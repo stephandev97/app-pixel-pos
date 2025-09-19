@@ -1,44 +1,65 @@
-const { app, BrowserWindow } = require('electron');
-
-const path = require('path')
-const isDev = process.env.NODE_ENV === "development";
-
-require('@electron/remote/main').initialize()
-
-const {default: installExtension, REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS} = require("electron-devtools-installer");
+const { app, BrowserWindow, dialog } = require('electron');
+const path = require('path');
+const isDev = !app.isPackaged;
 
 function createWindow() {
-    const win = new BrowserWindow({
-        resizable: false,
-        width: 500,
-        height: 800,
-        autoHideMenuBar: false,
-        webPreferences: {
-            nodeIntegration: true,
-            enableRemoteModule: true,
-            contextIsolation: false,
-        }
-    })
+  const win = new BrowserWindow({
+    width: 556,
+    height: 800,
+    resizable: false,
+    autoHideMenuBar: true,
+    webPreferences: { nodeIntegration: true, contextIsolation: false }
+  });
 
-    win.loadURL('http://localhost:3000')
-    //win.loadURL(`file://${path.join(__dirname, '../build/index.html')}`)
-    win.webContents.once("dom-ready", async () => {await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS]).then((name) => console.log(`Added Extension:  ${name}`)).catch((err) => console.log("An error occurred: ", err)).finally(() => {
-    win.webContents.openDevTools();});});
+  if (isDev) {
+    win.loadURL('http://localhost:3000');
+    win.webContents.openDevTools();
+  } else {
+    win.loadFile(path.join(__dirname, '../build/index.html'));
+  }
 }
 
-app.on('ready', createWindow)
+app.whenReady().then(async () => {
+  createWindow();
 
-//Quit when all windows are closed.
-app.on('window-all-closed', function(){
-    //On OS X it common for applications and their menu bar
-    //to stay active until the user quits explicitly with Cmd + Q
-    if (process.platform !== 'darwin') {
-        app.quit()
+  // ✅ Updates sólo cuando está empaquetado
+  if (app.isPackaged) {
+    const { autoUpdater } = require('electron-updater');
+
+    // Opcional: permitir pre-releases si usás “Pre-release” en GitHub
+    // autoUpdater.allowPrerelease = true;
+
+    // Mostrar logs básicos en consola
+    autoUpdater.logger = require('electron-log');
+    autoUpdater.logger.transports.file.level = 'info';
+
+    // Eventos útiles
+    autoUpdater.on('checking-for-update', () => console.log('Buscando update...'));
+    autoUpdater.on('update-available', (info) => console.log('Update disponible:', info.version));
+    autoUpdater.on('update-not-available', () => console.log('Sin updates'));
+    autoUpdater.on('error', (err) => console.error('Updater error:', err));
+    autoUpdater.on('download-progress', (p) => console.log(`Descargando: ${Math.round(p.percent)}%`));
+    autoUpdater.on('update-downloaded', async () => {
+      const r = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Reiniciar ahora', 'Luego'],
+        defaultId: 0,
+        message: 'Hay una nueva versión descargada. ¿Reiniciar para instalarla?'
+      });
+      if (r.response === 0) {
+        autoUpdater.quitAndInstall();
+      }
+    });
+
+    // 🔎 Buscar y descargar automáticamente
+    try {
+      await autoUpdater.checkForUpdatesAndNotify();
+      // Opcional: volver a chequear cada cierto tiempo (ej. 30 min)
+      setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000);
+    } catch (e) {
+      console.error('Fallo al chequear updates:', e);
     }
-})
+  }
+});
 
-app.on('active', function() {
-    //On OS X it's common to re-create a window in the app when the
-    //dock icon is clicked and there are no other windows open
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-})
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
