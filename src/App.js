@@ -1,45 +1,85 @@
-import React from 'react';
-import { useSelector } from 'react-redux';
 import './App.css';
+
+import { AnimatePresence, motion } from 'framer-motion';
+import { useSelector } from 'react-redux';
+import { PersistGate } from 'redux-persist/integration/react';
+
+import Sidebar from './components/Sidebar/Sidebar';
+import { SIDEBAR_W } from './components/Sidebar/SidebarStyles';
 import Checkout from './pages/Checkout/Checkout';
+import Config from './pages/Config/Config';
+import DailyStats from './pages/DailyStats/DailyStats';
 import FinishOrder from './pages/FinishOrder/FinishOrder';
 import Home from './pages/Home/Home';
-import Navbar from './pages/Navbar/Navbar';
 import OrderFinished from './pages/OrderFinished/OrderFinished';
-import { ThemeProvider, createTheme } from '@mui/material/styles';
-import Prueba from './pages/PRUEBA/prueba';
+import Orders from './pages/Orders/Orders';
+import { persistor } from './redux/store';
 
-function App() {
-  const theme = createTheme({
-    overrides: {
-      MuiCssBaseline: {
-        "@global": {
-          "*::-webkit-scrollbar": {
-            width: "5px"
-          },
-          "*::-webkit-scrollbar-track": {
-            background: "#E4EFEF"
-          },
-          "*::-webkit-scrollbar-thumb": {
-            background: "#1D388F61",
-            borderRadius: "10px"
-          }
-        }
-      }
-    }
-  });
+export default function App() {
+  const activeOrders = useSelector((s) => s.actions.toggleOrders);
+  const activeConfig = useSelector((s) => s.actions.toggleConfig);
+  const activeDaily = useSelector((s) => s.actions.toggleDailyStats);
+
+  // elegimos UNA sola pantalla y le damos un key único
+  const screen = activeOrders ? 'orders' : activeConfig ? 'config' : activeDaily ? 'daily' : 'home';
 
   return (
-    <ThemeProvider theme={theme}>
-    <div className='App'>
-        <Home/>
-        <Checkout/>
-        <Navbar/>
-        <FinishOrder/>
-        <OrderFinished/>
-    </div>
-    </ThemeProvider>
+    <PersistGate loading={null} persistor={persistor}>
+      <div className="App">
+        {/* Navbar superior con pestañas + spacer interno */}
+        <Sidebar />
+        <div
+          className="app-main"
+          style={{
+            flex: 1,
+            boxSizing: 'border-box', // ← el padding NO aumenta el ancho
+            paddingLeft: SIDEBAR_W, // ← reserva espacio para el sidebar
+            minWidth: 0, // ← permite encoger
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden', // el scroll va dentro de .screen
+          }}
+        >
+          <AnimatePresence initial={false} mode="wait">
+            <motion.div
+              key={screen}
+              className="screen" // <- dale una clase para tus reglas existentes
+              initial={{ x: 30, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -30, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              style={{
+                position: 'relative',
+                display: 'flex',
+                flexDirection: 'column',
+                minHeight: 0,
+                height: '100%',
+                minWidth: 0,
+                overflow: 'hidden',
+                width: 'min(476px, 100%)',
+                boxSizing: 'border-box',
+              }}
+            >
+              {screen === 'orders' ? (
+                <Orders />
+              ) : screen === 'config' ? (
+                <Config />
+              ) : screen === 'daily' ? (
+                <DailyStats />
+              ) : (
+                <Home />
+              )}
+            </motion.div>
+          </AnimatePresence>
+
+          {/* overlays */}
+          <Checkout />
+          <FinishOrder />
+          <OrderFinished />
+
+          {/* navbar solo si no estás en Orders */}
+        </div>
+      </div>
+    </PersistGate>
   );
 }
-
-export default App;

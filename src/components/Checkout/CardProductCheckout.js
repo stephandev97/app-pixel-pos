@@ -1,51 +1,68 @@
-import React from "react";
-import { ButtonMinus, ButtonQuantity, CardCheckoutStyled, ContainerSabores, Detalle, NameCard, PriceCard, QuantityStyled, RowCard, RowCardName, SpanDelivery } from "./styles/CardProductCheckoutStyled";
-import { useDispatch } from "react-redux";
-import { addToCart, removeFromCart } from "../../redux/cart/cartSlice";
-import { formatPrice } from "../../utils/formatPrice";
-import {Minus, Plus, Trash, X} from 'react-feather';
-import { TrashIcon } from "@heroicons/react/24/outline";
-import { toggleHiddenCart } from "../../redux/actions/actionsSlice";
-import { TbTrash, TbTrashOff, TbTrashX } from "react-icons/tb";
-import { IoTrashBinOutline } from "react-icons/io5";
+import React from 'react';
+import { Minus, Plus } from 'react-feather';
+import { IoTrashBinOutline } from 'react-icons/io5';
+import { useDispatch } from 'react-redux';
 
-const CardProductCheckout = ({name, price, id, quantity, listdetalle, removeAndHide, sabores, category}) => {
-    const dispatch = useDispatch()
+import { decrementById, incrementById } from '../../redux/cart/cartSlice';
+import { formatPrice } from '../../utils/formatPrice';
+import {
+  ButtonMinus,
+  ButtonQuantity,
+  CardCheckoutStyled,
+  ContainerSabores,
+  LeftCol,
+  MainRow,
+  NameCard,
+  PriceCard,
+  QuantityStyled,
+  RightCol,
+} from './styles/CardProductCheckoutStyled';
 
-    return (
-         <CardCheckoutStyled>
-            <RowCardName>
-                <NameCard>
-                    <span>{name}</span>
-                    {category === "Helado" && sabores ? 
-                    <SpanDelivery>Delivery</SpanDelivery> : null    
-                }
-                </NameCard>
-                {sabores? 
-                    <ContainerSabores>
-                        {sabores.map(sabor => {return <a>{sabor}</a>})}
-                    </ContainerSabores> : null
-                }
-                {listdetalle ? 
-                    <Detalle>{listdetalle}</Detalle> : null
-                }
-            </RowCardName>
-            <RowCard>
-                <QuantityStyled>
-                    {quantity > 1 ?
-                    <ButtonMinus className="minus" onClick={() => dispatch(removeFromCart(id))}><Minus/></ButtonMinus>
-                    :
-                    <ButtonMinus className="minus" onClick={() => removeAndHide(id)}><IoTrashBinOutline/></ButtonMinus>
-                    }
-                    <div>{quantity}</div>
-                    <ButtonQuantity onClick={() => dispatch(addToCart({name, price, id}))}><Plus/></ButtonQuantity>
-                </QuantityStyled>
-            </RowCard>
-            <RowCard style={{textAlign:"right !important"}}>
-                <PriceCard>{formatPrice(price * quantity)}</PriceCard>
-            </RowCard>
-        </CardCheckoutStyled>
-    )
-}
+const CardProductCheckout = ({ name, price, id, quantity, removeAndHide, sabores }) => {
+  const dispatch = useDispatch();
+
+  return (
+    <CardCheckoutStyled>
+      <MainRow>
+        <LeftCol>
+          {/* Nombre + sabores (como ya lo tenías): */}
+          <NameCard>
+            <span>
+              {name}
+              {sabores && sabores.length === 1 && ` · ${sabores[0]}`}
+            </span>
+          </NameCard>
+          {sabores && sabores.length > 1 && (
+            <ContainerSabores>
+              {sabores.map((s) => (
+                <a key={s}>{s}</a>
+              ))}
+            </ContainerSabores>
+          )}
+        </LeftCol>
+
+        <RightCol>
+          <QuantityStyled>
+            {quantity > 1 ? (
+              <ButtonMinus className="minus" onClick={() => dispatch(decrementById(id))}>
+                <Minus />
+              </ButtonMinus>
+            ) : (
+              <ButtonMinus className="minus" onClick={() => removeAndHide(id)}>
+                <IoTrashBinOutline />
+              </ButtonMinus>
+            )}
+            <div>{quantity}</div>
+            <ButtonQuantity onClick={() => dispatch(incrementById(id))}>
+              <Plus />
+            </ButtonQuantity>
+          </QuantityStyled>
+
+          <PriceCard>{formatPrice(price * quantity)}</PriceCard>
+        </RightCol>
+      </MainRow>
+    </CardCheckoutStyled>
+  );
+};
 
 export default CardProductCheckout;

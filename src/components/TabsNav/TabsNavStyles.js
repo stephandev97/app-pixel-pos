@@ -1,10 +1,12 @@
-import styled from "styled-components";
+import styled from 'styled-components';
 
 export const NAV_H = 60;
 
 export const Bar = styled.header`
   position: fixed;
-  top: 0; left: 0; right: 0;
+  top: 0;
+  left: 0;
+  right: 0;
   height: ${NAV_H}px;
   background: #f8f9fa; /* gris claro */
   z-index: 1000;
@@ -20,7 +22,7 @@ export const Tabs = styled.nav`
 `;
 
 export const TabBtn = styled.button`
-  flex: 1;                        /* cada tab ocupa el mismo ancho */
+  flex: 1; /* cada tab ocupa el mismo ancho */
   border: none;
   background: transparent;
   cursor: pointer;
@@ -30,14 +32,16 @@ export const TabBtn = styled.button`
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 
-  &[data-active="true"] {
-    background: #000;   /* pestaña activa */
+  &[data-active='true'] {
+    background: #000; /* pestaña activa */
     color: #fff;
   }
 
-  &:hover:not([data-active="true"]) {
+  &:hover:not([data-active='true']) {
     background: #e5e7eb; /* gris hover */
   }
 `;

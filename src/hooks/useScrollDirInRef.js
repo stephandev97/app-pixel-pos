@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState } from 'react';
 
 export default function useScrollDirInRef(ref, threshold = 6) {
-  const [dir, setDir] = useState("up"); // 'up' | 'down'
+  const [dir, setDir] = useState('up'); // 'up' | 'down'
   useEffect(() => {
     const el = ref?.current;
     if (!el) return;
@@ -10,12 +10,12 @@ export default function useScrollDirInRef(ref, threshold = 6) {
     const onScroll = () => {
       const y = el.scrollTop;
       if (Math.abs(y - lastY) > threshold) {
-        setDir(y > lastY ? "down" : "up");
+        setDir(y > lastY ? 'down' : 'up');
         lastY = y;
       }
     };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
   }, [ref, threshold]);
 
   return dir;

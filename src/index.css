@@ -2,4 +2,27 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* ancho de la barra */
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px; /* si querés scroll horizontal también */
+  }
+
+  /* track (fondo) */
+  ::-webkit-scrollbar-track {
+    background: #f3f4f6; /* gris suave */
+    border-radius: 4px;
+  }
+
+  /* thumb (la parte que se arrastra) */
+  ::-webkit-scrollbar-thumb {
+    background: #9ca3af; /* gris medio */
+    border-radius: 4px;
+  }
+
+  /* hover del thumb */
+  ::-webkit-scrollbar-thumb:hover {
+    background: #6b7280; /* gris más oscuro */
+  }
 }

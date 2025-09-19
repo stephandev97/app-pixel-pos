@@ -1,37 +1,63 @@
-import styled from "styled-components";
+import styled from 'styled-components';
 
-export const ContainerNavbar = styled.div`
-    position: fixed;
-    bottom: 0;
-    display: flex;
-    width: 100%;
-    height: 11%;
-    justify-content: space-evenly;
-    align-items: center;
-    z-index: 9;
-    background: white;
-    box-shadow: rgba(60, 64, 67, 0.3) 0px 1px 2px 0px, rgba(60, 64, 67, 0.15) 0px 1px 3px 1px;
-    border-top-left-radius: 25px;
-    border-top-right-radius: 25px;
-    `
+/* altura del navbar */
+const NAV_H = 64;
+
+export const ContainerNavbar = styled.nav`
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(${NAV_H}px + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  background: #fff;
+  border-top: 1px solid #e5e7eb;
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-items: center;
+  z-index: 200;
+
+  /* opcional: si tu contenido principal queda tapado, agregá un spacer
+     al final de tus páginas con height: NAV_H */
+`;
 
 export const ButtonPage = styled.button`
-    background: white;
-    border: none;
-    padding: 0;
-    font-family: 'Satoshi', sans-serif;
-    cursor: pointer;
-    height: 70px;
-    width: 70px;
-    border-radius: 50%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    z-index: 9;
-    color: #C0C5CD;
-`
-export const TextButton = styled.a`
-    font-size: 1.2em;
-    margin-top: 0.4em;
-`
+  appearance: none;
+  border: 0;
+  background: transparent;
+  height: ${NAV_H}px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #6b7280; /* gris */
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+
+  &:hover {
+    background: #f8f9fa;
+    color: #111;
+  }
+
+  /* estado activo */
+  &[data-active='true'] {
+    color: #111;
+    font-weight: 700;
+  }
+
+  /* accesibilidad: focus ring */
+  &:focus-visible {
+    outline: 2px solid #6528f7;
+    outline-offset: -2px;
+    border-radius: 12px;
+  }
+`;
+
+export const TextButton = styled.span`
+  font-size: 12px;
+  line-height: 1;
+`;

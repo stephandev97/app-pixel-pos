@@ -1,0 +1,21 @@
+{
+  // 👉 Formatea automáticamente al guardar
+  "editor.formatOnSave": true,
+
+  // 👉 Corre todos los fixes de ESLint al guardar
+  "editor.codeActionsOnSave": {
+    "source.fixAll": true,
+    "source.fixAll.eslint": true
+  },
+
+  // 👉 Activa ESLint en estos lenguajes
+  "eslint.validate": ["javascript", "javascriptreact", "json"],
+
+  // 👉 Config de Prettier
+  "prettier.singleQuote": true,
+  "prettier.semi": true,
+  "prettier.trailingComma": "es5",
+  "prettier.printWidth": 100,
+  "prettier.arrowParens": "always",
+  "prettier.endOfLine": "lf"
+}

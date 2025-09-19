@@ -1,18 +1,22 @@
-import { useDispatch, useSelector } from "react-redux";
-import { Bar, Item, Divider, LogoBox, Spacer } from "./SidebarStyles";
-import {
-  toggleHome, toggleOrders, toggleConfig, toggleEditor
-} from "../../redux/actions/actionsSlice";
+import { HiClipboardList, HiOutlineClipboardList } from 'react-icons/hi';
+import { HiOutlineSquares2X2, HiSquares2X2 } from 'react-icons/hi2';
+import { HiCog6Tooth, HiOutlineCog6Tooth } from 'react-icons/hi2';
+import { useDispatch, useSelector } from 'react-redux';
 
-import { HiSquares2X2, HiOutlineSquares2X2 } from "react-icons/hi2";
-import { HiClipboardList, HiOutlineClipboardList } from "react-icons/hi";
-import { HiOutlineCog6Tooth, HiCog6Tooth } from "react-icons/hi2";
+import logoPixelWhite from '../../assets/logoprintwhite.png';
+import {
+  toggleConfig,
+  toggleEditor,
+  toggleHome,
+  toggleOrders,
+} from '../../redux/actions/actionsSlice';
+import { Bar, Divider, Item, LogoBox, Spacer } from './SidebarStyles';
 
 export default function Sidebar() {
   const dispatch = useDispatch();
-  const activeHome   = useSelector(s => s.actions.toggleHome);
-  const activeOrders = useSelector(s => s.actions.toggleOrders);
-  const activeConfig = useSelector(s => s.actions.toggleConfig);
+  const activeHome = useSelector((s) => s.actions.toggleHome);
+  const activeOrders = useSelector((s) => s.actions.toggleOrders);
+  const activeConfig = useSelector((s) => s.actions.toggleConfig);
 
   const goHome = () => {
     dispatch(toggleHome(true));
@@ -35,22 +39,24 @@ export default function Sidebar() {
 
   return (
     <Bar>
-      <LogoBox>🍦</LogoBox>
-
+      <LogoBox>
+        {' '}
+        <img
+          src={logoPixelWhite} // 👉 poné un ícono tuyo (ej: una caja vacía o tu logo pixel)
+          alt="Sin pedidos"
+          style={{ width: 42, height: 'auto', marginBottom: 0, opacity: 1 }}
+        />
+      </LogoBox>
       <Item aria-label="Inicio" data-active={activeHome} onClick={goHome}>
-        {activeHome ? <HiSquares2X2 size={22}/> : <HiOutlineSquares2X2 size={22}/>}
+        {activeHome ? <HiSquares2X2 size={22} /> : <HiOutlineSquares2X2 size={22} />}
       </Item>
-
       <Item aria-label="Pedidos" data-active={activeOrders} onClick={goOrders}>
-        {activeOrders ? <HiClipboardList size={22}/> : <HiOutlineClipboardList size={22}/>}
+        {activeOrders ? <HiClipboardList size={22} /> : <HiOutlineClipboardList size={22} />}
       </Item>
-
       <Divider />
-
       <Item aria-label="Ajustes" data-active={activeConfig} onClick={goConfig}>
-        {activeConfig ? <HiCog6Tooth size={22}/> : <HiOutlineCog6Tooth size={22}/>}
+        {activeConfig ? <HiCog6Tooth size={22} /> : <HiOutlineCog6Tooth size={22} />}
       </Item>
-
       <Spacer /> {/* empuja lo de abajo si agregás más ítems */}
     </Bar>
   );

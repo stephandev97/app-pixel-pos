@@ -1,119 +1,79 @@
-import { useDispatch, useSelector } from "react-redux"
-import { ButtonPage, ContainerNavbar, TextButton } from "./NavbarStyles"
-import { toggleConfig, toggleEditor, toggleHome, toggleOrders } from "../../redux/actions/actionsSlice";
-import { HiDotsHorizontal, HiOutlineDotsHorizontal, HiOutlineViewGrid, HiOutlineViewList, HiViewGrid, HiViewList } from "react-icons/hi";
-import Box from '@mui/material/Box';
-import BottomNavigation from '@mui/material/BottomNavigation';
-import BottomNavigationAction from '@mui/material/BottomNavigationAction';
-import { useState } from "react";
+import {
+  HiDotsHorizontal,
+  HiOutlineDotsHorizontal,
+  HiOutlineViewGrid,
+  HiOutlineViewList,
+  HiViewGrid,
+  HiViewList,
+} from 'react-icons/hi';
+import { useDispatch, useSelector } from 'react-redux';
 
-const Navbar2 = () => {
-    const [value, setValue] = useState("menu");
-    const handleChange = (event, newValue) => {
-        setValue(newValue);
-    };
+import {
+  toggleConfig,
+  toggleEditor,
+  toggleHome,
+  toggleOrders,
+} from '../../redux/actions/actionsSlice';
+import { ButtonPage, ContainerNavbar, TextButton } from './NavbarStyles';
 
-    const dispatch = useDispatch()
-    const activeHome = useSelector(state => state.actions.toggleHome)
-    const activeOrders = useSelector(state => state.actions.toggleOrders)
-    const activeConfig = useSelector(state => state.actions.toggleConfig)
+export default function Navbar() {
+  const dispatch = useDispatch();
+  const activeHome = useSelector((s) => s.actions.toggleHome);
+  const activeOrders = useSelector((s) => s.actions.toggleOrders);
+  const activeConfig = useSelector((s) => s.actions.toggleConfig);
 
-    const clickToggleGrid = () => async (dispatch) => {
-        dispatch(toggleHome(true))
-        dispatch(toggleConfig(false))
-        dispatch(toggleEditor(true))
-        dispatch(toggleOrders(false))
-    }
+  const goHome = () => {
+    dispatch(toggleHome(true));
+    dispatch(toggleOrders(false));
+    dispatch(toggleConfig(false));
+    dispatch(toggleEditor(true));
+  };
 
-    const clickToggleOrders = () => async (dispatch) => {
-        dispatch(toggleOrders(true))
-        dispatch(toggleHome(false))
-        dispatch(toggleConfig(false))
-        dispatch(toggleEditor(true))
-    }
+  const goOrders = () => {
+    dispatch(toggleOrders(true));
+    dispatch(toggleHome(false));
+    dispatch(toggleConfig(false));
+    dispatch(toggleEditor(true));
+  };
 
-    const clickToggleConfig = () => async (dispatch) => {
-        dispatch(toggleOrders(false))
-        dispatch(toggleHome(false))
-        dispatch(toggleConfig(true))
-        dispatch(toggleEditor(true))
-    }
+  const goConfig = () => {
+    dispatch(toggleHome(false));
+    dispatch(toggleOrders(false));
+    dispatch(toggleConfig(true));
+    dispatch(toggleEditor(true));
+  };
 
-    return (
-        <Box sx={{width: "100%", height: "10%", position: "fixed", bottom: "0"}}>
-            <BottomNavigation value={value} onChange={handleChange}>
-                <BottomNavigationAction label="Menú" icon={<HiViewGrid/>} value="menu"/>
-                <BottomNavigationAction label="Pedidos" icon={<HiViewGrid/>} value="pedidos"/>
-                <BottomNavigationAction label="Más" icon={<HiViewGrid/>} value="mas"/>
-            </BottomNavigation>
-        </Box>
-    )
+  return (
+    <ContainerNavbar role="navigation" aria-label="Navegación principal">
+      {/* Menú */}
+      <ButtonPage
+        onClick={goHome}
+        aria-current={activeHome ? 'page' : undefined}
+        data-active={activeHome}
+      >
+        {activeHome ? <HiViewGrid size={22} /> : <HiOutlineViewGrid size={22} />}
+        <TextButton>Menú</TextButton>
+      </ButtonPage>
+
+      {/* Pedidos */}
+      <ButtonPage
+        onClick={goOrders}
+        aria-current={activeOrders ? 'page' : undefined}
+        data-active={activeOrders}
+      >
+        {activeOrders ? <HiViewList size={22} /> : <HiOutlineViewList size={22} />}
+        <TextButton>Pedidos</TextButton>
+      </ButtonPage>
+
+      {/* Más */}
+      <ButtonPage
+        onClick={goConfig}
+        aria-current={activeConfig ? 'page' : undefined}
+        data-active={activeConfig}
+      >
+        {activeConfig ? <HiDotsHorizontal size={22} /> : <HiOutlineDotsHorizontal size={22} />}
+        <TextButton>Más</TextButton>
+      </ButtonPage>
+    </ContainerNavbar>
+  );
 }
-
-const Navbar = () => {
-    const dispatch = useDispatch()
-    const activeHome = useSelector(state => state.actions.toggleHome)
-    const activeOrders = useSelector(state => state.actions.toggleOrders)
-    const activeConfig = useSelector(state => state.actions.toggleConfig)
-
-    const clickToggleGrid = () => async (dispatch) => {
-        dispatch(toggleHome(true))
-        dispatch(toggleConfig(false))
-        dispatch(toggleEditor(true))
-        dispatch(toggleOrders(false))
-    }
-
-    const clickToggleOrders = () => async (dispatch) => {
-        dispatch(toggleOrders(true))
-        dispatch(toggleHome(false))
-        dispatch(toggleConfig(false))
-        dispatch(toggleEditor(true))
-    }
-
-    const clickToggleConfig = () => async (dispatch) => {
-        dispatch(toggleOrders(false))
-        dispatch(toggleHome(false))
-        dispatch(toggleConfig(true))
-        dispatch(toggleEditor(true))
-    }
-
-    return (
-        <ContainerNavbar>
-            {activeHome? 
-            <ButtonPage style={{fontWeight:"bold", color: "black"}}>
-                <HiViewGrid size={28}/>
-                <TextButton>Menú</TextButton>
-            </ButtonPage>
-            :
-            <ButtonPage onClick={() => dispatch(clickToggleGrid(true))}>
-                <HiOutlineViewGrid size={28}/>
-                <TextButton>Menú</TextButton>
-            </ButtonPage>
-            }
-            {activeOrders ?
-            <ButtonPage style={{fontWeight:"bold", color: "black"}}>
-                <HiViewList size={28}/>
-                <TextButton>Pedidos</TextButton>
-            </ButtonPage>
-            :
-            <ButtonPage onClick={() => dispatch(clickToggleOrders())}>
-                <HiOutlineViewList size={28}/>
-                <TextButton>Pedidos</TextButton>
-            </ButtonPage>
-            }
-            {activeConfig ?
-            <ButtonPage style={{fontWeight:"bold", color: "black"}}>
-                <HiDotsHorizontal size={28}/>
-                <TextButton>Más</TextButton>
-            </ButtonPage>
-            :
-            <ButtonPage onClick={() => dispatch(clickToggleConfig())}>
-                <HiOutlineDotsHorizontal size={28}/>
-                <TextButton>Más</TextButton>
-            </ButtonPage>
-            }
-        </ContainerNavbar>
-    )
-}
-
-export default Navbar

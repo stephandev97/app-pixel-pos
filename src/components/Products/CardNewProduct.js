@@ -1,44 +1,56 @@
-import { set, useForm } from "react-hook-form"
-import { Background, Button, ContainerCard, DivInput, Input, PreFix } from "./styles/CardNewProductStyles"
-import { DollarSign } from "react-feather"
-import { LuIceCream } from "react-icons/lu"
+import { DollarSign } from 'react-feather';
+import { useForm } from 'react-hook-form';
+import { LuIceCream } from 'react-icons/lu';
+import { useDispatch } from 'react-redux';
 import uniqid from 'uniqid';
-import { useDispatch } from "react-redux";
-import { addNewProductToCart } from "../../redux/cart/cartSlice";
 
-const CardNewProduct = ({setHiddenCard}) => {
-    const dispatch = useDispatch()
-    const { register, handleSubmit, setValue, getValues } = useForm()
-    const generateId = uniqid()
+import { addNewProductToCart } from '../../redux/cart/cartSlice';
+import {
+  Background,
+  Button,
+  ContainerCard,
+  DivInput,
+  Input,
+  PreFix,
+} from './styles/CardNewProductStyles';
 
-    const onSubmit = () => {
-        const product = {
-            name: getValues("nombre"),
-            price: getValues("precio"),
-            id: generateId,
-            quantity: 1,
-        }
+const CardNewProduct = ({ setHiddenCard }) => {
+  const dispatch = useDispatch();
+  const { register, handleSubmit, getValues } = useForm();
+  const generateId = uniqid();
 
-        dispatch(addNewProductToCart(product))
-        setHiddenCard(false)
-    }
+  const onSubmit = () => {
+    const product = {
+      name: getValues('nombre'),
+      price: getValues('precio'),
+      id: generateId,
+      quantity: 1,
+    };
 
-    return (
-        <>
-            <Background onClick={() => setHiddenCard(false)}/>
-            <ContainerCard onSubmit={handleSubmit(onSubmit)}>
-                <DivInput>
-                    <PreFix><LuIceCream/></PreFix>
-                    <Input {...register("nombre", { required: true })} type='text'  placeholder='Producto'/>
-                </DivInput>
-                <DivInput>
-                    <PreFix><DollarSign size={16}/></PreFix>
-                    <Input {...register("precio", { required: true })} type='number' placeholder='Precio'/>
-                </DivInput>
-                <Button type="submit">Agregar</Button>
-            </ContainerCard>
-        </>
-    )
-}
+    dispatch(addNewProductToCart(product));
+    setHiddenCard(false);
+  };
 
-export default CardNewProduct
+  return (
+    <>
+      <Background onClick={() => setHiddenCard(false)} />
+      <ContainerCard onSubmit={handleSubmit(onSubmit)}>
+        <DivInput>
+          <PreFix>
+            <LuIceCream />
+          </PreFix>
+          <Input {...register('nombre', { required: true })} type="text" placeholder="Producto" />
+        </DivInput>
+        <DivInput>
+          <PreFix>
+            <DollarSign size={16} />
+          </PreFix>
+          <Input {...register('precio', { required: true })} type="number" placeholder="Precio" />
+        </DivInput>
+        <Button type="submit">Agregar</Button>
+      </ContainerCard>
+    </>
+  );
+};
+
+export default CardNewProduct;
