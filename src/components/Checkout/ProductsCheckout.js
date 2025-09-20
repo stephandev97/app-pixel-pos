@@ -49,7 +49,7 @@ const ProductsCheckout = ({ cartItems, price, cantidad }) => {
         )}
       </ContainerCards>
       <TotalStyled>
-        <div>
+        <div style={{ fontSize: '1.1em' }}>
           <span>Total</span>
           <span>{formatPrice(price)}</span>
         </div>

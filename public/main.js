@@ -1,44 +1,86 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow, dialog } = require('electron');
+const path = require('path');
 
-const path = require('path')
-const isDev = process.env.NODE_ENV === "development";
+const isDev = !app.isPackaged;
 
-require('@electron/remote/main').initialize()
-
-const {default: installExtension, REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS} = require("electron-devtools-installer");
+let win; // 👈 referencia global
 
 function createWindow() {
-    const win = new BrowserWindow({
-        resizable: false,
-        width: 500,
-        height: 800,
-        autoHideMenuBar: false,
-        webPreferences: {
-            nodeIntegration: true,
-            enableRemoteModule: true,
-            contextIsolation: false,
-        }
-    })
+  win = new BrowserWindow({
+    width: 556,
+    height: 800,
+    resizable: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+    },
+  });
 
-    win.loadURL('http://localhost:3000')
-    //win.loadURL(`file://${path.join(__dirname, '../build/index.html')}`)
-    win.webContents.once("dom-ready", async () => {await installExtension([REDUX_DEVTOOLS, REACT_DEVELOPER_TOOLS]).then((name) => console.log(`Added Extension:  ${name}`)).catch((err) => console.log("An error occurred: ", err)).finally(() => {
-    win.webContents.openDevTools();});});
+  if (isDev) {
+    win.loadURL('http://localhost:3000'); // CRA/Vite dev server
+    win.webContents.openDevTools();
+  } else {
+    // OJO: este archivo vive en /public; por eso apuntamos a ../build
+    win.loadFile(path.join(__dirname, '../build/index.html'));
+  }
 }
 
-app.on('ready', createWindow)
+app.whenReady().then(async () => {
+  createWindow();
 
-//Quit when all windows are closed.
-app.on('window-all-closed', function(){
-    //On OS X it common for applications and their menu bar
-    //to stay active until the user quits explicitly with Cmd + Q
-    if (process.platform !== 'darwin') {
-        app.quit()
-    }
-})
+  // Limpiar caché y recargar SIN caché (ahora win existe)
+  try {
+    await win.webContents.session.clearCache();
+    win.webContents.reloadIgnoringCache();
+  } catch (e) {
+    const log = require('electron-log');
+    log.error('No se pudo limpiar caché:', e);
+  }
 
-app.on('active', function() {
-    //On OS X it's common to re-create a window in the app when the
-    //dock icon is clicked and there are no other windows open
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
-})
+  // Auto-updates solo cuando está empaquetado
+  if (app.isPackaged) {
+    const { autoUpdater } = require('electron-updater');
+
+    const log = require('electron-log');
+    autoUpdater.logger = log;
+    autoUpdater.logger.transports.file.level = 'info';
+
+    // IMPORTANTE si tu release en GitHub está como Pre-release:
+    autoUpdater.allowPrerelease = true; // quítalo si publicás releases normales
+    autoUpdater.autoDownload = true; // explícito, aunque ya es true por defecto
+
+    autoUpdater.on('checking-for-update', () => log.info('checking-for-update'));
+    autoUpdater.on('update-available', (info) => log.info('update-available', info?.version));
+    autoUpdater.on('update-not-available', () => log.info('update-not-available'));
+    autoUpdater.on('error', (err) => log.error('update-error', err));
+    autoUpdater.on('download-progress', (p) =>
+      log.info('download-progress', Math.round(p.percent) + '%')
+    );
+
+    autoUpdater.on('update-downloaded', async () => {
+      const r = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Reiniciar ahora', 'Luego'],
+        defaultId: 0,
+        message: 'Hay una nueva versión descargada. ¿Reiniciar para instalarla?',
+      });
+      if (r.response === 0) autoUpdater.quitAndInstall();
+    });
+
+    // Hacer el primer check apenas todo está listo
+    setImmediate(async () => {
+      try {
+        await autoUpdater.checkForUpdatesAndNotify();
+      } catch (e) {
+        log.error('Fallo al chequear updates:', e);
+      }
+    });
+    // Y luego cada 30'
+    setInterval(() => autoUpdater.checkForUpdates(), 30 * 60 * 1000);
+  }
+});
+
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') app.quit();
+});

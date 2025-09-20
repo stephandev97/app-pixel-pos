@@ -4,8 +4,8 @@
 
   // 👉 Corre todos los fixes de ESLint al guardar
   "editor.codeActionsOnSave": {
-    "source.fixAll": true,
-    "source.fixAll.eslint": true
+    "source.fixAll": "explicit",
+    "source.fixAll.eslint": "explicit"
   },
 
   // 👉 Activa ESLint en estos lenguajes

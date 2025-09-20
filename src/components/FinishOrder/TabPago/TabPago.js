@@ -6,11 +6,14 @@ import { useDispatch, useSelector } from 'react-redux';
 import mpIcon from '../../../assets/mercadopago.png';
 import { changePago, toggleEfectivo } from '../../../redux/actions/actionsSlice';
 import {
+  AnimSection,
   ButtonPaste,
   ButtonToggle,
   Icon,
   Input,
   InputGroup,
+  Prefix,
+  StaggerList,
   Tab,
 } from '../ContainerFinish/ContainerFinishStyles';
 import { TabContainer } from './TabPagoStyles';
@@ -24,7 +27,7 @@ const stripLeadingZeros = (raw) => {
   return noZeros === '' ? '' : noZeros;
 };
 
-const TabPago = ({ price, updatePago, isEfectivo, register, setValue, errors }) => {
+const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
   const dispatch = useDispatch();
   const pagoState = useSelector((s) => s.actions.pago);
   const [isMixed, setIsMixed] = useState(false);
@@ -36,16 +39,27 @@ const TabPago = ({ price, updatePago, isEfectivo, register, setValue, errors }) 
 
   useEffect(() => {
     if (isMixed) {
-      const total = Number(price || 0);
-      // antes: setValue("pagoEfectivo", 0, ...)
+      const envio = Number(watch('envioTarifa') || 0);
+      const total = Number(price || 0) + envio;
       setValue('pagoEfectivo', '', { shouldValidate: true });
       setValue('pagoMp', total, { shouldValidate: true });
     }
-  }, [isMixed, price, setValue]);
+  }, [isMixed, price, watch, setValue]);
 
   const clickPasteTotal = () => {
-    dispatch(changePago(price));
-    setValue('pago', price, { shouldValidate: true });
+    const envio = Number(watch('envioTarifa') || 0);
+    const tot = Number(price || 0) + envio;
+    dispatch(changePago(tot));
+    setValue('pago', tot, { shouldValidate: true });
+  };
+
+  const formatWithDollar = (val) => {
+    if (!val) return ''; // vacío = no muestra nada
+    return `$ ${val}`; // muestra con $
+  };
+
+  const stripDollar = (val) => {
+    return val.replace(/[^\d]/g, ''); // elimina todo menos números
   };
 
   return (
@@ -90,86 +104,36 @@ const TabPago = ({ price, updatePago, isEfectivo, register, setValue, errors }) 
 
       {/* EFECTIVO */}
       {!isMixed && isEfectivo && (
-        <InputGroup>
-          <Icon>
-            <BsCash />
-          </Icon>
-          <Input
-            aria-invalid={!!errors?.pago}
-            // Mostrar vacío si el estado es 0
-            value={pagoState ? String(pagoState) : ''}
-            {...register('pago', {
-              required: true,
-              min: Number(price || 0),
-              onChange: (e) => {
-                const v = stripLeadingZeros(e.target.value);
-                e.target.value = v;
-                // mantener tu flujo original
-                updatePago(e);
-              },
-            })}
-            onFocus={(e) => {
-              if (e.target.value === '0') e.target.value = '';
-            }}
-            placeholder="Ingresa el monto recibido"
-            inputMode="numeric"
-            pattern="[0-9]*"
-          />
-          <ButtonPaste type="button" onClick={clickPasteTotal} title="Igualar al total">
-            <FaEquals />
-          </ButtonPaste>
-        </InputGroup>
-      )}
-
-      {/* TRANSFERENCIA */}
-      {!isMixed && !isEfectivo && (
-        <InputGroup>
-          <Icon>
-            <img
-              src={mpIcon}
-              alt="MercadoPago"
-              width="20"
-              height="20"
-              style={{ display: 'block' }}
-            />
-          </Icon>
-          <Input disabled value="Transferencia" />
-        </InputGroup>
-      )}
-
-      {/* MIXTO */}
-      {isMixed && (
-        <>
+        <AnimSection>
           <InputGroup>
             <Icon>
               <BsCash />
             </Icon>
             <Input
-              aria-invalid={!!errors?.pagoEfectivo}
-              {...register('pagoEfectivo', {
-                required: true,
-                min: 0,
-                onChange: (e) => {
-                  const v = stripLeadingZeros(e.target.value);
-                  e.target.value = v;
-                  if (!mpAuto) return;
-                  const ef = Number(v || 0);
-                  const resto = Math.max(0, Number(price || 0) - ef);
-                  setValue('pagoMp', resto, { shouldValidate: true });
-                },
-              })}
-              onFocus={(e) => {
-                if (e.target.value === '0') e.target.value = '';
+              {...register('pago')}
+              aria-invalid={!!errors?.pago}
+              value={formatWithDollar(watch('pago'))}
+              onChange={(e) => {
+                const raw = stripDollar(e.target.value);
+                setValue('pago', raw, { shouldValidate: true });
+                dispatch(changePago(raw));
               }}
-              placeholder="Efectivo"
+              placeholder="Ingresa el monto recibido"
               inputMode="numeric"
-              pattern="[0-9]*"
-              style={{ paddingLeft: '40px' }}
+              style={{ paddingLeft: '56px' }} // evita solaparse con el ícono
             />
+            <ButtonPaste type="button" onClick={clickPasteTotal} title="Igualar al total">
+              <FaEquals />
+            </ButtonPaste>
           </InputGroup>
+        </AnimSection>
+      )}
 
+      {/* TRANSFERENCIA */}
+      {!isMixed && !isEfectivo && (
+        <AnimSection>
           <InputGroup>
-            <Icon style={{ color: '#2563eb' }}>
+            <Icon>
               <img
                 src={mpIcon}
                 alt="MercadoPago"
@@ -178,27 +142,62 @@ const TabPago = ({ price, updatePago, isEfectivo, register, setValue, errors }) 
                 style={{ display: 'block' }}
               />
             </Icon>
-            <Input
-              aria-invalid={!!errors?.pagoMp}
-              {...register('pagoMp', {
-                required: true,
-                min: 0,
-                onChange: (e) => {
-                  setMpAuto(false);
-                  const v = stripLeadingZeros(e.target.value);
-                  e.target.value = v;
-                },
-              })}
-              onFocus={(e) => {
-                if (e.target.value === '0') e.target.value = '';
-              }}
-              placeholder="MercadoPago"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              style={{ paddingLeft: '44px' }}
-            />
+            <Input disabled value="Transferencia" />
           </InputGroup>
-        </>
+        </AnimSection>
+      )}
+
+      {/* MIXTO */}
+      {isMixed && (
+        <AnimSection>
+          <StaggerList>
+            <InputGroup>
+              <Icon>
+                <BsCash />
+              </Icon>
+              <Input
+                aria-invalid={!!errors?.pagoEfectivo}
+                value={formatWithDollar(watch('pagoEfectivo'))} // 👈 mostrar con $
+                onChange={(e) => {
+                  const raw = stripDollar(e.target.value); // limpiar $
+                  setValue('pagoEfectivo', raw, { shouldValidate: true }); // guardar solo número
+                  if (!mpAuto) return;
+                  const ef = Number(raw || 0);
+                  const envio = Number(watch('envioTarifa') || 0);
+                  const resto = Math.max(0, Number(price || 0) + envio - ef);
+                  setValue('pagoMp', resto, { shouldValidate: true });
+                }}
+                placeholder="Efectivo"
+                inputMode="numeric"
+                style={{ paddingLeft: '56px' }}
+              />
+            </InputGroup>
+
+            <InputGroup>
+              <Icon style={{ color: '#2563eb' }}>
+                <img
+                  src={mpIcon}
+                  alt="MercadoPago"
+                  width="20"
+                  height="20"
+                  style={{ display: 'block' }}
+                />
+              </Icon>
+              <Input
+                aria-invalid={!!errors?.pagoMp}
+                value={formatWithDollar(watch('pagoMp'))}
+                onChange={(e) => {
+                  const raw = stripDollar(e.target.value);
+                  setValue('pagoMp', raw, { shouldValidate: true });
+                  setMpAuto(false);
+                }}
+                placeholder="MercadoPago"
+                inputMode="numeric"
+                style={{ paddingLeft: '60px' }}
+              />
+            </InputGroup>
+          </StaggerList>
+        </AnimSection>
       )}
     </TabContainer>
   );

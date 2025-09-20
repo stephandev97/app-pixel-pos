@@ -29,7 +29,15 @@ import {
 // ===== Config =====
 const CACHE_KEY = 'pb_products_v1';
 const SKELETON_COUNT = 12;
-const CATEGORIES_ORDER = ['Helado', 'Paletas', 'Varios', 'Consumir en el local', 'Extras', 'Otros'];
+const CATEGORIES_ORDER = [
+  'Delivery',
+  'Helado',
+  'Paletas',
+  'Varios',
+  'Consumir en el local',
+  'Extras',
+  'Otros',
+];
 
 // ===== Skeleton UI =====
 function SkeletonStyles() {
@@ -467,6 +475,7 @@ export default function Products() {
             <div style={{ padding: '8px 14px', opacity: 0.7 }}>Sin resultados para “{q}”.</div>
           )}
           {grouped.map(([cat, items]) => {
+            if (cat === 'Delivery') return null;
             // 👉 ordena por precio de menor a mayor
             const sorted = [...items].sort((a, b) => (a.price || 0) - (b.price || 0));
 

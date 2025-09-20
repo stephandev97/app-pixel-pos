@@ -83,7 +83,7 @@ export const TotalStyled = styled.div`
     justify-content: space-between;
     align-items: center;
     margin-bottom: 1em;
-    font-size: 1.05rem;
+    font-size: 1.01rem;
     color: #111;
   }
 `;

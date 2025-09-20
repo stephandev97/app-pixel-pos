@@ -881,7 +881,7 @@ const CardOrders = ({
                     background: '#F1F1F7',
                     borderRadius: 12,
                     padding: '5px 10px',
-                    fontSize: '0.9em',
+                    fontSize: '1em',
                     fontWeight: 'bold',
                     display: 'flex',
                     alignItems: 'center',
@@ -964,7 +964,7 @@ const CardOrders = ({
         </div>
       </FooterCard>
 
-      <div style={{ display: 'block' }}>
+      <div style={{ display: 'none' }}>
         <Print ref={contentRef} style={{ width: '220px', fontSize: '12px', lineHeight: '1.3' }}>
           <div style={{ textAlign: 'center', marginBottom: '8px' }}>
             <img src={logo} alt="Logo" style={{ maxWidth: '100px', height: 'auto' }} />
