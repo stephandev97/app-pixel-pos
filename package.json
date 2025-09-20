@@ -1,7 +1,7 @@
 {
   "name": "pixel-pos2",
-  "version": "2.0.4",
-   "build": {
+  "version": "2.0.5",
+  "build": {
     "appId": "PixelPOS2",
     "productName": "pixel-pos2",
     "asar": true,
@@ -12,9 +12,15 @@
       "package.json",
       "public/main.js"
     ],
-    "directories": { "buildResources": "assets" },
+    "directories": {
+      "buildResources": "assets"
+    },
     "publish": [
-      { "provider": "github", "owner": "stephandev97", "repo": "app-pixel-pos" }
+      {
+        "provider": "github",
+        "owner": "stephandev97",
+        "repo": "app-pixel-pos"
+      }
     ],
     "win": {
       "target": "nsis",
