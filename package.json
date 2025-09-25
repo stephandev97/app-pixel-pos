@@ -1,6 +1,6 @@
 {
   "name": "pixel-pos2",
-  "version": "2.0.5",
+  "version": "2.1.6",
   "build": {
     "appId": "PixelPOS2",
     "productName": "pixel-pos2",
@@ -15,11 +15,15 @@
     "directories": {
       "buildResources": "assets"
     },
+    "extraMetadata": {
+      "main": "public/main.js"
+    },
     "publish": [
       {
         "provider": "github",
         "owner": "stephandev97",
-        "repo": "app-pixel-pos"
+        "repo": "app-pixel-pos",
+        "releaseType": "release"
       }
     ],
     "win": {
@@ -46,7 +50,8 @@
     "electron:start": "wait-on tcp:3000 && electron .",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier . --write"
+    "format": "prettier . --write",
+    "publish": "npm run build && electron-builder -w --publish always"
   },
   "lint-staged": {
     "*.{js,jsx,cjs,mjs,json,md,css}": [
@@ -86,8 +91,13 @@
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "electron-is-dev": "^3.0.1",
+    "electron-log": "^5.4.3",
+    "electron-updater": "^6.6.2",
+    "escpos": "^3.0.0-alpha.6",
+    "escpos-usb": "^3.0.0-alpha.4",
     "formik": "^2.4.5",
     "framer-motion": "^12.23.12",
+    "jimp": "^1.6.0",
     "lucide-react": "^0.544.0",
     "pocketbase": "^0.26.2",
     "react": "^18.2.0",

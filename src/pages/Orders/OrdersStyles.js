@@ -88,7 +88,7 @@ export const ContainerOrders = styled.div`
 
 export const ContainerCard = styled.div`
   position: relative;
-  width: 88%;
+  width: 100%;
   border-radius: 16px;
   background: #fff;
   padding: 16px 16px;

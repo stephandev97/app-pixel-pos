@@ -7,10 +7,10 @@ export const ContentForm = styled.form`
   display: flex;
   flex-direction: column;
   width: min(560px, calc(100vw - 48px));
-  margin: 0 auto;
   --summary-h: 240px;
-  min-height: 100vh;
-  overflow: hidden; /* sin scroll interno */
+  height: 100dvh; /* usa visual viewport, no 100vh */
+  max-height: 100dvh;
+  overflow: clip !important; /* recorta cualquier 1-2px fantasma */
   padding-bottom: var(--summary-h);
   box-sizing: border-box;
 `;
@@ -22,7 +22,16 @@ export const ContentTabs = styled.div`
   align-items: stretch;
   padding: 0 16px;
   box-sizing: border-box;
+  /* que este bloque sea el “sacrificio” si falta alto */
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: hidden !important;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    width: 0;
+    height: 0;
+  }
 `;
 
 export const BottomSpacer = styled.div`
@@ -454,6 +463,7 @@ export const AnimSection = styled.div`
   animation: ${fadeSlideIn} 0.18s ease-out both;
   width: 100%;
   margin-bottom: 0 !important;
+  overflow: hidden;
   ${motionSafe};
 `;
 

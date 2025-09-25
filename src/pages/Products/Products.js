@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
-
 import CardProduct from '../../components/Products/CardProduct';
 import { pb } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
@@ -17,14 +16,7 @@ import {
   TitleCategory,
 } from './ProductsStyled';
 
-/**
- * Products.js — versión completa con:
- * - Skeleton shimmer (sin salto de layout)
- * - Cache offline (localStorage)
- * - Suscripción en vivo (create/update/delete)
- * - Online/offline banner
- * - Barra de búsqueda con Satoshi + icono de lupa (Ctrl/⌘+K)
- */
+const { ipcRenderer } = window.require('electron');
 
 // ===== Config =====
 const CACHE_KEY = 'pb_products_v1';
@@ -340,6 +332,7 @@ function applyRealtimeChange(prev, e) {
 }
 
 export default function Products() {
+  const [downloadProgress, setDownloadProgress] = useState(null);
   const cached = useMemo(readCache, []);
   const [products, setProducts] = useState(cached);
   const [loading, setLoading] = useState(cached.length === 0);
@@ -367,6 +360,15 @@ export default function Products() {
 
     dispatch(addToCart(temp)); // 👉 entra directo al carrito con quantity: 1
   }
+
+  useEffect(() => {
+    ipcRenderer.on('update-download-progress', (_e, percent) => {
+      setDownloadProgress(percent);
+    });
+    return () => {
+      ipcRenderer.removeAllListeners('update-download-progress');
+    };
+  }, []);
 
   // Fetch inicial
   useEffect(() => {
@@ -446,6 +448,28 @@ export default function Products() {
   // ===== Render =====
   return (
     <GlobalProducts>
+      {downloadProgress !== null && (
+        <div
+          style={{
+            position: 'sticky',
+            top: 0,
+            width: '100%',
+            background: '#eee',
+            height: 6,
+            zIndex: 1000,
+          }}
+        >
+          <div
+            style={{
+              width: `${downloadProgress}%`,
+              height: '100%',
+              background: '#111',
+              transition: 'width .3s ease',
+            }}
+          />
+        </div>
+      )}
+
       {offline && (
         <div style={{ padding: '8px 14px', fontSize: 12, opacity: 0.8 }}>
           Modo offline: mostrando productos guardados.

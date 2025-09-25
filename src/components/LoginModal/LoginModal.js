@@ -34,8 +34,13 @@ export default function LoginModal() {
     }
   };
   return (
-    <Dialog open={open} onClose={handleClose} PaperProps={{ sx: { background: '#F7F7FF' } }}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      scroll="body" // evita que MUI haga scroll en el "paper"
+      PaperProps={{ sx: { overflow: 'visible' } }} // por si el Paper fuerza overflow
+    >
+      <DialogContent sx={{ overflowY: 'visible', p: 0 }}>
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: 12 }}>
           <h3 style={{ margin: 0 }}>Acceso administrador</h3>
           <input

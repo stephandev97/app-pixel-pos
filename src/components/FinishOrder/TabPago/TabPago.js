@@ -53,14 +53,13 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
     setValue('pago', tot, { shouldValidate: true });
   };
 
+  // Siempre limpia y luego agrega "$ " una sola vez
   const formatWithDollar = (val) => {
-    if (!val) return ''; // vacío = no muestra nada
-    return `$ ${val}`; // muestra con $
+    const raw = String(val ?? '').replace(/[^\d]/g, ''); // quita $, espacios, puntos, etc.
+    return raw ? `$ ${raw}` : '';
   };
-
-  const stripDollar = (val) => {
-    return val.replace(/[^\d]/g, ''); // elimina todo menos números
-  };
+  // Para guardar en el form/Redux sólo números
+  const stripDollar = (val) => String(val ?? '').replace(/[^\d]/g, '');
 
   return (
     <TabContainer>
@@ -110,11 +109,21 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
               <BsCash />
             </Icon>
             <Input
-              {...register('pago')}
+              {...register('pago', {
+                setValueAs: (v) => stripDollar(v),
+                validate: (raw) => {
+                  // Sólo valida cuando el modo es EFECTIVO
+                  if (String(watch('modePago')) !== 'efectivo') return true;
+                  const envio = Number(watch('envioTarifa') || 0);
+                  const tot = Number(price || 0) + envio;
+                  const val = Number(stripDollar(raw)) || 0;
+                  return val >= tot || 'El efectivo debe ser ≥ Total + Envío';
+                },
+              })}
               aria-invalid={!!errors?.pago}
-              value={formatWithDollar(watch('pago'))}
+              value={formatWithDollar(watch('pago'))} // muestra con "$ "
               onChange={(e) => {
-                const raw = stripDollar(e.target.value);
+                const raw = stripDollar(e.target.value); // guardamos sólo dígitos
                 setValue('pago', raw, { shouldValidate: true });
                 dispatch(changePago(raw));
               }}
@@ -156,16 +165,13 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
                 <BsCash />
               </Icon>
               <Input
+                {...register('pagoEfectivo', {
+                  setValueAs: (v) => String(v ?? '').replace(/[^\d]/g, ''), // guarda sólo números
+                })}
                 aria-invalid={!!errors?.pagoEfectivo}
-                value={formatWithDollar(watch('pagoEfectivo'))} // 👈 mostrar con $
+                value={formatWithDollar(watch('pagoEfectivo'))}
                 onChange={(e) => {
-                  const raw = stripDollar(e.target.value); // limpiar $
-                  setValue('pagoEfectivo', raw, { shouldValidate: true }); // guardar solo número
-                  if (!mpAuto) return;
-                  const ef = Number(raw || 0);
-                  const envio = Number(watch('envioTarifa') || 0);
-                  const resto = Math.max(0, Number(price || 0) + envio - ef);
-                  setValue('pagoMp', resto, { shouldValidate: true });
+                  setValue('pagoEfectivo', e.target.value, { shouldValidate: true });
                 }}
                 placeholder="Efectivo"
                 inputMode="numeric"
@@ -184,13 +190,12 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
                 />
               </Icon>
               <Input
+                {...register('pagoMp', {
+                  setValueAs: (v) => String(v ?? '').replace(/[^\d]/g, ''),
+                })}
                 aria-invalid={!!errors?.pagoMp}
                 value={formatWithDollar(watch('pagoMp'))}
-                onChange={(e) => {
-                  const raw = stripDollar(e.target.value);
-                  setValue('pagoMp', raw, { shouldValidate: true });
-                  setMpAuto(false);
-                }}
+                onChange={(e) => setValue('pagoMp', e.target.value, { shouldValidate: true })}
                 placeholder="MercadoPago"
                 inputMode="numeric"
                 style={{ paddingLeft: '60px' }}

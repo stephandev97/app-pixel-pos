@@ -1,3 +1,16 @@
+html, body, #root { height: 100%; overflow: hidden; -webkit-text-size-adjust: 100%; }
+* { box-sizing: border-box; }
+
+.modal-root {            /* el wrapper del modal */
+  max-height: 100vh;
+  overflow: hidden;
+}
+
+.modal-scroll-area {     /* el contenedor interno scrolleable SI hace falta */
+  max-height: calc(100vh - 160px); /* deja cabeza y footer */
+  overflow: auto;
+}
+
 body {
   margin: 0;
   -webkit-font-smoothing: antialiased;

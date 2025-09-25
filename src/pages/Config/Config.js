@@ -4,7 +4,6 @@ import DialogContent from '@mui/material/DialogContent';
 import { useState } from 'react';
 import { Check, ChevronRight, Settings, X } from 'react-feather';
 import { useDispatch, useSelector } from 'react-redux';
-
 import LoginModal from '../../components/LoginModal/LoginModal';
 import { setShowLoginModal } from '../../redux/actions/actionsSlice';
 import {
@@ -30,6 +29,8 @@ import {
   TitlePage,
   TitleUpload,
 } from './ConfigStyles';
+import pkg from '../../../package.json'; // ajustá el path
+const appVersion = pkg.version;
 
 const ImportFile = ({ open, setOpen }) => {
   //const groupedOptionsHelado = useSelector((state) => state.sabores.sabores[0])
@@ -179,55 +180,66 @@ const Config = () => {
     setRemove(false);
   };
 
+  const ipcRenderer =
+    (typeof window !== 'undefined' &&
+      window.require &&
+      window.require('electron') &&
+      window.require('electron').ipcRenderer) ||
+    null;
+
+  const [updateStatus, setUpdateStatus] = useState('');
+
+  const checkForUpdates = async () => {
+    if (!ipcRenderer) {
+      setUpdateStatus('IPC no disponible (¿corriendo en navegador?)');
+      return;
+    }
+    try {
+      setUpdateStatus('Buscando actualizaciones...');
+      const res = await ipcRenderer.invoke('check-for-updates');
+      if (res?.error) setUpdateStatus('Error: ' + res.error);
+      else if (res.updateAvailable) setUpdateStatus('Nueva versión disponible: v' + res.version);
+      else setUpdateStatus('Ya estás en la última versión');
+    } catch (e) {
+      setUpdateStatus('Error: ' + (e?.message || e));
+    }
+  };
+
+  const installUpdate = () => {
+    if (!ipcRenderer) return;
+    ipcRenderer.send('quit-and-install');
+  };
+
   return (
     <Container>
       <PageInner>
-        {save ? (
-          <>
-            <Background />
-            <MsjNav style={{ background: '#04a485' }}>
-              <span>¿Guardar pedidos?</span>
-              <div>
-                <MsjButton onClick={() => clickSave()} style={{ color: '#4CCD99' }}>
-                  <Check />
-                </MsjButton>
-                <MsjButton onClick={() => setSave(false)} style={{ color: '#4CCD99' }}>
-                  <X />
-                </MsjButton>
-              </div>
-            </MsjNav>
-          </>
-        ) : (
-          <>
-            <Background style={{ display: 'none' }} />
-            <MsjNav style={{ transform: 'translateY(800px)' }} />
-          </>
-        )}
-        {remove ? (
-          <>
-            <Background />
-            <MsjNav style={{ background: '#D20062' }}>
-              <span>¿Borrar pedidos?</span>
-              <div>
-                <MsjButton onClick={() => clickRemove()}>
-                  <Check />
-                </MsjButton>
-                <MsjButton onClick={() => setRemove(false)}>
-                  <X />
-                </MsjButton>
-              </div>
-            </MsjNav>
-          </>
-        ) : (
-          <>
-            <Background style={{ display: 'none' }} />
-            <MsjNav style={{ transform: 'translateY(800px)' }} />
-          </>
-        )}
         <TitlePage>
           <a>Config</a>
+          <span style={{ fontSize: '0.8em', marginLeft: '8px', opacity: 0.7 }}>v{appVersion}</span>
         </TitlePage>
         <ContainerPages>
+          <ButtonPage onClick={checkForUpdates}>
+            <IconButton>
+              <ArrowCircleUpIcon />
+            </IconButton>
+            <a>Buscar actualización</a>
+            <span>
+              <ChevronRight />
+            </span>
+          </ButtonPage>
+          {updateStatus && (
+            <div style={{ padding: '8px 12px', fontSize: '0.85em' }}>
+              {updateStatus}
+              {updateStatus.includes('Nueva versión') && (
+                <button
+                  style={{ marginLeft: 12, padding: '4px 8px', borderRadius: 6 }}
+                  onClick={installUpdate}
+                >
+                  Instalar
+                </button>
+              )}
+            </div>
+          )}
           <ButtonPage onClick={() => dispatch(setShowLoginModal(true))}>
             <IconButton>
               <Settings />

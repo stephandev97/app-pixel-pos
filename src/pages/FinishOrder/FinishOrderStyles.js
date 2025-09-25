@@ -41,4 +41,5 @@ export const ContainerCheckout = styled.div`
   border-top-right-radius: 20px;
   z-index: 101;
   font-family: 'Satoshi', sans-serif;
+  overflow: hidden;
 `;

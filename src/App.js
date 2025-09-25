@@ -14,6 +14,12 @@ import Home from './pages/Home/Home';
 import OrderFinished from './pages/OrderFinished/OrderFinished';
 import Orders from './pages/Orders/Orders';
 import { persistor } from './redux/store';
+import { createGlobalStyle } from 'styled-components';
+
+const GlobalNoDialogScroll = createGlobalStyle`
+  .MuiDialogContent-root { overflow-y: clip !important; }
+  .MuiDialog-paper { overflow: visible !important; }
+`;
 
 export default function App() {
   const activeOrders = useSelector((s) => s.actions.toggleOrders);
@@ -28,6 +34,7 @@ export default function App() {
       <div className="App">
         {/* Navbar superior con pestañas + spacer interno */}
         <Sidebar />
+        <GlobalNoDialogScroll />
         <div
           className="app-main"
           style={{
@@ -56,7 +63,6 @@ export default function App() {
                 height: '100%',
                 minWidth: 0,
                 overflow: 'hidden',
-                width: 'min(476px, 100%)',
                 boxSizing: 'border-box',
               }}
             >

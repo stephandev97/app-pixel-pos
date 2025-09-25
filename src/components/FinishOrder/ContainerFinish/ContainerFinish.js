@@ -40,6 +40,8 @@ import {
 } from './ContainerFinishStyles';
 import { useMemo, useEffect, useRef } from 'react';
 import { BsCash } from 'react-icons/bs';
+import { FaCheck } from 'react-icons/fa6';
+import { MdOutlineClear, MdOutlineCurrencyExchange } from 'react-icons/md';
 
 function getMixtoFromForm(getValues) {
   const ef = Number(getValues('pagoEfectivo') || 0);
@@ -76,17 +78,17 @@ const ContainerFinish = ({ cartItems, price }) => {
   }, []);
   const allProducts = Array.isArray(fromRedux) && fromRedux.length ? fromRedux : fromCache;
 
-  const deliveryOptions = (allProducts || [])
-    .filter((p) => p?.category === 'Delivery')
-    .map((p) => ({
-      key: p.id,
-      label: p.name,
-      price: Number(p.price || 0),
-    }))
-    .sort((a, b) => a.price - b.price); // 👈 orden por precio (asc)
-
+  const deliveryOptions = useMemo(() => {
+    return (allProducts || [])
+      .filter((p) => p?.category === 'Delivery')
+      .map((p) => ({ key: p.id, label: p.name, price: Number(p.price || 0) }))
+      .sort((a, b) => a.price - b.price);
+  }, [allProducts]);
   const generateId = uniqid();
   const dispatch = useDispatch();
+
+  const isRetiro = useSelector((state) => state.actions.toggleAddress);
+
   const {
     register,
     handleSubmit,
@@ -103,9 +105,9 @@ const ContainerFinish = ({ cartItems, price }) => {
       pago: '',
       pagoEfectivo: '',
       pagoMp: '',
-      envioTarifa: 0, // 0 | 1000 | 1500
+      envioTarifa: 0,
       envioOpcion: null,
-      direccion: 'Retiro', // 'envio1' | 'envio2' | null
+      direccion: isRetiro ? 'Retiro' : '', // 👈 ahora respeta el toggle
     },
   });
 
@@ -113,8 +115,17 @@ const ContainerFinish = ({ cartItems, price }) => {
     const mode = getValues('modePago');
     if (mode !== 'efectivo') return true;
     const val = Number(getValues('pago') || 0);
+    const tot = Number(price || 0) + Number(getValues('envioTarifa') || 0);
     if (val <= 0) {
       setError('pago', { type: 'manual', message: 'Debe ser mayor a 0' });
+      return false;
+    }
+    if (val < tot) {
+      setError('pago', { type: 'manual', message: 'El efectivo no cubre el total' });
+      // opcional: enfocar el input
+      try {
+        document.querySelector('input[name="pago"]')?.focus();
+      } catch {}
       return false;
     }
     clearErrors('pago');
@@ -126,7 +137,6 @@ const ContainerFinish = ({ cartItems, price }) => {
 
   const pagoState = useSelector((state) => state.actions.pago);
   const isEfectivo = useSelector((state) => state.actions.toggleEfectivo);
-  const isRetiro = useSelector((state) => state.actions.toggleAddress);
   const CUTOFF_HOUR = 3; // 3 AM
 
   const modePagoWatch = watch('modePago');
@@ -168,8 +178,9 @@ const ContainerFinish = ({ cartItems, price }) => {
     const mode = getValues('modePago'); // "mixto" | "efectivo" | "transferencia"
     if (mode !== 'mixto') return true;
 
-    const ef = Number(getValues('pagoEfectivo') || 0);
-    const mp = Number(getValues('pagoMp') || 0);
+    const parseNum = (v) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0;
+    const ef = parseNum(getValues('pagoEfectivo'));
+    const mp = parseNum(getValues('pagoMp'));
     const tot = Number(price || 0) + Number(getValues('envioTarifa') || 0);
     let ok = true;
 
@@ -201,14 +212,32 @@ const ContainerFinish = ({ cartItems, price }) => {
   }
 
   const onSubmit = async () => {
-    if (!validateMixtoTotal() || !validateEfectivo()) {
-      // no seguimos con el flujo: NO crear orden, NO avanzar
-      return;
+    // validaciones específicas por modo
+    const modePago = getValues('modePago');
+    const tot = Number(price || 0) + Number(getValues('envioTarifa') || 0);
+
+    // 🔒 EFECTIVO: debe ser ≥ total + envío
+    if (modePago === 'efectivo') {
+      const val = Number(getValues('pago') || 0);
+      if (!(val >= tot)) {
+        setError('pago', { type: 'manual', message: 'El efectivo debe ser ≥ Total + Envío' });
+        try {
+          document.querySelector('input[name="pago"]')?.focus();
+        } catch {}
+        return; // 🚫 CORTA EL SUBMIT
+      }
     }
+
+    // Mixto mantiene su validación actual
+    if (!validateMixtoTotal()) return;
     // no cierres acá; cerramos en finally
     dispatch(toggleFinishOrder(true));
 
     const dir = getValues('direccion') || 'Retiro';
+    if (!isRetiro && !dir.trim()) {
+      setError('direccion', { type: 'manual', message: 'Ingresá la dirección' });
+      return;
+    }
     const { mode, address } = detectFulfillment(dir);
 
     const now = new Date();
@@ -222,9 +251,9 @@ const ContainerFinish = ({ cartItems, price }) => {
       direccion: dir,
       total: finalTotal,
       envio: shippingWatch, // nuevo: guarda el costo de envío
-      envioOpcion: getValues('envioOpcion'), // nuevo: 'envio1' | 'envio2'
-      pago: isEfectivo ? pagoState : 'Transferencia',
-      cambio: Number((pagoState || 0) - (price || 0)),
+      ...(getValues('envioOpcion') ? { envioOpcion: getValues('envioOpcion') } : {}),
+      pago: 0, // ← SIEMPRE número; lo seteamos por modo abajo
+      cambio: 0, // ← se recalcula abajo
       check: mode === 'retiro',
       hora: time,
     };
@@ -253,7 +282,7 @@ const ContainerFinish = ({ cartItems, price }) => {
 
       orderToSave = {
         ...orderToSave,
-        pago: 'Mixto',
+        pago: ef + mp,
         pagoEfectivo: ef,
         pagoMp: mp,
         pagoDetalle: detalle,
@@ -266,10 +295,11 @@ const ContainerFinish = ({ cartItems, price }) => {
       // revenueAmount ya es el total de la venta
     } else if (isEfectivo) {
       // EFECTIVO simple
+      const pagoNum = Number(pagoState || 0);
       orderToSave = {
         ...orderToSave,
-        pago: Number(pagoState || 0), // tu UI venía guardando el importe pagado en efectivo
-        cambio: Math.max(0, Number(pagoState || 0) - orderToSave.total),
+        pago: pagoNum,
+        cambio: Math.max(0, pagoNum - orderToSave.total),
       };
       methodForOrder = 'efectivo';
       paidAmountForDaily = { efectivo: Number(pagoState || 0) }; // tu UI puede permitir >, = o <
@@ -278,7 +308,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       // TRANSFERENCIA
       orderToSave = {
         ...orderToSave,
-        pago: 'Transferencia',
+        pago: orderToSave.total, // ← número
         cambio: 0,
       };
       methodForOrder = 'transferencia';
@@ -327,7 +357,35 @@ const ContainerFinish = ({ cartItems, price }) => {
           : Promise.resolve(),
       ]);
     } catch (err) {
-      console.error('PB detail:', err?.status, err?.data || err);
+      // Intenta leer todas las formas típicas del error de PB
+      const pb = err?.data || err?.response?.data || err?.originalError?.data || err;
+
+      // Mensajes útiles
+      const msg = pb?.message || err?.message || 'Unknown error';
+      const fields = pb?.data || pb?.error || pb?.errors || null;
+
+      // Log crudo y bonito
+      console.group('PB create error');
+      console.log('message:', msg);
+      console.log('fields:', fields);
+      console.log('raw error:', err);
+      try {
+        console.log(
+          'raw error (stringified):',
+          JSON.stringify(err, Object.getOwnPropertyNames(err), 2)
+        );
+      } catch {}
+      // Muy útil: ver exactamente qué estás mandando
+      console.log('payload sent:', {
+        ...orderToSave,
+        method: methodForOrder,
+        paidAmount: paidAmountForDaily,
+        revenueAmount,
+        businessDate,
+        mode,
+        address,
+      });
+      console.groupEnd();
       return;
     } finally {
       // 3) Reset UI / estado
@@ -353,16 +411,17 @@ const ContainerFinish = ({ cartItems, price }) => {
     if (!formEl || !totalEl) return;
     const ro = new ResizeObserver(() => {
       const h = totalEl.offsetHeight || 0;
-      formEl.style.setProperty('--summary-h', `${h}px`);
+      const hRounded = Math.ceil(h); // evita 0.5px “fantasma”
+      formEl.style.setProperty('--summary-h', `${hRounded}px`);
     });
     ro.observe(totalEl);
     // kick inicial
-    formEl.style.setProperty('--summary-h', `${totalEl.offsetHeight || 0}px`);
+    formEl.style.setProperty('--summary-h', `${Math.ceil(totalEl.offsetHeight || 0)}px`);
     return () => ro.disconnect();
   }, []);
 
   return (
-    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)}>
+    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)} style={{ overflow: 'hidden' }}>
       <ContentTabs>
         <TabDireccion
           isRetiro={isRetiro}
@@ -441,10 +500,16 @@ const ContainerFinish = ({ cartItems, price }) => {
               <AnimSection>
                 <Row>
                   <Label>Estado</Label>
-                  {cambio > 0 && <StatusPill kind="warn">Cambio {formatPrice(cambio)}</StatusPill>}
+                  {cambio > 0 && (
+                    <StatusPill kind="warn" style={{ fontSize: 16 }}>
+                      <MdOutlineCurrencyExchange style={{ marginRight: 5 }} />
+                      Cambio {formatPrice(cambio)}
+                    </StatusPill>
+                  )}
                   {falta > 0 && <StatusPill kind="bad">Falta {formatPrice(falta)}</StatusPill>}
                   {cambio === 0 && falta === 0 && (
-                    <StatusPill kind="ok" style={{ fontSize: 15 }}>
+                    <StatusPill kind="ok" style={{ fontSize: 16 }}>
+                      <FaCheck style={{ marginRight: 5 }} />
                       Abona justo
                     </StatusPill>
                   )}
@@ -462,17 +527,21 @@ const ContainerFinish = ({ cartItems, price }) => {
               <AnimSection>
                 <Row>
                   <Label>Estado</Label>
-                  {pagoState > finalTotal && (
-                    <StatusPill kind="warn">
+                  {Number(pagoState) > finalTotal && (
+                    <StatusPill kind="warn" style={{ fontSize: 16 }}>
+                      <MdOutlineCurrencyExchange style={{ marginRight: 5 }} />
                       Cambio {formatPrice(pagoState - finalTotal)}
                     </StatusPill>
                   )}
                   {pagoState < finalTotal && (
-                    <StatusPill kind="bad">Falta {formatPrice(finalTotal - pagoState)}</StatusPill>
+                    <StatusPill kind="bad" style={{ fontSize: 16 }}>
+                      <MdOutlineClear style={{ marginRight: 5 }} />
+                      Falta {formatPrice(finalTotal - pagoState)}
+                    </StatusPill>
                   )}
                   {pagoState === finalTotal && (
-                    <StatusPill kind="ok" style={{ fontSize: 15 }}>
-                      Abona justo
+                    <StatusPill kind="ok" style={{ fontSize: 16 }}>
+                      <FaCheck style={{ marginRight: 5 }} /> Abona justo
                     </StatusPill>
                   )}
                 </Row>
@@ -483,13 +552,22 @@ const ContainerFinish = ({ cartItems, price }) => {
               <Row>
                 <Label>Paga</Label>
                 <Pill style={{ background: '#2563eb', color: 'white', fontSize: 16 }}>
+                  <img
+                    src={mpIconWhite}
+                    alt="MercadoPago"
+                    width="20"
+                    height="20"
+                    style={{ display: 'block', marginRight: '0.4em' }}
+                  />{' '}
                   Transferencia
                 </Pill>
               </Row>
             </AnimSection>
           )}
         </SummaryBox>
-        <ButtonNext type="submit">Crear Pedido</ButtonNext>
+        <ButtonNext type="submit" style={{ width: '90%', height: '55px' }}>
+          Crear Pedido
+        </ButtonNext>
       </TotalFinish>
     </ContentForm>
   );

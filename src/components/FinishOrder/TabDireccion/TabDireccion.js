@@ -41,7 +41,7 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
 
   const changeDelivery = () => {
     dispatch(toggleAddress(false));
-    setValue('direccion', '');
+    setValue('direccion', '', { shouldValidate: true });
     const first = deliveryOptions[0];
     if (first) applyShipping(first);
   };
@@ -50,18 +50,20 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
     dispatch(toggleAddress(true));
     setValue('direccion', 'Retiro');
     setValue('envioTarifa', 0, { shouldValidate: true });
-    setValue('envioOpcion', null, { shouldValidate: true });
+    setValue('envioOpcion', undefined, { shouldValidate: true });
   };
 
   // 👇 Default si ya estoy en Delivery, no hay selección y llegan las opciones
   useEffect(() => {
     const current = watch?.('envioOpcion');
+    const dir = watch?.('direccion');
     if (
       !isRetiro &&
       (!current || !deliveryOptions?.some((o) => String(o.key) === String(current)))
     ) {
       const first = deliveryOptions?.[0];
       if (first) applyShipping(first);
+      if (dir === 'Retiro') setValue('direccion', '', { shouldValidate: true });
     }
   }, [isRetiro, deliveryOptions, watch, setValue]);
 
@@ -129,6 +131,9 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
                     onClick={() => {
                       setValue('envioTarifa', Number(opt.price || 0), { shouldValidate: true });
                       setValue('envioOpcion', String(opt.key), { shouldValidate: true });
+                      if (watch?.('direccion') === 'Retiro') {
+                        setValue('direccion', '', { shouldValidate: true });
+                      }
                     }}
                     style={{ marginBottom: 10 }}
                   >

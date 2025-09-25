@@ -45,6 +45,9 @@ import {
   TitleCard,
   TotalPrint,
 } from './OrdersStyles';
+const { ipcRenderer } = window.require('electron');
+
+const Line = ({ m = 6 }) => <div style={{ borderTop: '1px dashed #000', margin: `${m}px 0` }} />;
 
 function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
@@ -52,11 +55,15 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   const [cash, setCash] = useState(initial.ef || 0);
   const [mp, setMp] = useState(initial.mp || 0);
   const [errors, setErrors] = useState({});
-
   useEffect(() => {
     const errs = {};
     const tot = Number(orderTotal) || 0;
-    if (method === 'Mixto') {
+    if (method === 'Efectivo') {
+      const c = Number(cash) || 0;
+      if (c < tot) {
+        errs.cash = `El efectivo debe ser ≥ ${tot.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}`;
+      }
+    } else if (method === 'Mixto') {
       if (!Number.isFinite(cash) || cash <= 0) errs.cash = 'Debe ser mayor a 0';
       if (!Number.isFinite(mp) || mp <= 0) errs.mp = 'Debe ser mayor a 0';
       const suma = (Number(cash) || 0) + (Number(mp) || 0);
@@ -224,7 +231,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
             <BsCash size={18} style={{ color: '#23a76d' }} />
             <input
               type="number"
-              min={1}
+              min={Number(orderTotal) || 0}
               value={cash}
               onChange={(e) => setCash(Math.max(1, Number(e.target.value) || 0))}
               style={inputInner}
@@ -264,13 +271,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
 
             {/* MP */}
             <div style={inputGroup(!!errors.mp)}>
-              <img
-                src="/icons/mercadopagowhite.png"
-                alt="MP"
-                width="18"
-                height="18"
-                style={{ display: 'block' }}
-              />
+              <img src={mpLogoWhite} alt="MP" width="18" height="18" style={{ display: 'block' }} />
               <input
                 type="number"
                 min={1}
@@ -420,6 +421,7 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
 }
 
 const CardOrders = ({
+  method,
   pending,
   numeracion,
   direccion,
@@ -438,15 +440,40 @@ const CardOrders = ({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [localPay, setLocalPay] = useState(null);
   const [viewVersion, setViewVersion] = useState(0);
-
+  const [showPreview, setShowPreview] = useState(false);
+  const [previewText, setPreviewText] = useState('');
   // Lo que la UI debe mostrar (si hay cambios recientes, usa localPay)
   const viewPago = localPay?.pago ?? pago;
   const viewEf = localPay?.pagoEfectivo ?? Number(pagoEfectivo || 0);
   const viewMp = localPay?.pagoMp ?? Number(pagoMp || 0);
 
+  // Método real de pago (desde field `method` o parche optimista)
+  const methodNorm = String(localPay?.method ?? method ?? '').toLowerCase(); // 'efectivo' | 'transferencia' | 'mixto'
+
+  const buildPreview = async () => {
+    const orderForPrint = {
+      direccion,
+      items: itemsNorm,
+      total,
+      pago: ticketPago,
+      pagoEfectivo: viewEf,
+      pagoMp: viewMp,
+    };
+    const text = await ipcRenderer.invoke('FORMAT_TICKET_TEXT', {
+      order: orderForPrint,
+      font: 'B',
+    });
+    setPreviewText(text);
+    setShowPreview((v) => !v);
+  };
+
   // 1) valores crudos
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
+
+  // valor para ticket/preview
+  const ticketPago =
+    methodNorm === 'mixto' ? 'Mixto' : methodNorm === 'transferencia' ? 'Transferencia' : viewPago;
   // 2) fallback: intentar parsear de "pagoDetalle" (ej: "EF $2000 + MP $8600")
   if (pago === 'Mixto' && ef === 0 && mp === 0 && typeof pagoDetalle === 'string') {
     const m = pagoDetalle.match(/EF\s*\$?\s*([\d.,]+)\s*\+\s*MP\s*\$?\s*([\d.,]+)/i);
@@ -457,26 +484,44 @@ const CardOrders = ({
     }
   }
   const totalPagado =
-    viewPago === 'Mixto'
+    methodNorm === 'mixto'
       ? viewEf + viewMp
-      : viewPago === 'Transferencia'
+      : methodNorm === 'transferencia'
         ? Number(total || 0)
         : Number(viewPago || 0);
-  const contentRef = useRef(null);
-  const reactToPrintFn = useReactToPrint({ contentRef });
   const dispatch = useDispatch();
   const [copiado, setCopiado] = useState();
   const [hidden, setHidden] = useState(true);
   const pedidoMap = items.map((item) => item.name);
   const listaItems = pedidoMap.flat();
   const repetidos = [];
+
+  // arriba de donde calculás repetidos2, crea una versión normalizada de items
+  const itemsNorm = useMemo(() => {
+    // ¿ya viene algún item con "envio"?
+    const hasEnvio = items.some((it) => /envio/i.test(String(it?.name || '')));
+
+    // renombra "envio 1" o "envio 2" a "Envío"
+    const base = items.map((it) => ({
+      ...it,
+      name: String(it?.name || '').replace(/^\s*envio\s*\d*/i, 'Envío'),
+    }));
+
+    // si es delivery (no "Retiro") y no existe item envío, lo agregamos virtual
+    if (direccion !== 'Retiro' && !hasEnvio) {
+      base.push({ name: 'Envío', quantity: 1, category: 'Envio' });
+    }
+    return base;
+  }, [items, direccion]);
+
   const repetidos2 = [];
   listaItems.forEach(function (numero) {
     repetidos[numero] = (repetidos[numero] || 0) + numero;
   });
 
-  items.map(function (item) {
-    repetidos2[item.name] = (repetidos2[item.name] || 0) + item.quantity;
+  itemsNorm.forEach((item) => {
+    const q = Number(item?.quantity || 0) || 1;
+    repetidos2[item.name] = (repetidos2[item.name] || 0) + q;
   });
 
   const removeOrder = (id) => {
@@ -490,7 +535,8 @@ const CardOrders = ({
 
       if (method === 'Transferencia') {
         payload = {
-          pago: 'Transferencia',
+          method: 'transferencia',
+          pago: tot,
           pagoEfectivo: 0,
           pagoMp: tot,
           pagoDetalle: 'Transferencia',
@@ -502,6 +548,7 @@ const CardOrders = ({
           return;
         }
         payload = {
+          method: 'efectivo',
           pago: ef,
           pagoEfectivo: ef,
           pagoMp: 0,
@@ -520,7 +567,8 @@ const CardOrders = ({
           return;
         }
         payload = {
-          pago: 'Mixto',
+          method: 'mixto',
+          pago: ef + mpVal,
           pagoEfectivo: ef,
           pagoMp: mpVal,
           pagoDetalle: `EF $${ef} + MP $${mpVal}`,
@@ -598,9 +646,9 @@ const CardOrders = ({
     if (extrasLines.length) lines.push(...extrasLines);
 
     // --- PAGO (usa viewPago/viewEf/viewMp para que sea instantáneo) ---
-    if (viewPago === 'Transferencia') {
+    if (methodNorm === 'transferencia') {
       lines.push(`💳 Transferencia OK`);
-    } else if (viewPago === 'Mixto') {
+    } else if (methodNorm === 'mixto') {
       const cash = Number(viewEf) || 0;
       const mpAmt = Number(viewMp) || 0;
       const tot = Number(total) || 0;
@@ -609,7 +657,7 @@ const CardOrders = ({
 
       if (cash > 0) lines.push(`💵 ${formatPrice(cash)}`);
       if (cambioDesdeEF > 0) lines.push(`🔄 ${formatPrice(cambioDesdeEF)}`);
-    } else if (!isNaN(Number(viewPago))) {
+    } else if (methodNorm === 'efectivo' && !isNaN(Number(viewPago))) {
       const cash = Number(viewPago) || 0;
       const tot = Number(total) || 0;
       const change = Math.max(cash - tot, 0);
@@ -649,23 +697,171 @@ const CardOrders = ({
       return `${total} ${label}`;
     });
 
+  // --- Ticket reusable (preview + print) ---
+  const Ticket58 = React.forwardRef(
+    ({ direccion, itemsNorm, total, pago, ef, mp, totalPagado, formatPrice, logo }, ref) => {
+      return (
+        <Print
+          ref={ref}
+          className="ticket58"
+          style={{
+            width: '40mm', // si te queda angosto, dejalo; si queda chico, probá '48mm'
+            maxWidth: '40mm',
+            boxSizing: 'border-box',
+            margin: 0,
+            padding: 0,
+            lineHeight: 1.25,
+            fontSize: '3.2mm', // ~9pt
+          }}
+        >
+          {/* Header */}
+          <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
+            <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
+
+            <img
+              src={logo}
+              alt="Logo"
+              style={{ width: '30mm', height: 'auto', display: 'block', margin: '0 auto' }}
+            />
+          </div>
+
+          {/* Dirección / Cliente */}
+          <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
+            <div
+              style={{
+                fontSize: '3.5mm',
+                lineHeight: 1.2,
+                maxWidth: '52mm',
+                margin: '0 auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+                fontWeight: 700,
+              }}
+            >
+              {direccion || 'Retiro'}
+            </div>
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
+
+          {/* Tabla de productos */}
+          <div style={{ width: '100%', margin: '1.5mm 0' }}>
+            <div
+              style={{
+                display: 'flex',
+                fontWeight: 'bold',
+                marginBottom: '1mm',
+                fontSize: '3.4mm',
+              }}
+            >
+              <span style={{ width: '6mm' }}>#</span>
+              <span style={{ flex: 1, textAlign: 'left' }}>Producto</span>
+            </div>
+
+            {itemsNorm.map((it, idx) => {
+              const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
+              const nombre = it?.name || it?.title || it?.label || '';
+              const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
+              return (
+                <div key={idx} style={{ marginBottom: '1mm' }}>
+                  <div style={{ display: 'flex', fontSize: '3.4mm' }}>
+                    <span style={{ width: '6mm' }}>{cantidad}</span>
+                    <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
+                  </div>
+                  {!!sabores.length && (
+                    <div
+                      style={{
+                        marginLeft: '6mm',
+                        marginTop: '.6mm',
+                        fontSize: '3mm',
+                        fontWeight: 700,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {sabores.map((s, i) => (
+                        <div key={i}>• {s}</div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
+
+          {/* Totales */}
+          <TotalPrint>
+            <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
+            <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
+          </TotalPrint>
+
+          {pago === 'Mixto' ? (
+            <>
+              <TotalPrint>
+                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
+                <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
+              </TotalPrint>
+              <TotalPrint>
+                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
+                <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
+              </TotalPrint>
+              {totalPagado > total && (
+                <TotalPrint>
+                  <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
+                  <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
+                </TotalPrint>
+              )}
+            </>
+          ) : (
+            <TotalPrint>
+              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
+                {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
+              </a>
+              <a style={{ textAlign: 'right' }}>
+                {pago === 'Transferencia' ? '' : pago === total ? 'JUSTO' : formatPrice(pago)}
+              </a>
+            </TotalPrint>
+          )}
+          <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
+        </Print>
+      );
+    }
+  );
+
+  const contentRef = useRef(null);
+
+  const pageStyle = `
+  @page { size: 58mm auto; margin: 0; }
+  @media print {
+    html, body { margin: 0 !important; padding: 0 !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  }
+`;
+
+  const reactToPrintFn = useReactToPrint({
+    contentRef, // 👈 clave para tu versión
+    pageStyle,
+    removeAfterPrint: false, // deja el nodo montado (más estable)
+  });
+
   return (
     //<ContainerCard style={{border: `2px solid ${check? '#28a745' : '#dc3545'}`}}>
     <ContainerCard
       key={viewVersion}
       style={pending ? { border: '2px dashed orange' } : {}}
       $estado={
-        pago === 'Mixto'
+        methodNorm === 'mixto'
           ? totalPagado === total
             ? 'justo'
             : totalPagado > total
               ? 'cambio'
               : 'incompleto'
-          : pago == total
-            ? 'justo'
-            : pago === 'Transferencia'
-              ? 'transferencia'
-              : pago > total
+          : methodNorm === 'transferencia'
+            ? 'transferencia'
+            : Number(viewPago) === Number(total)
+              ? 'justo'
+              : Number(viewPago) > Number(total)
                 ? 'cambio'
                 : 'incompleto'
       }
@@ -709,8 +905,9 @@ const CardOrders = ({
           ) : (
             <ButtonCopy onClick={clickBtnCopy}>Copiar</ButtonCopy>
           )}
-          <ButtonPrint variant="contained" onClick={reactToPrintFn}>
-            <PrintIcon fontSize="small" />
+
+          <ButtonPrint variant="contained" onClick={() => reactToPrintFn()}>
+            <PrintIcon />
           </ButtonPrint>
 
           {/* NUEVO: editar pago */}
@@ -766,11 +963,26 @@ const CardOrders = ({
           <DivProducts style={{ fontWeight: 'normal' }}>
             <ShoppingBag size={18} />
             <ListProducts style={{ fontSize: '0.9em' }}>
-              {Object.entries(repetidos2).map((item) => (
-                <a key={item.id}>
-                  {item[0]} <a style={{ fontWeight: 'bold' }}>({item[1]})</a>
-                </a>
-              ))}
+              {itemsNorm.map((it, idx) => {
+                const cantidad = Number(it?.quantity ?? 1);
+                const nombre = it?.name || '';
+                const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
+
+                return (
+                  <div key={idx} style={{ marginBottom: '6px' }}>
+                    <div>
+                      {nombre} <a style={{ fontWeight: 'bold' }}>({cantidad})</a>
+                    </div>
+                    {!!sabores.length && (
+                      <div style={{ marginLeft: '12px', fontSize: '0.85em', marginTop: '2px' }}>
+                        {sabores.map((s, i) => (
+                          <div key={i}>• {s}</div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </ListProducts>
             {/* BLOQUE DESTACADO DE EXTRAS */}
           </DivProducts>
@@ -789,7 +1001,7 @@ const CardOrders = ({
           {/* IZQUIERDA: agrupa todas las pills */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {/* MIXTO */}
-            {viewPago === 'Mixto' && (
+            {methodNorm === 'mixto' && (
               <>
                 <span
                   style={{
@@ -804,27 +1016,7 @@ const CardOrders = ({
                 >
                   <BsCash size="1.1em" style={{ marginRight: '0.4em' }} /> {formatPrice(viewEf)}
                 </span>
-                <span
-                  style={{
-                    background: '#3c6dd8ff',
-                    color: 'white',
-                    borderRadius: 12,
-                    padding: '5px 10px',
-                    fontSize: '0.9em',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                  }}
-                >
-                  <img
-                    src={mpLogoWhite}
-                    alt="MP"
-                    width="18"
-                    height="18"
-                    style={{ marginRight: '0.4em' }}
-                  />{' '}
-                  {formatPrice(viewMp)}
-                </span>
+
                 {totalPagado === total && (
                   <span
                     style={{
@@ -874,7 +1066,7 @@ const CardOrders = ({
             )}
 
             {/* EFECTIVO SIMPLE */}
-            {!isNaN(Number(viewPago)) && Number(viewPago) > 0 && (
+            {methodNorm === 'efectivo' && !isNaN(Number(viewPago)) && Number(viewPago) > 0 && (
               <>
                 <span
                   style={{
@@ -940,7 +1132,7 @@ const CardOrders = ({
             )}
 
             {/* TRANSFERENCIA */}
-            {viewPago === 'Transferencia' && (
+            {methodNorm === 'transferencia' && (
               <span
                 style={{
                   background: '#007bff',
@@ -963,158 +1155,54 @@ const CardOrders = ({
           <span style={{ fontWeight: '800', fontSize: '1.2em' }}>{formatPrice(total)}</span>
         </div>
       </FooterCard>
-
-      <div style={{ display: 'none' }}>
-        <Print ref={contentRef} style={{ width: '220px', fontSize: '12px', lineHeight: '1.3' }}>
-          <div style={{ textAlign: 'center', marginBottom: '8px' }}>
-            <img src={logo} alt="Logo" style={{ maxWidth: '100px', height: 'auto' }} />
-          </div>
-          {/* Dirección (sin etiqueta) */}
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              margin: '6px 0 4px',
-            }}
-          >
-            <span style={{ fontWeight: 700, fontSize: '16px', lineHeight: 1.1, marginBottom: 5 }}>
-              Cliente
-            </span>
-            <span
-              style={{
-                fontSize: '15px',
-                lineHeight: 1.2,
-                maxWidth: '200px', // ≈ 58mm
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                opacity: 0.9,
-                textAlign: 'center',
-              }}
-            >
-              {direccion || 'Retiro'}
-            </span>
-          </div>
-
-          <LineaPrint>--------------------------------</LineaPrint>
-
-          {/* === Productos (tabla 58mm con sabores) === */}
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              flexDirection: 'column',
-              margin: '6px 0',
-            }}
-          >
-            {/* Cabecera */}
-            <div
-              style={{
-                display: 'flex',
-                justifyContent: 'flex-start',
-                fontWeight: 'bold',
-                paddingBottom: '2px',
-                marginBottom: '6px',
-                fontSize: '15px',
-              }}
-            >
-              <span style={{ width: 20, textAlign: 'left' }}>#</span>
-              <span style={{ flex: 1, textAlign: 'left' }}>Producto</span>
-            </div>
-
-            {/* Filas de productos */}
-            {items.map((it, idx) => {
-              const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
-              const nombre = it?.name || it?.title || it?.label || '';
-              const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
-
-              return (
-                <div key={idx} style={{ marginBottom: 3 }}>
-                  {/* Producto principal */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      fontSize: '14px',
-                      justifyContent: 'flex-start',
-                    }}
-                  >
-                    <span style={{ width: 20, textAlign: 'left' }}>{cantidad}</span>
-                    <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
-                  </div>
-
-                  {/* Sabores debajo, alineados con la columna del producto */}
-                  {sabores.length > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        fontSize: '11px',
-                        lineHeight: 1.2,
-                        marginLeft: 20,
-                        marginTop: 5,
-                        fontWeight: 700, // deja espacio como la columna "#"
-                      }}
-                    >
-                      <span style={{ flex: 1, textAlign: 'left', paddingLeft: 5 }}>
-                        {sabores.map((s, i) => (
-                          <div key={i}>• {s}</div>
-                        ))}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <LineaPrint>--------------------------------</LineaPrint>
-
-          {/* Total */}
-          <TotalPrint>
-            <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
-            <a style={{ textAlign: 'right' }}>{formatPrice(total)}</a>
-          </TotalPrint>
-
-          {/* Medio de pago debajo (igual lógica que ya usás) */}
-          {pago === 'Mixto' ? (
-            <>
-              <TotalPrint>
-                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
-                <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
-              </TotalPrint>
-              <TotalPrint>
-                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
-                <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
-              </TotalPrint>
-              {totalPagado > total && (
-                <TotalPrint>
-                  <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
-                  <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
-                </TotalPrint>
-              )}
-            </>
-          ) : (
-            <TotalPrint>
-              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
-                {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
-              </a>
-              <a style={{ textAlign: 'right' }}>
-                {pago === 'Transferencia' ? '' : pago === total ? 'JUSTO' : formatPrice(pago)}
-              </a>
-            </TotalPrint>
-          )}
-
-          <LineaPrint>--------------------------------</LineaPrint>
-        </Print>
+      {/* PRINT AREA — SIEMPRE montada, fuera de pantalla (no display:none) */}
+      <div
+        style={{
+          position: 'fixed',
+          top: 0,
+          left: '-10000px',
+          zIndex: -1,
+          background: '#fff',
+        }}
+      >
+        <Ticket58
+          ref={contentRef}
+          direccion={direccion}
+          itemsNorm={itemsNorm}
+          total={total}
+          pago={ticketPago}
+          ef={ef}
+          mp={mp}
+          totalPagado={totalPagado}
+          formatPrice={formatPrice}
+          logo={logo}
+        />
       </div>
+      {process.env.NODE_ENV === 'development' && (
+        <div style={{ border: '1px solid #ccc', marginTop: 10, padding: 8, background: '#fff' }}>
+          <h4>Vista previa ticket (58mm)</h4>
+          <Ticket58
+            direccion={direccion}
+            itemsNorm={itemsNorm}
+            total={total}
+            pago={ticketPago}
+            ef={ef}
+            mp={mp}
+            totalPagado={totalPagado}
+            formatPrice={formatPrice}
+            logo={logo}
+          />
+        </div>
+      )}
       <PaymentEditor
         open={editPayOpen}
         onClose={() => setEditPayOpen(false)}
         onSave={savePayment}
         initial={{
           method:
-            viewPago === 'Mixto'
+            methodNorm === 'mixto'
               ? 'Mixto'
-              : viewPago === 'Transferencia'
+              : methodNorm === 'transferencia'
                 ? 'Transferencia'
                 : 'Efectivo',
           ef: Number(viewEf || 0),

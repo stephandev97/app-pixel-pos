@@ -32,7 +32,7 @@ export const ContainerProducts = styled.div`
 
 export const GridProducts = styled.div`
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   width: 100%;
 `;
