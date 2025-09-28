@@ -75,6 +75,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
 
   const isValid = Object.keys(errors).length === 0;
 
+  // Si querés bloquear Guardar con Enter cuando es inválido
   useEffect(() => {
     if (!open) return;
     const onKey = (e) => {
@@ -110,7 +111,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     inset: 0,
     zIndex: 6,
     borderRadius: 'inherit',
-    background: '#111',
+    background: '#111', // 👈 ahora sólido
     color: '#fff',
     transform:
       phase === 'enter'
@@ -125,7 +126,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   };
 
   const panel = {
-    position: 'relative',
+    position: 'relative', // <- para ubicar acciones abajo a la derecha
     display: 'flex',
     flexDirection: 'column',
     gap: 10,
@@ -154,7 +155,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     gap: 6,
     padding: '6px 10px',
     borderRadius: 8,
-    border: `1px solid ${hasError ? '#ff4d4d' : '#2e2e2e'}`,
+    border: `1px solid ${hasError ? '#ff4d4d' : '#2e2e2e'}`, // 👈 rojo si error
     background: '#1b1b1b',
     color: '#fff',
     width: '100%',
@@ -168,6 +169,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     fontSize: '0.95rem',
   };
 
+  // acciones: mini botones redondos, abajo a la derecha
   const actions = {
     position: 'absolute',
     right: 12,
@@ -190,6 +192,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   return (
     <div style={root} role="dialog" aria-modal="true">
       <div style={panel}>
+        {/* header compacto */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ fontWeight: 900, fontSize: '1rem' }}>Editar forma de pago</div>
           <button
@@ -207,6 +210,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
           </button>
         </div>
 
+        {/* método */}
         <div style={pills}>
           {['Efectivo', 'Transferencia', 'Mixto'].map((m) => (
             <button key={m} onClick={() => setMethod(m)} style={pillBtn(method === m)}>
@@ -215,6 +219,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
           ))}
         </div>
 
+        {/* montos: EF solo / Mixto EF+MP uno debajo del otro y full width */}
         {method === 'Efectivo' && (
           <div
             style={{
@@ -251,6 +256,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
               marginTop: 6,
             }}
           >
+            {/* EF */}
             <div style={inputGroup(!!errors.cash)}>
               <BsCash size={18} style={{ color: '#23a76d' }} />
               <input
@@ -263,6 +269,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
               />
             </div>
 
+            {/* MP */}
             <div style={inputGroup(!!errors.mp)}>
               <img src={mpLogoWhite} alt="MP" width="18" height="18" style={{ display: 'block' }} />
               <input
@@ -277,6 +284,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
           </div>
         )}
 
+        {/* acciones abajo-derecha: solo íconos */}
         <div style={actions}>
           <button
             onClick={() => isValid && onSave({ method, cash, mp })}
@@ -301,25 +309,29 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
 function ConfirmOverlay({ open, onConfirm, onCancel }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
 
+  // Animación de entrada/salida
   useEffect(() => {
     if (open) {
       setPhase('enter');
       const id = requestAnimationFrame(() => setPhase('open'));
       return () => cancelAnimationFrame(id);
     } else {
+      // salir -> closed
       setPhase((prev) => (prev === 'closed' ? 'closed' : 'exit'));
       const t = setTimeout(() => setPhase('closed'), 180);
       return () => clearTimeout(t);
     }
   }, [open]);
 
+  // ESC para cancelar (hook SIEMPRE montado, pero solo escucha cuando open)
   useEffect(() => {
-    if (!open) return;
+    if (!open) return; // no adjuntar listener si está cerrado
     const onKey = (e) => e.key === 'Escape' && onCancel();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onCancel]);
 
+  // En lugar de "return null" usamos visibilidad/interaction para ocultar
   const hidden = phase === 'closed';
 
   const style = {
@@ -345,6 +357,7 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
             : 'translateX(100%)',
     opacity: phase === 'open' ? 1 : 0.9,
     transition: 'transform 180ms ease-out, opacity 180ms ease-out',
+    // Cuando está "closed", que no bloquee la card
     visibility: hidden ? 'hidden' : 'visible',
     pointerEvents: hidden ? 'none' : 'auto',
     borderRadius: 16,
@@ -387,7 +400,7 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
           onClick={onCancel}
           style={{
             padding: '10px 16px',
-            borderRadius: '12',
+            borderRadius: 12,
             border: '2px solid #fff',
             fontWeight: 700,
             cursor: 'pointer',
@@ -429,11 +442,13 @@ const CardOrders = ({
   const [viewVersion, setViewVersion] = useState(0);
   const [showPreview, setShowPreview] = useState(false);
   const [previewText, setPreviewText] = useState('');
+  // Lo que la UI debe mostrar (si hay cambios recientes, usa localPay)
   const viewPago = localPay?.pago ?? pago;
   const viewEf = localPay?.pagoEfectivo ?? Number(pagoEfectivo || 0);
   const viewMp = localPay?.pagoMp ?? Number(pagoMp || 0);
 
-  const methodNorm = String(localPay?.method ?? method ?? '').toLowerCase();
+  // Método real de pago (desde field `method` o parche optimista)
+  const methodNorm = String(localPay?.method ?? method ?? '').toLowerCase(); // 'efectivo' | 'transferencia' | 'mixto'
 
   const buildPreview = async () => {
     const orderForPrint = {
@@ -452,11 +467,14 @@ const CardOrders = ({
     setShowPreview((v) => !v);
   };
 
+  // 1) valores crudos
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
 
+  // valor para ticket/preview
   const ticketPago =
     methodNorm === 'mixto' ? 'Mixto' : methodNorm === 'transferencia' ? 'Transferencia' : viewPago;
+  // 2) fallback: intentar parsear de "pagoDetalle" (ej: "EF $2000 + MP $8600")
   if (pago === 'Mixto' && ef === 0 && mp === 0 && typeof pagoDetalle === 'string') {
     const m = pagoDetalle.match(/EF\s*\$?\s*([\d.,]+)\s*\+\s*MP\s*\$?\s*([\d.,]+)/i);
     if (m) {
@@ -478,13 +496,18 @@ const CardOrders = ({
   const listaItems = pedidoMap.flat();
   const repetidos = [];
 
+  // arriba de donde calculás repetidos2, crea una versión normalizada de items
   const itemsNorm = useMemo(() => {
+    // ¿ya viene algún item con "envio"?
     const hasEnvio = items.some((it) => /envio/i.test(String(it?.name || '')));
+
+    // renombra "envio 1" o "envio 2" a "Envío"
     const base = items.map((it) => ({
       ...it,
       name: String(it?.name || '').replace(/^\s*envio\s*\d*/i, 'Envío'),
     }));
 
+    // si es delivery (no "Retiro") y no existe item envío, lo agregamos virtual
     if (direccion !== 'Retiro' && !hasEnvio) {
       base.push({ name: 'Envío', quantity: 1, category: 'Envio' });
     }
@@ -532,6 +555,7 @@ const CardOrders = ({
           pagoDetalle: `EF $${ef}`,
         };
       } else {
+        // Mixto
         const ef = Number(cash) || 0;
         const mpVal = Number(mp) || 0;
         if (ef <= 0 || mpVal <= 0) {
@@ -551,15 +575,20 @@ const CardOrders = ({
         };
       }
 
+      // 1) parche optimista
       setLocalPay(payload);
       setViewVersion((v) => v + 1);
 
+      // 2) persistir en PB
       await pb.collection('orders').update(id, payload);
+
+      // 3) opcional refrescar redux
+      // dispatch(syncPendingOrders());
 
       setEditPayOpen(false);
     } catch (e) {
       console.error('Error guardando pago:', e);
-      setLocalPay(null);
+      setLocalPay(null); // revertir si falló
       alert('No se pudo guardar el pago.');
     }
   };
@@ -567,8 +596,10 @@ const CardOrders = ({
   const copyOrder = () => {
     const lines = [];
 
+    // Dirección
     lines.push(`📍 *${direccion}*`);
 
+    // --- PRODUCTOS (excepto extras) ---
     const productosGrouped = items
       .filter(
         (it) =>
@@ -583,6 +614,7 @@ const CardOrders = ({
       }, {});
     const productosLines = Object.entries(productosGrouped).map(([name, qty]) => {
       let baseName = name.trim();
+      // Evitar "2 1 Kg" -> "2 Kg"
       if (qty > 1 && /^1\s*kg\b/i.test(baseName)) {
         baseName = baseName.replace(/^1\s*/i, '');
       }
@@ -590,15 +622,16 @@ const CardOrders = ({
     });
     if (productosLines.length) lines.push(...productosLines);
 
+    // --- EXTRAS (solo vasitos y cucuruchos) ---
     const extrasGrouped = items
       .filter(
         (it) =>
           String(it.category || '')
             .toLowerCase()
-            .includes('extra') && /vasito|cucurucho/i.test(it.name)
+            .includes('extra') && /vasito|cucurucho/i.test(it.name) // solo vasitos o cucuruchos
       )
       .reduce((acc, it) => {
-        const m = String(it.name).match(/^(\d+)/);
+        const m = String(it.name).match(/^(\d+)/); // ej "5 Vasitos"
         const base = m ? parseInt(m[1], 10) : 1;
         const units = base * (Number(it.quantity) || 0);
         const label = String(it.name)
@@ -612,6 +645,7 @@ const CardOrders = ({
     );
     if (extrasLines.length) lines.push(...extrasLines);
 
+    // --- PAGO (usa viewPago/viewEf/viewMp para que sea instantáneo) ---
     if (methodNorm === 'transferencia') {
       lines.push(`💳 Transferencia OK`);
     } else if (methodNorm === 'mixto') {
@@ -643,6 +677,7 @@ const CardOrders = ({
     }, 1800);
   };
 
+  // timestamp base: primero clientCreatedAt (ms), si no, 'created' (ISO) -> ms
   const createdMs = useMemo(() => {
     if (typeof clientCreatedAt === 'number') return clientCreatedAt;
     if (created) return new Date(created).getTime();
@@ -653,13 +688,16 @@ const CardOrders = ({
   const extrasCalc = items
     .filter((it) => it.category === 'Extras')
     .map((it) => {
+      // buscar número inicial en el nombre, ej: "5 vasitos"
       const match = it.name.match(/^(\d+)/);
       const base = match ? parseInt(match[1], 10) : 1;
       const total = base * it.quantity;
+      // devolver el nombre sin el número, ej: "vasitos"
       const label = it.name.replace(/^\d+\s*/, '');
       return `${total} ${label}`;
     });
 
+  // --- Ticket reusable (preview + print) ---
   const Ticket58 = React.forwardRef(
     ({ direccion, itemsNorm, total, pago, ef, mp, totalPagado, formatPrice, logo }, ref) => {
       return (
@@ -667,15 +705,16 @@ const CardOrders = ({
           ref={ref}
           className="ticket58"
           style={{
-            width: '40mm',
+            width: '40mm', // si te queda angosto, dejalo; si queda chico, probá '48mm'
             maxWidth: '40mm',
             boxSizing: 'border-box',
             margin: 0,
             padding: 0,
             lineHeight: 1.25,
-            fontSize: '3.2mm',
+            fontSize: '3.2mm', // ~9pt
           }}
         >
+          {/* Header */}
           <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
             <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
@@ -686,6 +725,7 @@ const CardOrders = ({
             />
           </div>
 
+          {/* Dirección / Cliente */}
           <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
             <div
               style={{
@@ -704,6 +744,7 @@ const CardOrders = ({
 
           <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
+          {/* Tabla de productos */}
           <div style={{ width: '100%', margin: '1.5mm 0' }}>
             <div
               style={{
@@ -749,6 +790,7 @@ const CardOrders = ({
 
           <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
+          {/* Totales */}
           <TotalPrint>
             <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
             <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
@@ -798,12 +840,13 @@ const CardOrders = ({
 `;
 
   const reactToPrintFn = useReactToPrint({
-    contentRef,
+    contentRef, // 👈 clave para tu versión
     pageStyle,
-    removeAfterPrint: false,
+    removeAfterPrint: false, // deja el nodo montado (más estable)
   });
 
   return (
+    //<ContainerCard style={{border: `2px solid ${check? '#28a745' : '#dc3545'}`}}>
     <ContainerCard
       key={viewVersion}
       style={pending ? { border: '2px dashed orange' } : {}}
@@ -867,10 +910,12 @@ const CardOrders = ({
             <PrintIcon />
           </ButtonPrint>
 
+          {/* NUEVO: editar pago */}
           <ButtonTitle onClick={() => setEditPayOpen(true)} title="Editar pago">
             <MdEdit size={16} />
           </ButtonTitle>
 
+          {/* existente: borrar */}
           <ButtonTitle onClick={() => setConfirmOpen(true)} title="Borrar">
             <FaXmark size={16} />
           </ButtonTitle>
@@ -885,12 +930,15 @@ const CardOrders = ({
           onClick={() => setHidden(!hidden)}
         />
       </DirCard>
+      {/* AVISO DE EXTRAS SIEMPRE VISIBLE */}
+      {/* AVISO DE EXTRAS SIEMPRE VISIBLE */}
+      {/* AVISO DE EXTRAS SIEMPRE VISIBLE */}
       {extrasCalc.length > 0 && (
         <div
           style={{
             margin: '10px 0',
-            display: 'flex',
-            justifyContent: 'flex-start',
+            display: 'flex', // 👈 usa flexbox
+            justifyContent: 'flex-start', // 👈 alinea a la izquierda
           }}
         >
           <span
@@ -902,8 +950,8 @@ const CardOrders = ({
               fontWeight: 'bold',
               color: '#333',
               fontSize: '0.9rem',
-              display: 'inline-block',
-              whiteSpace: 'nowrap',
+              display: 'inline-block', // 👈 se ajusta al contenido
+              whiteSpace: 'nowrap', // 👈 evita que se corte en varias líneas
             }}
           >
             ⚠️ {extrasCalc.join(', ')}
@@ -916,7 +964,7 @@ const CardOrders = ({
             <ShoppingBag size={18} />
             <ListProducts style={{ fontSize: '0.9em' }}>
               {itemsNorm.map((it, idx) => {
-                const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
+                const cantidad = Number(it?.quantity ?? 1);
                 const nombre = it?.name || '';
                 const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
 
@@ -936,6 +984,7 @@ const CardOrders = ({
                 );
               })}
             </ListProducts>
+            {/* BLOQUE DESTACADO DE EXTRAS */}
           </DivProducts>
         </>
       )}
@@ -949,7 +998,9 @@ const CardOrders = ({
             width: '100%',
           }}
         >
+          {/* IZQUIERDA: agrupa todas las pills */}
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {/* MIXTO */}
             {methodNorm === 'mixto' && (
               <>
                 <span
@@ -1011,23 +1062,10 @@ const CardOrders = ({
                     Falta {formatPrice(total - totalPagado)}
                   </span>
                 )}
-                {Number(viewPago) === total && (
-                  <span
-                    style={{
-                      background: '#28a745',
-                      color: 'white',
-                      borderRadius: 12,
-                      padding: '5px 10px',
-                      fontSize: '0.9em',
-                      fontWeight: 'bold',
-                    }}
-                  >
-                    💵 Paga justo
-                  </span>
-                )}
               </>
             )}
 
+            {/* EFECTIVO SIMPLE */}
             {methodNorm === 'efectivo' && !isNaN(Number(viewPago)) && Number(viewPago) > 0 && (
               <>
                 <span
@@ -1045,6 +1083,7 @@ const CardOrders = ({
                   {formatPrice(Number(viewPago))}
                 </span>
 
+                {/* cambio pegado a la pill de efectivo */}
                 {Number(viewPago) > total && (
                   <span
                     style={{
@@ -1060,6 +1099,7 @@ const CardOrders = ({
                   </span>
                 )}
 
+                {/* falta/justo en la misma fila */}
                 {Number(viewPago) < total && (
                   <span
                     style={{
@@ -1091,6 +1131,7 @@ const CardOrders = ({
               </>
             )}
 
+            {/* TRANSFERENCIA */}
             {methodNorm === 'transferencia' && (
               <span
                 style={{
@@ -1110,9 +1151,11 @@ const CardOrders = ({
             )}
           </div>
 
+          {/* DERECHA: total */}
           <span style={{ fontWeight: '800', fontSize: '1.2em' }}>{formatPrice(total)}</span>
         </div>
       </FooterCard>
+      {/* PRINT AREA — SIEMPRE montada, fuera de pantalla (no display:none) */}
       <div
         style={{
           position: 'fixed',
@@ -1165,7 +1208,7 @@ const CardOrders = ({
           ef: Number(viewEf || 0),
           mp: Number(viewMp || 0),
         }}
-        orderTotal={Number(total) || 0}
+        orderTotal={Number(total) || 0} // 👈 NUEVO
       />
 
       <ConfirmOverlay
@@ -1180,13 +1223,11 @@ const CardOrders = ({
   );
 };
 
+// rollover (cada 1 min) con el mismo CUTOFF_HOUR
+const CUTOFF_HOUR = 3;
 function getBusinessDayKey(date = new Date()) {
   const d = new Date(date);
-  const businessDayCutoffHour = 3; 
-
-  if (d.getHours() < businessDayCutoffHour) {
-    d.setDate(d.getDate() - 1);
-  }
+  if (d.getHours() < CUTOFF_HOUR) d.setDate(d.getDate() - 1);
   return d.toISOString().slice(0, 10);
 }
 
@@ -1195,12 +1236,15 @@ export default function Orders() {
   const unsubRef = useRef(null);
   const { orders } = useSelector((s) => s.orders);
 
+  // Hidratar al entrar
   useEffect(() => {
+    // No limpiar si querés ver lo persistido offline.
     if (navigator.onLine) {
       dispatch(hydrateOrdersFromPocket());
     }
   }, [dispatch]);
 
+  // Suscripción realtime al montar (una sola)
   useEffect(() => {
     unsubRef.current = dispatch(subscribeOrdersRealtime());
     return () => {
@@ -1208,6 +1252,7 @@ export default function Orders() {
     };
   }, [dispatch]);
 
+  // Reintentar pendings cuando vuelve la conexión y al montar (si ya hay internet)
   useEffect(() => {
     const handleOnline = () => dispatch(syncPendingOrders());
     window.addEventListener('online', handleOnline);
@@ -1215,19 +1260,19 @@ export default function Orders() {
     return () => window.removeEventListener('online', handleOnline);
   }, [dispatch]);
 
-  const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => {
-      const ta = a.clientCreatedAt ?? new Date(a.created ?? 0).getTime();
-      const tb = b.clientCreatedAt ?? new Date(b.created ?? 0).getTime();
-      return tb - ta;
-    });
-  }, [orders]);
+  const sortedOrders = [...orders].sort((a, b) => {
+    const ta = a.clientCreatedAt ?? new Date(a.created ?? 0).getTime();
+    const tb = b.clientCreatedAt ?? new Date(b.created ?? 0).getTime();
+    return tb - ta; // descendente
+  });
 
+  // rollover (cada 1 min)
   useEffect(() => {
     const doRolloverIfNeeded = () => {
       const nowKey = getBusinessDayKey();
       const lastKey = localStorage.getItem('orders_business_day');
       if (lastKey && lastKey !== nowKey) {
+        // Nuevo día: limpiá y tratá de hidratar si hay conexión
         dispatch(clearOrders());
         if (navigator.onLine) dispatch(hydrateOrdersFromPocket());
       }
@@ -1255,7 +1300,7 @@ export default function Orders() {
             }}
           >
             <img
-              src={logoPixel}
+              src={logoPixel} // 👉 poné un ícono tuyo (ej: una caja vacía o tu logo pixel)
               alt="Sin pedidos"
               style={{ width: 120, height: 'auto', marginBottom: 20, opacity: 0.8 }}
             />
@@ -1267,7 +1312,7 @@ export default function Orders() {
             </p>
           </div>
         ) : (
-          sortedOrders.map((o, i) => (
+          orders.map((o, i) => (
             <CardOrders key={o.id || i} {...o} index={i} numeracion={sortedOrders.length - i} />
           ))
         )}
@@ -1275,3 +1320,5 @@ export default function Orders() {
     </GlobalOrders>
   );
 }
+
+//export default Orders

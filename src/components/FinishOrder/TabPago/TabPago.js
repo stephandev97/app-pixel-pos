@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { BsCash } from 'react-icons/bs';
-import { FaEquals } from 'react-icons/fa';
+import { FaEquals, FaLock, FaLockOpen } from 'react-icons/fa6';
 import { useDispatch, useSelector } from 'react-redux';
 
 import mpIcon from '../../../assets/mercadopago.png';
@@ -22,7 +22,6 @@ const stripLeadingZeros = (raw) => {
   const s = String(raw ?? '');
   if (s === '' || s === '0') return s === '0' ? '' : '';
   const cleaned = s.replace(/[^\d]/g, '');
-  // Evitar "000", "0123" -> "123"
   const noZeros = cleaned.replace(/^0+/, '');
   return noZeros === '' ? '' : noZeros;
 };
@@ -31,20 +30,11 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
   const dispatch = useDispatch();
   const pagoState = useSelector((s) => s.actions.pago);
   const [isMixed, setIsMixed] = useState(false);
-  const [mpAuto, setMpAuto] = useState(true);
+  const [mpLocked, setMpLocked] = useState(false);
 
   useEffect(() => {
     setValue('modePago', isMixed ? 'mixto' : isEfectivo ? 'efectivo' : 'transferencia');
   }, [isMixed, isEfectivo, setValue]);
-
-  useEffect(() => {
-    if (isMixed) {
-      const envio = Number(watch('envioTarifa') || 0);
-      const total = Number(price || 0) + envio;
-      setValue('pagoEfectivo', '', { shouldValidate: true });
-      setValue('pagoMp', total, { shouldValidate: true });
-    }
-  }, [isMixed, price, watch, setValue]);
 
   const clickPasteTotal = () => {
     const envio = Number(watch('envioTarifa') || 0);
@@ -53,12 +43,11 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
     setValue('pago', tot, { shouldValidate: true });
   };
 
-  // Siempre limpia y luego agrega "$ " una sola vez
   const formatWithDollar = (val) => {
-    const raw = String(val ?? '').replace(/[^\d]/g, ''); // quita $, espacios, puntos, etc.
+    const raw = String(val ?? '').replace(/[^\d]/g, '');
     return raw ? `$ ${raw}` : '';
   };
-  // Para guardar en el form/Redux sólo números
+
   const stripDollar = (val) => String(val ?? '').replace(/[^\d]/g, '');
 
   return (
@@ -93,7 +82,12 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
           role="tab"
           aria-selected={isMixed}
           data-active={isMixed}
-          onClick={() => setIsMixed(true)}
+          onClick={() => {
+            setIsMixed(true);
+            const envio = Number(watch('envioTarifa') || 0);
+            const total = Number(price || 0) + envio;
+            setValue('pagoMp', total, { shouldValidate: true });
+          }}
         >
           Mixto
         </ButtonToggle>
@@ -112,7 +106,6 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
               {...register('pago', {
                 setValueAs: (v) => stripDollar(v),
                 validate: (raw) => {
-                  // Sólo valida cuando el modo es EFECTIVO
                   if (String(watch('modePago')) !== 'efectivo') return true;
                   const envio = Number(watch('envioTarifa') || 0);
                   const tot = Number(price || 0) + envio;
@@ -121,15 +114,15 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
                 },
               })}
               aria-invalid={!!errors?.pago}
-              value={formatWithDollar(watch('pago'))} // muestra con "$ "
+              value={formatWithDollar(watch('pago'))}
               onChange={(e) => {
-                const raw = stripDollar(e.target.value); // guardamos sólo dígitos
+                const raw = stripDollar(e.target.value);
                 setValue('pago', raw, { shouldValidate: true });
                 dispatch(changePago(raw));
               }}
               placeholder="Ingresa el monto recibido"
               inputMode="numeric"
-              style={{ paddingLeft: '56px' }} // evita solaparse con el ícono
+              style={{ paddingLeft: '56px' }}
             />
             <ButtonPaste type="button" onClick={clickPasteTotal} title="Igualar al total">
               <FaEquals />
@@ -166,12 +159,21 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
               </Icon>
               <Input
                 {...register('pagoEfectivo', {
-                  setValueAs: (v) => String(v ?? '').replace(/[^\d]/g, ''), // guarda sólo números
+                  setValueAs: (v) => String(v ?? '').replace(/[^\d]/g, ''),
                 })}
                 aria-invalid={!!errors?.pagoEfectivo}
                 value={formatWithDollar(watch('pagoEfectivo'))}
                 onChange={(e) => {
-                  setValue('pagoEfectivo', e.target.value, { shouldValidate: true });
+                  const raw = stripDollar(e.target.value);
+                  setValue('pagoEfectivo', raw, { shouldValidate: true });
+
+                  if (!mpLocked) {
+                    const pagoEfectivo = Number(raw) || 0;
+                    const envio = Number(watch('envioTarifa') || 0);
+                    const total = Number(price || 0) + envio;
+                    const mpNeeded = Math.max(0, total - pagoEfectivo);
+                    setValue('pagoMp', mpNeeded, { shouldValidate: true });
+                  }
                 }}
                 placeholder="Efectivo"
                 inputMode="numeric"
@@ -194,12 +196,18 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
                   setValueAs: (v) => String(v ?? '').replace(/[^\d]/g, ''),
                 })}
                 aria-invalid={!!errors?.pagoMp}
+                disabled={mpLocked}
                 value={formatWithDollar(watch('pagoMp'))}
-                onChange={(e) => setValue('pagoMp', e.target.value, { shouldValidate: true })}
+                onChange={(e) => {
+                  setValue('pagoMp', e.target.value, { shouldValidate: true });
+                }}
                 placeholder="MercadoPago"
                 inputMode="numeric"
                 style={{ paddingLeft: '60px' }}
               />
+              <ButtonPaste type="button" onClick={() => setMpLocked(!mpLocked)} title={mpLocked ? "Desbloquear el monto" : "Bloquear el monto"}>
+                {mpLocked ? <FaLock /> : <FaLockOpen />}
+              </ButtonPaste>
             </InputGroup>
           </StaggerList>
         </AnimSection>

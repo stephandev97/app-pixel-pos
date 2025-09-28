@@ -106,26 +106,14 @@ export const hydrateOrdersFromPocket = createAsyncThunk(
   'orders/hydrate',
   async (_, { rejectWithValue }) => {
     try {
-      const todayKey = computeBusinessDate(new Date(), 3); // corte 03:00
-      const startIso = new Date(`${todayKey}T03:00:00`).toISOString();
-      const endIso = new Date(new Date(startIso).getTime() + 24 * 60 * 60 * 1000).toISOString();
-
-      const filter = `(created >= "${startIso}" && created < "${endIso}")`;
-
+      const startOfBusinessDay = computeBusinessDate(new Date(), 3);
+      const filter = `businessDate = "${startOfBusinessDay}"`;
+      
       let list = await pb.collection('orders').getFullList({
         filter,
         sort: '-clientCreatedAt,-created',
       });
-
-      // fallback opcional
-      if (!list.length) {
-        const raw = await pb.collection('orders').getList(1, 400, { sort: '-created' });
-        list = raw.items.filter((r) => {
-          const t = new Date(r.created).getTime();
-          return t >= new Date(startIso).getTime() && t < new Date(endIso).getTime();
-        });
-      }
-
+      
       return list.map(pbToOrder);
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
