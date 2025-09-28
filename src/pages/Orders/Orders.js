@@ -39,7 +39,6 @@ import {
   GlobalOrders,
   HaceMin,
   Hora,
-  LineaPrint,
   ListProducts,
   Print,
   TitleCard,
@@ -1180,26 +1179,67 @@ const CardOrders = ({
   );
 };
 
-function getBusinessDayKey(date = new Date()) {
-  const d = new Date(date);
-  const businessDayCutoffHour = 3; 
-
-  if (d.getHours() < businessDayCutoffHour) {
-    d.setDate(d.getDate() - 1);
-  }
-  return d.toISOString().slice(0, 10);
-}
+const getTodayBusinessDate = () => {
+  const d = new Date();
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export default function Orders() {
   const dispatch = useDispatch();
   const unsubRef = useRef(null);
   const { orders } = useSelector((s) => s.orders);
 
+  // Nuevo estado para manejar la carga inicial
+  const [isLoading, setIsLoading] = useState(true);
+  const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false);
+
   useEffect(() => {
-    if (navigator.onLine) {
-      dispatch(hydrateOrdersFromPocket());
+    // 1. Cargar desde el caché si existe
+    try {
+      const cachedOrders = localStorage.getItem('cachedOrders');
+      if (cachedOrders) {
+        // Asumiendo que tienes una acción para cargar la caché en Redux.
+        // Podrías crear una acción como `ordersSlice.actions.setOrders(JSON.parse(cachedOrders))`.
+        // Para este ejemplo, solo actualizaremos el estado y procederemos con la carga real.
+        // Nota: si tu acción `hydrateOrdersFromPocket` ya maneja esto, puedes eliminar este bloque.
+        
+        // Aquí simulamos la carga de la caché.
+        const parsedOrders = JSON.parse(cachedOrders);
+        if (parsedOrders.length > 0) {
+          // Si hay pedidos en la caché, los cargamos inmediatamente.
+          // En tu implementación real, esto debería despachar una acción de Redux.
+          // Por ahora, como no tenemos acceso a tu Redux, el código solo lo procesa.
+          // Se asume que el `useSelector` se actualizará si se despacha una acción.
+          
+          setHasLoadedFromCache(true);
+        }
+      }
+    } catch (e) {
+      console.error('Error loading orders cache:', e);
+      localStorage.removeItem('cachedOrders'); // Limpiar caché corrupto
     }
-  }, [dispatch]);
+
+    // 2. Intentar cargar desde la red, actualizando el caché
+    if (navigator.onLine) {
+      dispatch(hydrateOrdersFromPocket())
+        .then((response) => {
+          // Si la carga de la red fue exitosa, guarda la respuesta en el caché.
+          if (response && response.payload) {
+            localStorage.setItem('cachedOrders', JSON.stringify(response.payload));
+          }
+        })
+        .finally(() => {
+          setIsLoading(false);
+        });
+    } else {
+      // Si no hay conexión, terminamos la carga inmediatamente si no hay caché
+      setIsLoading(!hasLoadedFromCache);
+    }
+  }, [dispatch, hasLoadedFromCache]);
+
 
   useEffect(() => {
     unsubRef.current = dispatch(subscribeOrdersRealtime());
@@ -1209,39 +1249,64 @@ export default function Orders() {
   }, [dispatch]);
 
   useEffect(() => {
-    const handleOnline = () => dispatch(syncPendingOrders());
+    const handleOnline = () => {
+      dispatch(syncPendingOrders());
+      // Disparamos la recarga completa cuando el internet vuelve
+      if (navigator.onLine) {
+        dispatch(hydrateOrdersFromPocket())
+          .then((response) => {
+            if (response && response.payload) {
+              localStorage.setItem('cachedOrders', JSON.stringify(response.payload));
+            }
+          })
+          .finally(() => {
+            setIsLoading(false);
+          });
+      }
+    };
     window.addEventListener('online', handleOnline);
     if (navigator.onLine) dispatch(syncPendingOrders());
     return () => window.removeEventListener('online', handleOnline);
   }, [dispatch]);
 
-  const sortedOrders = useMemo(() => {
-    return [...orders].sort((a, b) => {
+  const todayBusinessDate = getTodayBusinessDate();
+
+  const todayOrders = useMemo(() => {
+    return orders.filter(order => order.businessDate === todayBusinessDate);
+  }, [orders, todayBusinessDate]);
+
+  const sortedTodayOrders = useMemo(() => {
+    return [...todayOrders].sort((a, b) => {
       const ta = a.clientCreatedAt ?? new Date(a.created ?? 0).getTime();
       const tb = b.clientCreatedAt ?? new Date(b.created ?? 0).getTime();
       return tb - ta;
     });
-  }, [orders]);
-
-  useEffect(() => {
-    const doRolloverIfNeeded = () => {
-      const nowKey = getBusinessDayKey();
-      const lastKey = localStorage.getItem('orders_business_day');
-      if (lastKey && lastKey !== nowKey) {
-        dispatch(clearOrders());
-        if (navigator.onLine) dispatch(hydrateOrdersFromPocket());
-      }
-      localStorage.setItem('orders_business_day', nowKey);
-    };
-    doRolloverIfNeeded();
-    const t = setInterval(doRolloverIfNeeded, 60 * 1000);
-    return () => clearInterval(t);
-  }, [dispatch]);
+  }, [todayOrders]);
 
   return (
     <GlobalOrders>
       <ContainerOrders>
-        {orders.length === 0 ? (
+        {isLoading && !hasLoadedFromCache ? (
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: '#666',
+            }}
+          >
+            <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: 8, color: '#333' }}>
+              Cargando pedidos...
+            </h2>
+            <p style={{ fontSize: '1rem', opacity: 0.8 }}>
+              Esto no debería tardar mucho.
+            </p>
+          </div>
+        ) : todayOrders.length === 0 ? (
           <div
             style={{
               flex: 1,
@@ -1260,16 +1325,18 @@ export default function Orders() {
               style={{ width: 120, height: 'auto', marginBottom: 20, opacity: 0.8 }}
             />
             <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: 8, color: '#333' }}>
-              No hay pedidos por ahora
+              No hay pedidos para hoy
             </h2>
             <p style={{ fontSize: '1rem', opacity: 0.8 }}>
               Cuando lleguen, aparecerán acá automáticamente.
             </p>
           </div>
         ) : (
-          sortedOrders.map((o, i) => (
-            <CardOrders key={o.id || i} {...o} index={i} numeracion={sortedOrders.length - i} />
-          ))
+          <>
+            {sortedTodayOrders.map((o, i) => (
+              <CardOrders key={o.id || i} {...o} index={i} numeracion={sortedTodayOrders.length - i} />
+            ))}
+          </>
         )}
       </ContainerOrders>
     </GlobalOrders>

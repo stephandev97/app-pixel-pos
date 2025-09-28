@@ -109,21 +109,42 @@ export default function CardProduct({ name, price, id, category }) {
   useEffect(() => {
     let alive = true;
     (async () => {
+      // 1. Cargar del caché si existe
+      try {
+        const cachedSabores = localStorage.getItem('cachedSabores');
+        if (cachedSabores) {
+          const parsed = JSON.parse(cachedSabores);
+          const { flat, grouped } = explodeOptionsFromRecords(parsed);
+          setFlatOptions(flat);
+          setGroupOptions(grouped);
+        }
+      } catch (e) {
+        console.error('Error loading cache:', e);
+        localStorage.removeItem('cachedSabores'); // Limpiar caché corrupto
+      }
+
+      // 2. Intentar cargar desde la red, actualizando el caché
       try {
         setLoadingSabores(true);
         const list = await pb.collection('sabores').getFullList({
-          batch: 200, // trae todos los grupos
-          sort: 'label', // opcional
+          batch: 200,
+          sort: 'label',
         });
-        if (!alive) return; // si lo usás en otro lado, lo conservamos
+        if (!alive) return;
 
         const { flat, grouped } = explodeOptionsFromRecords(list);
         setFlatOptions(flat);
         setGroupOptions(grouped);
+
+        // Guardar la nueva lista en el caché
+        localStorage.setItem('cachedSabores', JSON.stringify(list));
+
       } catch (e) {
         console.error('PB sabores:', e);
       } finally {
-        if (alive) setLoadingSabores(false);
+        if (alive) {
+          setLoadingSabores(false);
+        }
       }
     })();
     return () => {
@@ -277,6 +298,8 @@ export default function CardProduct({ name, price, id, category }) {
     []
   );
 
+  const hasFlavors = flatOptions.length > 0 || groupOptions.length > 0;
+
   return (
     <ThemeProvider theme={theme}>
       {category !== 'Helado' && category !== 'Paletas' ? (
@@ -308,40 +331,46 @@ export default function CardProduct({ name, price, id, category }) {
                 </Header>
 
                 <BodyScroll>
-                  <OptionsGrid>
-                    {getOptions().map((opt) => {
-                      const label = typeof opt === 'string' ? opt : opt.label;
-                      const slug = (s) =>
-                        String(s)
-                          .normalize('NFD')
-                          .replace(/[\u0300-\u036f]/g, '')
-                          .toLowerCase()
-                          .replace(/[^a-z0-9]+/g, '-')
-                          .replace(/(^-|-$)/g, '');
-                      const sku = `${id}__${slug(label)}`;
-                      return (
-                        <OptionBtn
-                          type="button"
-                          key={label}
-                          onClick={() => {
-                            dispatch(
-                              addToCart({
-                                id: sku, // 👈 ID estable por sabor
-                                sku, // opcional
-                                name: `${name}`, // base visible
-                                price,
-                                category,
-                                sabores: [label], // sabor elegido
-                              })
-                            );
-                            closeModal();
-                          }}
-                        >
-                          {label}
-                        </OptionBtn>
-                      );
-                    })}
-                  </OptionsGrid>
+                  {loadingSabores && !hasFlavors ? (
+                    <p style={{ textAlign: 'center', margin: '20px 0', opacity: 0.6 }}>
+                      Cargando sabores...
+                    </p>
+                  ) : (
+                    <OptionsGrid>
+                      {getOptions().map((opt) => {
+                        const label = typeof opt === 'string' ? opt : opt.label;
+                        const slug = (s) =>
+                          String(s)
+                            .normalize('NFD')
+                            .replace(/[\u0300-\u036f]/g, '')
+                            .toLowerCase()
+                            .replace(/[^a-z0-9]+/g, '-')
+                            .replace(/(^-|-$)/g, '');
+                        const sku = `${id}__${slug(label)}`;
+                        return (
+                          <OptionBtn
+                            type="button"
+                            key={label}
+                            onClick={() => {
+                              dispatch(
+                                addToCart({
+                                  id: sku, // 👈 ID estable por sabor
+                                  sku, // opcional
+                                  name: `${name}`, // base visible
+                                  price,
+                                  category,
+                                  sabores: [label], // sabor elegido
+                                })
+                              );
+                              closeModal();
+                            }}
+                          >
+                            {label}
+                          </OptionBtn>
+                        );
+                      })}
+                    </OptionsGrid>
+                  )}
                 </BodyScroll>
               </>
             ) : (
@@ -360,20 +389,22 @@ export default function CardProduct({ name, price, id, category }) {
                   )}
                 </Title>
                 <BodyScroll>
-                  {fields.map((field, idx) => (
-                    <Field key={field.id}>
-                      <LabelRow>
-                        <span>Sabor {idx + 1}</span>
-                        {idx > 0 && (
-                          <RemoveLink type="button" onClick={() => remove(idx)}>
-                            Quitar sabor {idx + 1}
-                          </RemoveLink>
-                        )}
-                      </LabelRow>
+                  {loadingSabores && !hasFlavors ? (
+                    <p style={{ textAlign: 'center', margin: '20px 0', opacity: 0.6 }}>
+                      Cargando sabores...
+                    </p>
+                  ) : (
+                    fields.map((field, idx) => (
+                      <Field key={field.id}>
+                        <LabelRow>
+                          <span>Sabor {idx + 1}</span>
+                          {idx > 0 && (
+                            <RemoveLink type="button" onClick={() => remove(idx)}>
+                              Quitar sabor {idx + 1}
+                            </RemoveLink>
+                          )}
+                        </LabelRow>
 
-                      {loadingSabores ? (
-                        <Skeleton h={40} r={10} />
-                      ) : (
                         <Controller
                           control={control}
                           name={`sabores.${idx}`}
@@ -383,24 +414,24 @@ export default function CardProduct({ name, price, id, category }) {
                               options={getOptions()}
                               value={
                                 typeof field.value === 'string'
-                                  ? { value: field.value, label: field.value } // normalizo si quedó string
+                                  ? { value: field.value, label: field.value }
                                   : field.value?.label
-                                    ? field.value // ya tiene label
+                                    ? field.value
                                     : field.value?.value
-                                      ? { value: field.value.value, label: field.value.value } // si vino sin label, lo creo
+                                      ? { value: field.value.value, label: field.value.value }
                                       : null
                               }
-                              onChange={(option) => field.onChange(option)} // 👈 guardo { value, label }
-                              styles={selectStylesFix} // 👈 ahora usa el fix con texto negro
+                              onChange={(option) => field.onChange(option)}
+                              styles={selectStylesFix}
                               menuPortalTarget={document.body}
                               menuPosition="fixed"
                               menuShouldScrollIntoView={false}
                             />
                           )}
                         />
-                      )}
-                    </Field>
-                  ))}
+                      </Field>
+                    ))
+                  )}
 
                   {fields.length < maxSabores && (
                     <GhostPill type="button" onClick={addSabor}>

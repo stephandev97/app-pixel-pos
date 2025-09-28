@@ -260,6 +260,24 @@ export const syncPendingOrders = createAsyncThunk(
 
     for (const p of pendings) {
       try {
+        // 1. Verificar si la orden ya existe en el servidor
+        let existingOrder = null;
+        try {
+          // Asume que el campo 'number' es un identificador único.
+          // Si no tienes un campo 'number', puedes usar 'id' o 'clientCreatedAt'
+          existingOrder = await pb.collection('orders').getFirstListItem(`number="${p.number}"`);
+          // Si existe, actualiza el estado local y salta a la siguiente orden
+          dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
+          continue; // Salta a la siguiente iteración del bucle
+        } catch (e) {
+          if (e.status !== 404) {
+            console.error('Error checking for existing order:', e);
+            continue; // Si es un error inesperado, salta a la siguiente orden
+          }
+          // Si el status es 404, significa que no existe, y continuamos con la creación
+        }
+
+        // 2. Si no existe, proceder con la creación
         const { pagoEfectivo, pagoMp } = normalizePaymentFields(p);
         const created = await pb.collection('orders').create({
           number: p.number,
@@ -271,7 +289,6 @@ export const syncPendingOrders = createAsyncThunk(
           items: p.items,
           hora: p.hora,
           clientCreatedAt: p.clientCreatedAt ?? Date.now(),
-          // ---- NUEVO: mantener detalles de pago/metadata ----
           pagoEfectivo,
           pagoMp,
           pagoDetalle: p.pagoDetalle ?? null,
@@ -286,6 +303,7 @@ export const syncPendingOrders = createAsyncThunk(
         });
         dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) }));
       } catch (e) {
+        console.error('Failed to sync pending order:', e);
         // si falla, queda pendiente para el próximo intento
       }
     }
