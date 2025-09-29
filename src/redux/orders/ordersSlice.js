@@ -104,22 +104,46 @@ const pbToOrder = (rec) => ({
 // ---------- Thunks existentes ----------
 export const hydrateOrdersFromPocket = createAsyncThunk(
   'orders/hydrate',
-  async (_, { rejectWithValue }) => {
+  async ({ page = 1, perPage = 20 }, { rejectWithValue }) => {
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
       
-      let list = await pb.collection('orders').getFullList({
+      const list = await pb.collection('orders').getList(page, perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
       
-      return list.map(pbToOrder);
+      return list; // <-- devuelve todo el objeto de paginación
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
     }
   }
 );
+
+export const fetchMoreOrders = createAsyncThunk(
+  'orders/fetchMoreOrders',
+  async (_, { getState, rejectWithValue }) => {
+    try {
+      const { pagination } = getState().orders;
+      if (!pagination.hasMore) return null;
+
+      const nextPage = pagination.page + 1;
+      const startOfBusinessDay = computeBusinessDate(new Date(), 3);
+      const filter = `businessDate = "${startOfBusinessDay}"`;
+      
+      const list = await pb.collection('orders').getList(nextPage, pagination.perPage, {
+        filter,
+        sort: '-clientCreatedAt,-created',
+      });
+      
+      return list;
+    } catch (err) {
+      return rejectWithValue(err?.message || 'Error al obtener más pedidos');
+    }
+  }
+);
+
 
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
@@ -250,6 +274,25 @@ export const removeOrderFromBoth = createAsyncThunk(
   }
 );
 
+export const subscribeOrdersRealtime = createAsyncThunk(
+  'orders/subscribeRealtime',
+  async (_, { dispatch }) => {
+    try {
+      const unsub = await pb.collection('orders').subscribe('*', (e) => {
+        if (e.action === 'create' || e.action === 'update') {
+          dispatch(upsertOrder(e.record));
+        } else if (e.action === 'delete') {
+          dispatch(removeOrderById(e.record.id));
+        }
+      });
+      return unsub;
+    } catch (err) {
+      console.error('Failed to subscribe to orders:', err);
+      throw err;
+    }
+  }
+);
+
 // Reintento de sincronización de pendings
 export const syncPendingOrders = createAsyncThunk(
   'orders/syncPendingOrders',
@@ -315,6 +358,13 @@ const initialState = {
   orders: loadPendingFromStorage(), // arrancamos con los pending guardados
   status: 'idle',
   error: null,
+  pagination: {
+    page: 0,
+    perPage: 20, // <-- ajusta este valor como quieras
+    totalItems: 0,
+    totalPages: 0,
+    hasMore: true,
+  },
 };
 
 const ordersSlice = createSlice({
@@ -343,6 +393,7 @@ const ordersSlice = createSlice({
       state.orders = [];
       state.status = 'idle';
       state.error = null;
+      state.pagination = { ...initialState.pagination }; // <-- Reset paginación
       savePendingToStorage(state.orders);
     },
 
@@ -371,7 +422,14 @@ const ordersSlice = createSlice({
       s.status = 'succeeded';
       // Mezclamos: primero los del server, y dejamos arriba los pending locales
       const pendings = s.orders.filter((o) => o.pending);
-      s.orders = [...pendings, ...payload];
+      s.orders = [...pendings, ...payload.items.map(pbToOrder)];
+      s.pagination = {
+        page: payload.page,
+        perPage: payload.perPage,
+        totalItems: payload.totalItems,
+        totalPages: payload.totalPages,
+        hasMore: payload.page < payload.totalPages,
+      };
       savePendingToStorage(s.orders);
     });
     b.addCase(hydrateOrdersFromPocket.rejected, (s, { payload }) => {
@@ -379,6 +437,26 @@ const ordersSlice = createSlice({
       s.error = payload || 'Fallo al hidratar';
     });
 
+    b.addCase(fetchMoreOrders.pending, (s) => {
+      s.status = 'loadingMore';
+    });
+    b.addCase(fetchMoreOrders.fulfilled, (s, { payload }) => {
+      s.status = 'succeeded';
+      s.orders = [...s.orders, ...payload.items.map(pbToOrder)];
+      s.pagination = {
+        page: payload.page,
+        perPage: payload.perPage,
+        totalItems: payload.totalItems,
+        totalPages: payload.totalPages,
+        hasMore: payload.page < payload.totalPages,
+      };
+      savePendingToStorage(s.orders);
+    });
+    b.addCase(fetchMoreOrders.rejected, (s, { payload }) => {
+      s.status = 'failed';
+      s.error = payload || 'Fallo al cargar más pedidos';
+    });
+    
     b.addCase(addOrderOnBoth.fulfilled, (s, { payload }) => {
       if (payload) {
         // caso online ok → el server devolvió algo

@@ -11,6 +11,7 @@ import { HiCheck, HiX } from 'react-icons/hi';
 import { MdEdit } from 'react-icons/md';
 import { useDispatch, useSelector } from 'react-redux';
 import { useReactToPrint } from 'react-to-print';
+import { computeBusinessDate } from '../../utils/stats';
 
 import logoPixel from '../../assets/logoprint.png';
 import mpLogoWhite from '../../assets/mercadopagowhite.png';
@@ -19,6 +20,8 @@ import {
   removeOrderFromBoth,
   subscribeOrdersRealtime,
   syncPendingOrders,
+  fetchTotalOrdersCount,
+  fetchMoreOrders,
 } from '../../features/orders/ordersThunks';
 import { pb } from '../../lib/pb';
 import { clearOrders } from '../../redux/orders/ordersSlice';
@@ -43,6 +46,7 @@ import {
   Print,
   TitleCard,
   TotalPrint,
+  LoadMoreButton,
 } from './OrdersStyles';
 const { ipcRenderer } = window.require('electron');
 
@@ -1179,68 +1183,24 @@ const CardOrders = ({
   );
 };
 
-const getTodayBusinessDate = () => {
-  const d = new Date();
-  const year = d.getFullYear();
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-};
-
 export default function Orders() {
   const dispatch = useDispatch();
   const unsubRef = useRef(null);
-  const { orders } = useSelector((s) => s.orders);
+  const { orders, totalOrdersCount, pagination, status } = useSelector((s) => s.orders);
 
   // Nuevo estado para manejar la carga inicial
   const [isLoading, setIsLoading] = useState(true);
   const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false);
+  const [isInitialLoading, setIsInitialLoading] = useState(true);
 
+  // Cargar pedidos y el conteo total
   useEffect(() => {
-    // 1. Cargar desde el caché si existe
-    try {
-      const cachedOrders = localStorage.getItem('cachedOrders');
-      if (cachedOrders) {
-        // Asumiendo que tienes una acción para cargar la caché en Redux.
-        // Podrías crear una acción como `ordersSlice.actions.setOrders(JSON.parse(cachedOrders))`.
-        // Para este ejemplo, solo actualizaremos el estado y procederemos con la carga real.
-        // Nota: si tu acción `hydrateOrdersFromPocket` ya maneja esto, puedes eliminar este bloque.
-        
-        // Aquí simulamos la carga de la caché.
-        const parsedOrders = JSON.parse(cachedOrders);
-        if (parsedOrders.length > 0) {
-          // Si hay pedidos en la caché, los cargamos inmediatamente.
-          // En tu implementación real, esto debería despachar una acción de Redux.
-          // Por ahora, como no tenemos acceso a tu Redux, el código solo lo procesa.
-          // Se asume que el `useSelector` se actualizará si se despacha una acción.
-          
-          setHasLoadedFromCache(true);
-        }
-      }
-    } catch (e) {
-      console.error('Error loading orders cache:', e);
-      localStorage.removeItem('cachedOrders'); // Limpiar caché corrupto
-    }
+    dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 20 }))
+      .then(() => dispatch(fetchTotalOrdersCount()))
+      .finally(() => setIsInitialLoading(false));
+  }, [dispatch]);
 
-    // 2. Intentar cargar desde la red, actualizando el caché
-    if (navigator.onLine) {
-      dispatch(hydrateOrdersFromPocket())
-        .then((response) => {
-          // Si la carga de la red fue exitosa, guarda la respuesta en el caché.
-          if (response && response.payload) {
-            localStorage.setItem('cachedOrders', JSON.stringify(response.payload));
-          }
-        })
-        .finally(() => {
-          setIsLoading(false);
-        });
-    } else {
-      // Si no hay conexión, terminamos la carga inmediatamente si no hay caché
-      setIsLoading(!hasLoadedFromCache);
-    }
-  }, [dispatch, hasLoadedFromCache]);
-
-
+  // Suscripción en vivo
   useEffect(() => {
     unsubRef.current = dispatch(subscribeOrdersRealtime());
     return () => {
@@ -1248,20 +1208,13 @@ export default function Orders() {
     };
   }, [dispatch]);
 
+  // Sincronización offline
   useEffect(() => {
     const handleOnline = () => {
       dispatch(syncPendingOrders());
-      // Disparamos la recarga completa cuando el internet vuelve
       if (navigator.onLine) {
-        dispatch(hydrateOrdersFromPocket())
-          .then((response) => {
-            if (response && response.payload) {
-              localStorage.setItem('cachedOrders', JSON.stringify(response.payload));
-            }
-          })
-          .finally(() => {
-            setIsLoading(false);
-          });
+        dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 20 }));
+        dispatch(fetchTotalOrdersCount());
       }
     };
     window.addEventListener('online', handleOnline);
@@ -1269,8 +1222,7 @@ export default function Orders() {
     return () => window.removeEventListener('online', handleOnline);
   }, [dispatch]);
 
-  const todayBusinessDate = getTodayBusinessDate();
-
+  const todayBusinessDate = computeBusinessDate(new Date(), 3);
   const todayOrders = useMemo(() => {
     return orders.filter(order => order.businessDate === todayBusinessDate);
   }, [orders, todayBusinessDate]);
@@ -1283,10 +1235,15 @@ export default function Orders() {
     });
   }, [todayOrders]);
 
+  const isLoadingMore = status === 'loadingMore';
+  const handleLoadMore = () => {
+    dispatch(fetchMoreOrders());
+  };
+
   return (
     <GlobalOrders>
       <ContainerOrders>
-        {isLoading && !hasLoadedFromCache ? (
+        {isInitialLoading ? (
           <div
             style={{
               flex: 1,
@@ -1334,8 +1291,13 @@ export default function Orders() {
         ) : (
           <>
             {sortedTodayOrders.map((o, i) => (
-              <CardOrders key={o.id || i} {...o} index={i} numeracion={sortedTodayOrders.length - i} />
+              <CardOrders key={o.id || i} {...o} index={i} numeracion={totalOrdersCount - i} />
             ))}
+            {pagination.hasMore && (
+              <LoadMoreButton onClick={handleLoadMore} disabled={isLoadingMore}>
+                {isLoadingMore ? 'Cargando...' : 'Ver más pedidos'}
+              </LoadMoreButton>
+            )}
           </>
         )}
       </ContainerOrders>

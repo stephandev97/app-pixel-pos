@@ -319,16 +319,19 @@ function groupByCategory(products) {
 }
 // Aplica cambios en vivo de PocketBase (create/update/delete)
 function applyRealtimeChange(prev, e) {
+  const safePrev = Array.isArray(prev) ? prev : []; // <<-- Agrega esta línea
   const rec = e?.record;
-  if (!rec) return prev;
-  if (e.action === 'delete') return prev.filter((p) => p.id !== rec.id);
-  const idx = prev.findIndex((p) => p.id === rec.id);
+  if (!rec) return safePrev; // <<-- Usa safePrev aquí
+
+  if (e.action === 'delete') return safePrev.filter((p) => p.id !== rec.id);
+
+  const idx = safePrev.findIndex((p) => p.id === rec.id);
   if (idx >= 0) {
-    const next = prev.slice();
-    next[idx] = { ...prev[idx], ...rec };
+    const next = safePrev.slice();
+    next[idx] = { ...safePrev[idx], ...rec };
     return next;
   }
-  return [rec, ...prev.filter((p) => p.id !== rec.id)];
+  return [rec, ...safePrev.filter((p) => p.id !== rec.id)];
 }
 
 export default function Products() {

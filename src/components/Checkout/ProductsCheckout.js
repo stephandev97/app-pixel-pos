@@ -17,6 +17,7 @@ import {
 
 const ProductsCheckout = ({ cartItems, price, cantidad }) => {
   const dispatch = useDispatch();
+   const { orders, totalOrdersCount } = useSelector((s) => s.orders);
   const numPedido = useSelector((state) => state.orders.orders.length);
   const removeAndHide = (id) => {
     dispatch(removeFromCart(id));
@@ -35,7 +36,7 @@ const ProductsCheckout = ({ cartItems, price, cantidad }) => {
         >
           <FaChevronLeft />
         </ButtonTitle>
-        <span>Pedido #{numPedido + 1}</span>
+        <span>Pedido #{totalOrdersCount + 1}</span>
       </TitleCheckout>
       <ContainerCards>
         {cartItems.length ? (

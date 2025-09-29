@@ -425,3 +425,26 @@ export const TotalPrint = styled.div`
   display: grid;
   grid-template-columns: 1fr 1fr;
 `;
+
+export const LoadMoreButton = styled.button`
+    padding: 10px 20px;
+    font-size: 1rem;
+    font-weight: bold;
+    color: #fff;
+    background-color: #007bff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
+    margin: 20px auto;
+    display: block;
+
+    &:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+    }
+
+    &:hover:not(:disabled) {
+        background-color: #0056b3;
+    }
+`;

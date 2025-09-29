@@ -109,6 +109,8 @@ export default function CardProduct({ name, price, id, category }) {
   useEffect(() => {
     let alive = true;
     (async () => {
+      let hasCache = false;
+
       // 1. Cargar del caché si existe
       try {
         const cachedSabores = localStorage.getItem('cachedSabores');
@@ -117,15 +119,19 @@ export default function CardProduct({ name, price, id, category }) {
           const { flat, grouped } = explodeOptionsFromRecords(parsed);
           setFlatOptions(flat);
           setGroupOptions(grouped);
+          hasCache = true;
         }
       } catch (e) {
         console.error('Error loading cache:', e);
         localStorage.removeItem('cachedSabores'); // Limpiar caché corrupto
       }
 
-      // 2. Intentar cargar desde la red, actualizando el caché
-      try {
+      // 2. Intentar cargar desde la red, solo si no hay caché
+      if (!hasCache) {
         setLoadingSabores(true);
+      }
+      
+      try {
         const list = await pb.collection('sabores').getFullList({
           batch: 200,
           sort: 'label',
