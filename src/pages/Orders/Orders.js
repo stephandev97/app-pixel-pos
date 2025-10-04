@@ -22,7 +22,7 @@ import {
   syncPendingOrders,
   fetchTotalOrdersCount,
   fetchMoreOrders,
-} from '../../features/orders/ordersThunks';
+} from '../../redux/orders/ordersSlice';
 import { pb } from '../../lib/pb';
 import { clearOrders } from '../../redux/orders/ordersSlice';
 import logo from '../../styles/img/logoprint.png';
@@ -1187,20 +1187,15 @@ export default function Orders() {
   const dispatch = useDispatch();
   const unsubRef = useRef(null);
   const { orders, totalOrdersCount, pagination, status } = useSelector((s) => s.orders);
-
-  // Nuevo estado para manejar la carga inicial
-  const [isLoading, setIsLoading] = useState(true);
-  const [hasLoadedFromCache, setHasLoadedFromCache] = useState(false);
+  
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
-  // Cargar pedidos y el conteo total
   useEffect(() => {
     dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 20 }))
       .then(() => dispatch(fetchTotalOrdersCount()))
       .finally(() => setIsInitialLoading(false));
   }, [dispatch]);
 
-  // Suscripción en vivo
   useEffect(() => {
     unsubRef.current = dispatch(subscribeOrdersRealtime());
     return () => {
@@ -1208,7 +1203,6 @@ export default function Orders() {
     };
   }, [dispatch]);
 
-  // Sincronización offline
   useEffect(() => {
     const handleOnline = () => {
       dispatch(syncPendingOrders());
@@ -1291,7 +1285,7 @@ export default function Orders() {
         ) : (
           <>
             {sortedTodayOrders.map((o, i) => (
-              <CardOrders key={o.id || i} {...o} index={i} numeracion={totalOrdersCount - i} />
+              <CardOrders key={o.id || i} {...o} index={i} numeracion={Number(totalOrdersCount) - i} />
             ))}
             {pagination.hasMore && (
               <LoadMoreButton onClick={handleLoadMore} disabled={isLoadingMore}>

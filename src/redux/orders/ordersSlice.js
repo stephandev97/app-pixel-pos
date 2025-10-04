@@ -1,5 +1,4 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
-
 import { pb } from '../../lib/pb';
 import {
   computeBusinessDate,
@@ -8,10 +7,13 @@ import {
   upsertCustomerFromOrder,
   upsertDailyStatsJsonSmart,
 } from '../../utils/stats';
+
+// Secciones de importación de acciones de Redux
+// (estas acciones ya no se importan de este mismo archivo)
+
 // ---------- Helpers de persistencia ----------
 const PENDING_KEY = 'orders_pending_v1';
 
-// helpers (colocalo arriba del slice)
 function normalizePaymentFields({ pago, total, pagoDetalle, pagoEfectivo, pagoMp }) {
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
@@ -101,7 +103,6 @@ const pbToOrder = (rec) => ({
   name: rec.name ?? null,
 });
 
-// ---------- Thunks existentes ----------
 export const hydrateOrdersFromPocket = createAsyncThunk(
   'orders/hydrate',
   async ({ page = 1, perPage = 20 }, { rejectWithValue }) => {
@@ -114,9 +115,24 @@ export const hydrateOrdersFromPocket = createAsyncThunk(
         sort: '-clientCreatedAt,-created',
       });
       
-      return list; // <-- devuelve todo el objeto de paginación
+      return list;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
+    }
+  }
+);
+
+export const fetchTotalOrdersCount = createAsyncThunk(
+  'orders/fetchTotalOrdersCount',
+  async (_, { rejectWithValue }) => {
+    try {
+      const startOfBusinessDay = computeBusinessDate(new Date(), 3);
+      const filter = `businessDate = "${startOfBusinessDay}"`;
+      
+      const totalCount = await pb.collection('orders').getList(1, 1, { filter }).then(res => res.totalItems);
+      return totalCount;
+    } catch (err) {
+      return rejectWithValue(err?.message || 'Error al obtener el conteo total');
     }
   }
 );
@@ -144,7 +160,6 @@ export const fetchMoreOrders = createAsyncThunk(
   }
 );
 
-
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
   async (payload, { rejectWithValue, dispatch }) => {
@@ -156,18 +171,16 @@ export const addOrderOnBoth = createAsyncThunk(
       const { pagoEfectivo, pagoMp } = normalizePaymentFields(withTsBase);
       const withTs = { ...withTsBase, pagoEfectivo, pagoMp };
       if (!navigator.onLine) {
-        // Offline → guardamos local
         const localId = 'local-' + Date.now();
-        dispatch(addLocalOrder({ ...withTs, id: localId, clientId: localId }));
-        return null; // no rompe
+        dispatch(ordersSlice.actions.addLocalOrder({ ...withTs, id: localId, clientId: localId }));
+        return null;
       }
       const created = await pb.collection('orders').create(withTs);
       return pbToOrder(created);
     } catch (err) {
-      // Falló el server → guardamos local igual
       const localId = 'local-' + Date.now();
       dispatch(
-        addLocalOrder({
+        ordersSlice.actions.addLocalOrder({
           ...payload,
           clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
           id: localId,
@@ -183,12 +196,10 @@ export const removeOrderFromBoth = createAsyncThunk(
   'orders/removeOrderFromBoth',
   async ({ id, number }, { getState, rejectWithValue }) => {
     try {
-      // 1) Resolver la orden (del state o PB)
       const orders = getState()?.orders?.orders ?? [];
       let target = orders.find((o) => (id && o.id === id) || (number && o.number === number));
 
       if (!target) {
-        // buscá por id o por number en PB
         if (id) {
           target = await pb.collection('orders').getOne(id);
         } else if (number) {
@@ -197,11 +208,8 @@ export const removeOrderFromBoth = createAsyncThunk(
       }
       if (!target) return rejectWithValue('Orden no encontrada');
 
-      // 2) Borrar primero en PB (si falla, no descontamos)
       await pb.collection('orders').delete(target.id);
 
-      // 3) Descontar del DAILY del MISMO día de negocio (corte 03:00)
-      //    Construimos una dayKey robusta:
       const createdMs =
         typeof target.clientCreatedAt === 'number'
           ? target.clientCreatedAt
@@ -209,10 +217,8 @@ export const removeOrderFromBoth = createAsyncThunk(
             ? new Date(target.created).getTime()
             : Date.now();
       const createdDate = new Date(createdMs);
-      // computeBusinessDate ya aplica el corte 03:00 -> 'YYYY-MM-DD'
       const day = target.businessDate || computeBusinessDate(createdDate, 3);
 
-      // 4) Método y montos pagados
       const { method: detectedMethod, revenueAmount: detectedRevenue } = detectPayment(
         target.pago,
         target.total
@@ -220,7 +226,6 @@ export const removeOrderFromBoth = createAsyncThunk(
       const method = target.method ?? detectedMethod ?? null;
       const revenueAmount = Number(target.revenueAmount ?? detectedRevenue ?? 0);
 
-      // Reconstruimos paidAmount si no vino como JSON
       const ef = Number(target.pagoEfectivo ?? 0);
       const mp = Number(target.pagoMp ?? 0);
       let paidAmount =
@@ -235,21 +240,20 @@ export const removeOrderFromBoth = createAsyncThunk(
               ? { [method]: revenueAmount }
               : {};
 
-      // Modo (retiro/delivery) y address para métricas
       const { mode, address } = detectFulfillment(target.direccion);
 
       await upsertDailyStatsJsonSmart({
         day,
-        addRevenue: revenueAmount, // resta el ingreso
-        addOrders: 1, // resta 1 orden
-        addItems: itemsCountFrom(target.items), // resta cantidades por ítem
-        paidAmount, // resta por método (mapa)
-        method, // si no hay mapa, usa único método
+        addRevenue: revenueAmount,
+        addOrders: 1,
+        addItems: itemsCountFrom(target.items),
+        paidAmount,
+        method,
         mode,
         address,
         sign: -1,
-        pruneZero: true, // limpia claves a 0
-        deleteIfEmpty: true, // elimina el doc si queda vacío
+        pruneZero: true,
+        deleteIfEmpty: true,
       });
 
       if (mode === 'delivery' && address) {
@@ -265,7 +269,6 @@ export const removeOrderFromBoth = createAsyncThunk(
         });
       }
 
-      // 4) Devolver info para limpiar Redux local
       return { id: target.id, number: target.number };
     } catch (err) {
       console.error('Error al borrar orden:', err?.status, err?.data || err);
@@ -280,9 +283,9 @@ export const subscribeOrdersRealtime = createAsyncThunk(
     try {
       const unsub = await pb.collection('orders').subscribe('*', (e) => {
         if (e.action === 'create' || e.action === 'update') {
-          dispatch(upsertOrder(e.record));
+          dispatch(ordersSlice.actions.upsertOrder(e.record));
         } else if (e.action === 'delete') {
-          dispatch(removeOrderById(e.record.id));
+          dispatch(ordersSlice.actions.removeOrderById(e.record.id));
         }
       });
       return unsub;
@@ -293,7 +296,6 @@ export const subscribeOrdersRealtime = createAsyncThunk(
   }
 );
 
-// Reintento de sincronización de pendings
 export const syncPendingOrders = createAsyncThunk(
   'orders/syncPendingOrders',
   async (_, { getState, dispatch }) => {
@@ -303,24 +305,18 @@ export const syncPendingOrders = createAsyncThunk(
 
     for (const p of pendings) {
       try {
-        // 1. Verificar si la orden ya existe en el servidor
         let existingOrder = null;
         try {
-          // Asume que el campo 'number' es un identificador único.
-          // Si no tienes un campo 'number', puedes usar 'id' o 'clientCreatedAt'
           existingOrder = await pb.collection('orders').getFirstListItem(`number="${p.number}"`);
-          // Si existe, actualiza el estado local y salta a la siguiente orden
-          dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
-          continue; // Salta a la siguiente iteración del bucle
+          dispatch(ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
+          continue;
         } catch (e) {
           if (e.status !== 404) {
             console.error('Error checking for existing order:', e);
-            continue; // Si es un error inesperado, salta a la siguiente orden
+            continue;
           }
-          // Si el status es 404, significa que no existe, y continuamos con la creación
         }
 
-        // 2. Si no existe, proceder con la creación
         const { pagoEfectivo, pagoMp } = normalizePaymentFields(p);
         const created = await pb.collection('orders').create({
           number: p.number,
@@ -344,10 +340,9 @@ export const syncPendingOrders = createAsyncThunk(
           phone: p.phone ?? null,
           name: p.name ?? null,
         });
-        dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) }));
+        dispatch(ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) }));
       } catch (e) {
         console.error('Failed to sync pending order:', e);
-        // si falla, queda pendiente para el próximo intento
       }
     }
   }
@@ -360,7 +355,7 @@ const initialState = {
   error: null,
   pagination: {
     page: 0,
-    perPage: 20, // <-- ajusta este valor como quieras
+    perPage: 20,
     totalItems: 0,
     totalPages: 0,
     hasMore: true,
@@ -373,10 +368,9 @@ const ordersSlice = createSlice({
   reducers: {
     // realtime create/update desde server
     upsertOrder(state, { payload: o }) {
-      // Si existe un pending con mismo "number", hacemos "synced" en vez de duplicar
       const pendingIdx = state.orders.findIndex((x) => x.pending && x.number === o.number);
       if (pendingIdx >= 0) {
-        state.orders[pendingIdx] = { ...o }; // reemplaza el local por el server
+        state.orders[pendingIdx] = { ...o };
         savePendingToStorage(state.orders);
         return;
       }
@@ -393,7 +387,7 @@ const ordersSlice = createSlice({
       state.orders = [];
       state.status = 'idle';
       state.error = null;
-      state.pagination = { ...initialState.pagination }; // <-- Reset paginación
+      state.pagination = { ...initialState.pagination };
       savePendingToStorage(state.orders);
     },
 
@@ -420,7 +414,6 @@ const ordersSlice = createSlice({
     });
     b.addCase(hydrateOrdersFromPocket.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
-      // Mezclamos: primero los del server, y dejamos arriba los pending locales
       const pendings = s.orders.filter((o) => o.pending);
       s.orders = [...pendings, ...payload.items.map(pbToOrder)];
       s.pagination = {
@@ -459,13 +452,11 @@ const ordersSlice = createSlice({
     
     b.addCase(addOrderOnBoth.fulfilled, (s, { payload }) => {
       if (payload) {
-        // caso online ok → el server devolvió algo
         s.orders.unshift(payload);
         savePendingToStorage(s.orders);
       }
     });
     b.addCase(addOrderOnBoth.rejected, (s, { payload }) => {
-      // ya se agregó local; guardamos el error informativo si querés
       s.error = payload || null;
     });
 
@@ -479,6 +470,10 @@ const ordersSlice = createSlice({
 
     b.addCase(syncPendingOrders.fulfilled, (s) => {
       // no-op (markOrderSynced ya actualiza)
+    });
+
+    b.addCase(fetchTotalOrdersCount.fulfilled, (s, { payload }) => {
+        s.totalOrdersCount = payload;
     });
   },
 });

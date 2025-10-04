@@ -253,16 +253,16 @@ export function itemsCountFrom(items = []) {
     // Base: nombre del producto
     let label = String(it?.name || 'Producto').trim();
 
-    // Si es paleta y tiene sabor único, lo agregamos como sufijo
-    if (Array.isArray(it?.sabores) && it.sabores.length > 0) {
-      // si hay varios sabores (helado por kg), los unimos con " + "
+    // Detectamos si el producto es por kg para no agregarle los sabores
+    const shouldAggregate = label.toLowerCase().includes('kg');
+
+    // Si NO es un producto a agregar y tiene sabores, los añadimos como antes
+    if (!shouldAggregate && Array.isArray(it?.sabores) && it.sabores.length > 0) {
       const sabores = it.sabores.join(' + ');
       label = `${label} - ${sabores}`;
     }
-
-    // Si viniera solo el sku/id con formato base__slug, lo convertimos
-    // (fallback por si en algún flujo no llegó "sabores")
-    else if (typeof it?.sku === 'string' && it.sku.includes('__')) {
+    // Fallback para SKU, también respetando la condición
+    else if (!shouldAggregate && typeof it?.sku === 'string' && it.sku.includes('__')) {
       const [slug] = it.sku.split('__');
       const nice = slug
         .split('-')
