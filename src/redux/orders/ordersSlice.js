@@ -163,31 +163,32 @@ export const fetchMoreOrders = createAsyncThunk(
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
   async (payload, { rejectWithValue, dispatch }) => {
-    try {
-      const withTsBase = {
-        clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
+    const localId = 'local-' + Date.now();
+    const orderData = {
         ...payload,
-      };
-      const { pagoEfectivo, pagoMp } = normalizePaymentFields(withTsBase);
-      const withTs = { ...withTsBase, pagoEfectivo, pagoMp };
-      if (!navigator.onLine) {
-        const localId = 'local-' + Date.now();
-        dispatch(ordersSlice.actions.addLocalOrder({ ...withTs, id: localId, clientId: localId }));
-        return null;
-      }
-      const created = await pb.collection('orders').create(withTs);
-      return pbToOrder(created);
+        clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
+    };
+
+    // Si estamos offline, guardamos localmente y retornamos la orden local.
+    if (!navigator.onLine) {
+      const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
+      dispatch(ordersSlice.actions.addLocalOrder(localOrder));
+      return localOrder; // Devolvemos la orden para que el estado .fulfilled la reciba
+    }
+
+    // Si estamos online, intentamos crearla en el servidor.
+    try {
+      const { pagoEfectivo, pagoMp } = normalizePaymentFields(orderData);
+      const created = await pb.collection('orders').create({ ...orderData, pagoEfectivo, pagoMp });
+      return pbToOrder(created); // Éxito: devolvemos la orden del servidor.
     } catch (err) {
-      const localId = 'local-' + Date.now();
-      dispatch(
-        ordersSlice.actions.addLocalOrder({
-          ...payload,
-          clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
-          id: localId,
-          clientId: localId,
-        })
-      );
-      return rejectWithValue(err?.message || 'No se pudo crear en servidor (guardado offline)');
+      // Si falla, guardamos localmente y TAMBIÉN retornamos la orden local.
+      console.error("Error creando orden en servidor, guardando localmente:", err);
+      const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
+      dispatch(ordersSlice.actions.addLocalOrder(localOrder));
+      // En lugar de rechazar, devolvemos la orden local.
+      // La UI la tratará como un éxito (porque se guardó) y mostrará el botón.
+      return localOrder; 
     }
   }
 );
@@ -360,6 +361,7 @@ const initialState = {
     totalPages: 0,
     hasMore: true,
   },
+  lastCreatedOrder: null,
 };
 
 const ordersSlice = createSlice({
@@ -391,6 +393,10 @@ const ordersSlice = createSlice({
       savePendingToStorage(state.orders);
     },
 
+    clearLastCreatedOrder(state) {
+      state.lastCreatedOrder = null;
+    },
+
     // --- Offline helpers ---
     addLocalOrder(state, { payload }) {
       const localOrder = {
@@ -398,6 +404,7 @@ const ordersSlice = createSlice({
         pending: true,
       };
       state.orders.unshift(localOrder);
+      state.lastCreatedOrder = localOrder;
       savePendingToStorage(state.orders);
     },
     markOrderSynced(state, { payload }) {
@@ -453,6 +460,7 @@ const ordersSlice = createSlice({
     b.addCase(addOrderOnBoth.fulfilled, (s, { payload }) => {
       if (payload) {
         s.orders.unshift(payload);
+        s.lastCreatedOrder = payload;
         savePendingToStorage(s.orders);
       }
     });
@@ -478,7 +486,7 @@ const ordersSlice = createSlice({
   },
 });
 
-export const { upsertOrder, removeOrderById, clearOrders, addLocalOrder, markOrderSynced } =
+export const { upsertOrder, removeOrderById, clearOrders, addLocalOrder, markOrderSynced, clearLastCreatedOrder } =
   ordersSlice.actions;
 
 export default ordersSlice.reducer;

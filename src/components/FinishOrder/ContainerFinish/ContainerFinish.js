@@ -308,7 +308,10 @@ const ContainerFinish = ({ cartItems, price }) => {
       // TRANSFERENCIA
       orderToSave = {
         ...orderToSave,
-        pago: orderToSave.total, // ← número
+        pago: orderToSave.total, // número
+        pagoEfectivo: 0, // <- importante
+        pagoMp: orderToSave.total, // <- acá lo marcamos como MP
+        pagoDetalle: 'Transferencia', // opcional pero útil
         cambio: 0,
       };
       methodForOrder = 'transferencia';

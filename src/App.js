@@ -1,5 +1,4 @@
 import './App.css';
-
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
@@ -82,8 +81,6 @@ export default function App() {
           <Checkout />
           <FinishOrder />
           <OrderFinished />
-
-          {/* navbar solo si no estás en Orders */}
         </div>
       </div>
     </PersistGate>

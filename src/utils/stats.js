@@ -328,19 +328,35 @@ export async function upsertDailyStatsJsonSmart({
   const paidKeys = Object.keys(paidMap);
   const addrKey = mode === 'delivery' && address ? normalizeAddress(address) : null;
 
+  const revTotal = safeNumber(addRevenue);
+
+  // 📊 Cómo repartir el revenue por método (solo lo del pedido)
+  let revenueSplit = {};
+  if (paidKeys.length && revTotal > 0) {
+    // Repartimos según cuánto puso cada método (para Mixto)
+    const paidTotal = paidKeys.reduce((sum, k) => sum + safeNumber(paidMap[k]), 0) || 1;
+
+    for (const k of paidKeys) {
+      const portion = safeNumber(paidMap[k]) / paidTotal;
+      revenueSplit[k] = (revenueSplit[k] || 0) + revTotal * portion;
+    }
+  } else if (m && revTotal > 0) {
+    // Un solo método: todo el revenue va ahí
+    revenueSplit[m] = revTotal;
+  }
+
   // 3) Calcular siguiente estado
   let next = {
-    revenue: clamp0(prev.revenue + sign * safeNumber(addRevenue)),
+    revenue: clamp0(prev.revenue + sign * revTotal),
     ordersCount: clamp0(prev.ordersCount + sign * safeNumber(addOrders)),
     itemsCount: mergeCounts(prev.itemsCount, addItems, sign),
+
+    // 💵 Lo que realmente entra a caja por método
     paidByMethod: mergeCounts(prev.paidByMethod, paidAmount, sign),
-    // Si vino desglose (paidAmount), distribuimos revenue y contamos la orden en cada método;
-    // si no, usamos el método único como antes.
-    revenueByMethod: mergeCounts(
-      prev.revenueByMethod,
-      paidKeys.length ? paidMap : m ? { [m]: safeNumber(addRevenue) } : {},
-      sign
-    ),
+
+    // 📈 Revenue por método = SOLO lo del pedido (sin cambio)
+    revenueByMethod: mergeCounts(prev.revenueByMethod, revenueSplit, sign),
+
     ordersByMethod: mergeCounts(
       prev.ordersByMethod,
       paidKeys.length
@@ -371,7 +387,7 @@ export async function upsertDailyStatsJsonSmart({
 
   if (pruneZero) {
     next.itemsCount = pruneZeroKeys(next.itemsCount, epsilon);
-    next.paidByMethod = pruneZeroKeys(next.paidByMethod, epsilon); // si no querés podés omitirlo
+    next.paidByMethod = pruneZeroKeys(next.paidByMethod, epsilon);
     next.revenueByMethod = pruneZeroKeys(next.revenueByMethod, epsilon);
     next.ordersByMethod = pruneZeroKeys(next.ordersByMethod, epsilon);
     next.ordersByMode = pruneZeroKeys(next.ordersByMode, epsilon);
