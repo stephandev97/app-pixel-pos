@@ -1,14 +1,13 @@
 {
-  "name": "pixel-pos2",
-  "version": "2.2.5",
+  "name": "pixel-pos",
+  "version": "1.0.0",
   "build": {
-    "appId": "PixelPOS2",
+    "appId": "com.pixelhelados.pos",
     "productName": "pixel-pos2",
     "asar": true,
+    "npmRebuild": true,
     "files": [
-      "dist/**/*",
-      "build/**/*",
-      "node_modules/**/*",
+      "build/**",
       "package.json",
       "public/main.js"
     ],
@@ -35,7 +34,17 @@
       "oneClick": true,
       "allowElevation": true,
       "perMachine": false,
-      "allowToChangeInstallationDirectory": false
+      "allowToChangeInstallationDirectory": false,
+      "differentialPackage": true
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "category": "Office",
+      "artifactName": "pixel-pos-${version}-${arch}.${ext}",
+      "icon": "build/icons/512x512.png"
     }
   },
   "homepage": "./",
@@ -51,7 +60,12 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "publish": "npm run build && electron-builder -w --publish always"
+    "publish": "npm run build && electron-builder -w --publish always",
+    "electron:build:win": "npm run build && electron-builder -w",
+    "electron:build:linux": "npm run build && electron-builder -l",
+    "electron:build:all": "npm run build && electron-builder -wl",
+    "publish:win": "npm run build && electron-builder -w --publish always",
+    "publish:linux": "npm run build && electron-builder -l --publish always"
   },
   "lint-staged": {
     "*.{js,jsx,cjs,mjs,json,md,css}": [
@@ -94,7 +108,6 @@
     "electron-log": "^5.4.3",
     "electron-updater": "^6.6.2",
     "escpos": "^3.0.0-alpha.6",
-    "escpos-usb": "^3.0.0-alpha.4",
     "formik": "^2.4.5",
     "framer-motion": "^12.23.12",
     "jimp": "^1.6.0",
@@ -126,6 +139,7 @@
     "electron": "^30.0.2",
     "electron-builder": "^24.13.3",
     "electron-devtools-installer": "^3.2.0",
+    "electron-rebuild": "^3.2.9",
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.5",
     "globals": "^16.4.0",

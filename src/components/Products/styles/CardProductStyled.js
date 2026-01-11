@@ -54,7 +54,6 @@ export const Background = styled.div`
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.35);
-  backdrop-filter: blur(2px);
   z-index: ${Z_BASE};
 `;
 
@@ -235,7 +234,6 @@ export const Title = styled.div`
   height: 70px;
   padding: 0 ${PAD}px;
   background: rgba(247, 248, 251, 0.95);
-  backdrop-filter: blur(4px);
   border-bottom: 1px solid rgba(0, 0, 0, 0.06);
 
   a {
@@ -433,17 +431,16 @@ export const OptionsGrid = styled.div`
 
 // Botón de opción “pill” con micro-relieve
 export const OptionBtn = styled.button`
+  font-family: 'Satoshi', sans-serif;
   appearance: none;
   cursor: pointer;
   border: 1px solid #e5e7eb; /* gris claro */
-  background: linear-gradient(180deg, #ffffff, #f8fafc);
+  background: #ffffffff;
   border-radius: 14px;
   padding: 12px 14px;
   font-weight: 600;
+  font-size: 16px;
   color: #111827; /* gris muy oscuro */
-  box-shadow:
-    0 1px 0 rgba(17, 24, 39, 0.04),
-    inset 0 2px 6px rgba(2, 6, 23, 0.06);
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease,

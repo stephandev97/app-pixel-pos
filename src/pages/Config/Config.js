@@ -2,7 +2,7 @@ import ArrowCircleUpIcon from '@mui/icons-material/ArrowCircleUp';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
 import { useState } from 'react';
-import { Check, ChevronRight, Settings, X } from 'react-feather';
+import { ChevronRight, Settings, X } from 'react-feather';
 import { useDispatch, useSelector } from 'react-redux';
 import LoginModal from '../../components/LoginModal/LoginModal';
 import { setShowLoginModal } from '../../redux/actions/actionsSlice';
@@ -14,7 +14,6 @@ import {
 } from '../../redux/data/dataSlice';
 import { formatPrice } from '../../utils/formatPrice';
 import {
-  Background,
   ButtonPage,
   ButtonUpload,
   Container,
@@ -23,8 +22,6 @@ import {
   ContentUploadFile,
   IconButton,
   InputFile,
-  MsjButton,
-  MsjNav,
   PageInner,
   TitlePage,
   TitleUpload,
@@ -106,8 +103,6 @@ const ImportFile = ({ open, setOpen }) => {
 const Config = () => {
   const orders = useSelector((state) => state.orders.orders);
   const dispatch = useDispatch();
-  const [save, setSave] = useState(false);
-  const [remove, setRemove] = useState(false);
   const [open, setOpen] = useState(false);
   const date = new Date().toLocaleDateString();
   const pedidos = orders.length;
@@ -170,16 +165,6 @@ const Config = () => {
     navigator.clipboard.writeText(result.join('\r\n'));
   };
 
-  const clickSave = () => {
-    clickCopyOrders();
-    setSave(false);
-  };
-
-  const clickRemove = () => {
-    //dispatch(removeOrders())
-    setRemove(false);
-  };
-
   const ipcRenderer =
     (typeof window !== 'undefined' &&
       window.require &&
@@ -240,6 +225,7 @@ const Config = () => {
               )}
             </div>
           )}
+
           <ButtonPage onClick={() => dispatch(setShowLoginModal(true))}>
             <IconButton>
               <Settings />

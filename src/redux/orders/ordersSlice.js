@@ -8,15 +8,38 @@ import {
   upsertDailyStatsJsonSmart,
 } from '../../utils/stats';
 
-// Secciones de importación de acciones de Redux
-// (estas acciones ya no se importan de este mismo archivo)
-
 // ---------- Helpers de persistencia ----------
 const PENDING_KEY = 'orders_pending_v1';
 
-function normalizePaymentFields({ pago, total, pagoDetalle, pagoEfectivo, pagoMp }) {
+function normalizePaymentFields({
+  pago,
+  total,
+  pagoDetalle,
+  pagoEfectivo,
+  pagoMp,
+  pagoDebito,
+  method,
+}) {
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
+  let db = Number(pagoDebito || 0);
+
+  // ✅ Si vino débito explícito o method=debito, no lo conviertas a efectivo
+  const isDebito =
+    String(method || '').toLowerCase() === 'debito' ||
+    String(pagoDetalle || '')
+      .toLowerCase()
+      .includes('débito') ||
+    String(pagoDetalle || '')
+      .toLowerCase()
+      .includes('debito') ||
+    db > 0;
+
+  if (isDebito) {
+    // blindaje: dejamos efectivo y mp en 0, y débito como venga (o total)
+    if (db === 0) db = Number(total || pago || 0);
+    return { pagoEfectivo: 0, pagoMp: 0, pagoDebito: db };
+  }
 
   // Si es mixto y no vino desglosado, intentar parsear del texto ("EF $2000 + MP $8600")
   if (String(pago) === 'Mixto' && ef === 0 && mp === 0 && typeof pagoDetalle === 'string') {
@@ -28,8 +51,8 @@ function normalizePaymentFields({ pago, total, pagoDetalle, pagoEfectivo, pagoMp
     }
   }
 
-  // Si pago es número → asumimos todo EF
-  if (typeof pago === 'number' && ef === 0 && mp === 0) {
+  // Si pago es número → asumimos todo EF (solo si no es débito)
+  if (typeof pago === 'number' && ef === 0 && mp === 0 && db === 0) {
     ef = Number(pago || 0);
   }
 
@@ -38,7 +61,7 @@ function normalizePaymentFields({ pago, total, pagoDetalle, pagoEfectivo, pagoMp
     mp = Number(total || 0);
   }
 
-  return { pagoEfectivo: ef, pagoMp: mp };
+  return { pagoEfectivo: ef, pagoMp: mp, pagoDebito: db };
 }
 
 function detectPayment(pago, fallbackRevenue) {
@@ -89,6 +112,7 @@ const pbToOrder = (rec) => ({
   created: rec.created,
   updated: rec.updated,
   clientCreatedAt: rec.clientCreatedAt ?? null,
+
   // -------- NUEVO: campos de pago y metadata --------
   pagoEfectivo: Number(rec.pagoEfectivo ?? 0),
   pagoMp: Number(rec.pagoMp ?? 0),
@@ -101,6 +125,14 @@ const pbToOrder = (rec) => ({
   address: rec.address ?? null,
   phone: rec.phone ?? null,
   name: rec.name ?? null,
+
+  // cliente y puntos
+  client: rec.client ?? rec.clientId ?? null,
+  points: Number(rec.points ?? 0),
+  pointsClaimed: !!rec.pointsClaimed,
+  copied: !!rec.copied,
+
+  pagoDebito: Number(rec.pagoDebito ?? 0),
 });
 
 export const hydrateOrdersFromPocket = createAsyncThunk(
@@ -109,12 +141,12 @@ export const hydrateOrdersFromPocket = createAsyncThunk(
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
+
       const list = await pb.collection('orders').getList(page, perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
-      
+
       return list;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
@@ -128,8 +160,11 @@ export const fetchTotalOrdersCount = createAsyncThunk(
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
-      const totalCount = await pb.collection('orders').getList(1, 1, { filter }).then(res => res.totalItems);
+
+      const totalCount = await pb
+        .collection('orders')
+        .getList(1, 1, { filter })
+        .then((res) => res.totalItems);
       return totalCount;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al obtener el conteo total');
@@ -147,12 +182,12 @@ export const fetchMoreOrders = createAsyncThunk(
       const nextPage = pagination.page + 1;
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
+
       const list = await pb.collection('orders').getList(nextPage, pagination.perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
-      
+
       return list;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al obtener más pedidos');
@@ -162,33 +197,36 @@ export const fetchMoreOrders = createAsyncThunk(
 
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
-  async (payload, { rejectWithValue, dispatch }) => {
+  async (payload, { dispatch }) => {
     const localId = 'local-' + Date.now();
     const orderData = {
-        ...payload,
-        clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
+      ...payload,
+      clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
     };
 
     // Si estamos offline, guardamos localmente y retornamos la orden local.
     if (!navigator.onLine) {
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
       dispatch(ordersSlice.actions.addLocalOrder(localOrder));
-      return localOrder; // Devolvemos la orden para que el estado .fulfilled la reciba
+      return localOrder;
     }
 
     // Si estamos online, intentamos crearla en el servidor.
     try {
-      const { pagoEfectivo, pagoMp } = normalizePaymentFields(orderData);
-      const created = await pb.collection('orders').create({ ...orderData, pagoEfectivo, pagoMp });
-      return pbToOrder(created); // Éxito: devolvemos la orden del servidor.
+      const { pagoEfectivo, pagoMp, pagoDebito } = normalizePaymentFields(orderData);
+      const created = await pb.collection('orders').create({
+        ...orderData,
+        pagoEfectivo,
+        pagoMp,
+        pagoDebito,
+      });
+      return pbToOrder(created);
     } catch (err) {
-      // Si falla, guardamos localmente y TAMBIÉN retornamos la orden local.
-      console.error("Error creando orden en servidor, guardando localmente:", err);
+      // Si falla, guardamos localmente y retornamos la orden local.
+      console.error('Error creando orden en servidor, guardando localmente:', err);
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
       dispatch(ordersSlice.actions.addLocalOrder(localOrder));
-      // En lugar de rechazar, devolvemos la orden local.
-      // La UI la tratará como un éxito (porque se guardó) y mostrará el botón.
-      return localOrder; 
+      return localOrder;
     }
   }
 );
@@ -284,7 +322,7 @@ export const subscribeOrdersRealtime = createAsyncThunk(
     try {
       const unsub = await pb.collection('orders').subscribe('*', (e) => {
         if (e.action === 'create' || e.action === 'update') {
-          dispatch(ordersSlice.actions.upsertOrder(e.record));
+          dispatch(ordersSlice.actions.upsertOrder(pbToOrder(e.record)));
         } else if (e.action === 'delete') {
           dispatch(ordersSlice.actions.removeOrderById(e.record.id));
         }
@@ -309,7 +347,12 @@ export const syncPendingOrders = createAsyncThunk(
         let existingOrder = null;
         try {
           existingOrder = await pb.collection('orders').getFirstListItem(`number="${p.number}"`);
-          dispatch(ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
+          dispatch(
+            ordersSlice.actions.markOrderSynced({
+              localId: p.id,
+              serverOrder: pbToOrder(existingOrder),
+            })
+          );
           continue;
         } catch (e) {
           if (e.status !== 404) {
@@ -318,7 +361,7 @@ export const syncPendingOrders = createAsyncThunk(
           }
         }
 
-        const { pagoEfectivo, pagoMp } = normalizePaymentFields(p);
+        const { pagoEfectivo, pagoMp, pagoDebito } = normalizePaymentFields(p);
         const created = await pb.collection('orders').create({
           number: p.number,
           direccion: p.direccion,
@@ -331,6 +374,7 @@ export const syncPendingOrders = createAsyncThunk(
           clientCreatedAt: p.clientCreatedAt ?? Date.now(),
           pagoEfectivo,
           pagoMp,
+          pagoDebito,
           pagoDetalle: p.pagoDetalle ?? null,
           method: p.method ?? null,
           paidAmount: p.paidAmount ?? null,
@@ -341,7 +385,10 @@ export const syncPendingOrders = createAsyncThunk(
           phone: p.phone ?? null,
           name: p.name ?? null,
         });
-        dispatch(ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) }));
+
+        dispatch(
+          ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) })
+        );
       } catch (e) {
         console.error('Failed to sync pending order:', e);
       }
@@ -354,6 +401,7 @@ const initialState = {
   orders: loadPendingFromStorage(), // arrancamos con los pending guardados
   status: 'idle',
   error: null,
+  totalOrdersCount: 0,
   pagination: {
     page: 0,
     perPage: 20,
@@ -368,17 +416,19 @@ const ordersSlice = createSlice({
   name: 'orders',
   initialState,
   reducers: {
-    // realtime create/update desde server
     upsertOrder(state, { payload: o }) {
       const pendingIdx = state.orders.findIndex((x) => x.pending && x.number === o.number);
+
       if (pendingIdx >= 0) {
-        state.orders[pendingIdx] = { ...o };
+        state.orders[pendingIdx] = { ...state.orders[pendingIdx], ...o };
         savePendingToStorage(state.orders);
         return;
       }
+
       const i = state.orders.findIndex((x) => x.id === o.id);
-      if (i >= 0) state.orders[i] = o;
+      if (i >= 0) state.orders[i] = { ...state.orders[i], ...o };
       else state.orders.unshift(o);
+
       savePendingToStorage(state.orders);
     },
     removeOrderById(state, { payload: id }) {
@@ -392,7 +442,6 @@ const ordersSlice = createSlice({
       state.pagination = { ...initialState.pagination };
       savePendingToStorage(state.orders);
     },
-
     clearLastCreatedOrder(state) {
       state.lastCreatedOrder = null;
     },
@@ -442,6 +491,7 @@ const ordersSlice = createSlice({
     });
     b.addCase(fetchMoreOrders.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
+      if (!payload) return;
       s.orders = [...s.orders, ...payload.items.map(pbToOrder)];
       s.pagination = {
         page: payload.page,
@@ -456,15 +506,22 @@ const ordersSlice = createSlice({
       s.status = 'failed';
       s.error = payload || 'Fallo al cargar más pedidos';
     });
-    
+
+    // ✅ CLAVE: status correcto + anti-duplicados
+    b.addCase(addOrderOnBoth.pending, (s) => {
+      s.status = 'loading';
+      s.error = null;
+    });
     b.addCase(addOrderOnBoth.fulfilled, (s, { payload }) => {
-      if (payload) {
-        s.orders.unshift(payload);
-        s.lastCreatedOrder = payload;
-        savePendingToStorage(s.orders);
-      }
+      s.status = 'succeeded';
+      if (!payload) return;
+
+      // anti-duplicados (realtime + fulfilled)
+      ordersSlice.caseReducers.upsertOrder(s, { payload });
+      s.lastCreatedOrder = payload;
     });
     b.addCase(addOrderOnBoth.rejected, (s, { payload }) => {
+      s.status = 'failed';
       s.error = payload || null;
     });
 
@@ -476,17 +533,23 @@ const ordersSlice = createSlice({
       s.error = payload || 'Fallo al borrar';
     });
 
-    b.addCase(syncPendingOrders.fulfilled, (s) => {
+    b.addCase(syncPendingOrders.fulfilled, () => {
       // no-op (markOrderSynced ya actualiza)
     });
 
     b.addCase(fetchTotalOrdersCount.fulfilled, (s, { payload }) => {
-        s.totalOrdersCount = payload;
+      s.totalOrdersCount = payload;
     });
   },
 });
 
-export const { upsertOrder, removeOrderById, clearOrders, addLocalOrder, markOrderSynced, clearLastCreatedOrder } =
-  ordersSlice.actions;
+export const {
+  upsertOrder,
+  removeOrderById,
+  clearOrders,
+  addLocalOrder,
+  markOrderSynced,
+  clearLastCreatedOrder,
+} = ordersSlice.actions;
 
 export default ordersSlice.reducer;

@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
+import { QrCode } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 import CardProduct from '../../components/Products/CardProduct';
-import { pb } from '../../lib/pb';
+import { pb, ensureServiceAuth } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
 import {
   CategoryHeader,
@@ -64,15 +65,127 @@ function SkeletonCard() {
 
 // ===== SearchBar =====
 function SearchBar({ q, setQ, onQuickAdd }) {
+  const dispatch = useDispatch();
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
+  const [qrOpen, setQrOpen] = useState(false);
+  const [qrCode, setQrCode] = useState('');
+  const [qrClaim, setQrClaim] = useState(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [qrMsg, setQrMsg] = useState('');
+  const [qrError, setQrError] = useState('');
 
   const submit = () => {
     onQuickAdd?.({ name: name.trim(), price });
     setName('');
     setPrice('');
     setOpen(false);
+  };
+
+  const resetQr = () => {
+    setQrOpen(false);
+    setQrCode('');
+    setQrClaim(null);
+    setQrMsg('');
+    setQrError('');
+  };
+
+  const lookupClaim = async () => {
+    const codeVal = qrCode.trim();
+    if (!codeVal) {
+      setQrError('Ingresá un código de 6 dígitos');
+      return;
+    }
+    try {
+      setQrLoading(true);
+      setQrError('');
+      setQrMsg('');
+      await ensureServiceAuth();
+      const safe = codeVal.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const claim = await pb
+        .collection('reward_claims')
+        .getFirstListItem(`code = "${safe}" && status = "pending"`, {
+          expand: 'reward,client,reward.product',
+        });
+      if (!claim) {
+        setQrError('Cupón no encontrado o ya usado.');
+        setQrClaim(null);
+        return;
+      }
+
+      const now = Date.now();
+      const expiresMs = claim.expiresAt ? new Date(claim.expiresAt).getTime() : null;
+      if (expiresMs && expiresMs < now) {
+        try {
+          await pb.collection('reward_claims').update(claim.id, { status: 'expired' });
+        } catch {}
+        setQrError('Cupón vencido.');
+        setQrClaim(null);
+        return;
+      }
+
+      const rewardTitle = claim?.expand?.reward?.title || claim.reward || 'Premio';
+      const product = claim?.expand?.reward?.expand?.product || null;
+      const clientName =
+        `${claim?.expand?.client?.name || ''} ${claim?.expand?.client?.surname || ''}`.trim() ||
+        claim?.expand?.client?.email ||
+        claim?.expand?.client?.id ||
+        '';
+
+      setQrClaim({
+        id: claim.id,
+        code: claim.code,
+        rewardTitle,
+        pointsCost: claim.pointsCost,
+        clientName,
+        expiresAt: claim.expiresAt,
+        product: product
+          ? {
+              id: product.id,
+              name: product.name || rewardTitle,
+              price: Number(product.price || 0),
+            }
+          : null,
+      });
+      setQrMsg('');
+    } catch (err) {
+      setQrClaim(null);
+      const reason = err?.data?.message || err?.message || '';
+      setQrError(`Cupón no encontrado o ya usado. ${reason}`);
+    } finally {
+      setQrLoading(false);
+    }
+  };
+
+  const redeemClaim = async () => {
+    if (!qrClaim) {
+      setQrError('Validá un cupón primero.');
+      return;
+    }
+    try {
+      setQrLoading(true);
+      setQrError('');
+      await ensureServiceAuth();
+      const now = Date.now();
+      const expiresMs = qrClaim.expiresAt ? new Date(qrClaim.expiresAt).getTime() : null;
+      if (expiresMs && expiresMs < now) {
+        await pb.collection('reward_claims').update(qrClaim.id, { status: 'expired' });
+        setQrError('Cupón vencido.');
+        setQrClaim(null);
+        return;
+      }
+      await pb.collection('reward_claims').update(qrClaim.id, { status: 'redeemed' });
+      setQrMsg('Cupón canjeado.');
+      setQrClaim(null);
+      setQrCode('');
+      setQrOpen(false);
+    } catch (err) {
+      const reason = err?.data?.message || err?.message || '';
+      setQrError(`No se pudo canjear. ${reason}`);
+    } finally {
+      setQrLoading(false);
+    }
   };
 
   return (
@@ -167,6 +280,30 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           </svg>
         </button>
 
+        {/* Botón QR (placeholder) */}
+        <button
+          onClick={() => setQrOpen(true)}
+          title="QR"
+          aria-label="QR"
+          style={{
+            width: 38,
+            height: 38,
+            minWidth: 38,
+            minHeight: 38,
+            borderRadius: 12,
+            border: '1.5px solid #111',
+            background: '#fff',
+            color: '#111',
+            display: 'grid',
+            placeItems: 'center',
+            cursor: 'pointer',
+            lineHeight: 1,
+            boxShadow: '0 2px 10px rgba(0,0,0,.06)',
+          }}
+        >
+          <QrCode size={18} strokeWidth={2} />
+        </button>
+
         {/* Limpiar */}
         {q && (
           <button
@@ -185,6 +322,184 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           >
             Limpiar
           </button>
+        )}
+
+        {qrOpen && (
+          <div
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) resetQr();
+            }}
+            style={{
+              position: 'fixed',
+              inset: 0,
+              zIndex: 1500,
+              background: 'rgba(0,0,0,0.65)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              padding: 16,
+            }}
+          >
+            <div
+              style={{
+                width: '95vw',
+                maxWidth: 520,
+                background: '#fff',
+                borderRadius: 18,
+                padding: 20,
+                boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
+                display: 'grid',
+                gap: 12,
+                fontFamily: "'Satoshi', sans-serif",
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>Canjear cupón</div>
+                <button
+                  onClick={resetQr}
+                  style={{
+                    border: 'none',
+                    background: 'transparent',
+                    cursor: 'pointer',
+                    fontSize: '1.2rem',
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+
+              <label style={{ display: 'grid', gap: 6, fontSize: '.95rem', color: '#444' }}>
+                Código (6 dígitos)
+                <input
+                  value={qrCode}
+                  onChange={(e) => setQrCode(e.target.value)}
+                  placeholder="Ej: 123456"
+                  autoFocus
+                  maxLength={6}
+                  inputMode="numeric"
+                  style={{
+                    padding: '12px 14px',
+                    borderRadius: 12,
+                    border: '1px solid #ccc',
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                  }}
+                />
+              </label>
+
+              {qrClaim && (
+                <div
+                  style={{
+                    background: '#f7f8fa',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 12,
+                    padding: 12,
+                    display: 'grid',
+                    gap: 6,
+                  }}
+                >
+                  <div>
+                    Premio: <strong>{qrClaim.rewardTitle}</strong>
+                  </div>
+                  {qrClaim.pointsCost && (
+                    <div>
+                      Costo: <strong>{qrClaim.pointsCost} pts</strong>
+                    </div>
+                  )}
+                  {qrClaim.clientName && (
+                    <div>
+                      Cliente: <strong>{qrClaim.clientName}</strong>
+                    </div>
+                  )}
+                  {qrClaim.expiresAt && (
+                    <div style={{ fontSize: '0.95rem', color: '#666' }}>
+                      Vence: {new Date(qrClaim.expiresAt).toLocaleString()}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {qrError && (
+                <div
+                  style={{
+                    color: '#b91c1c',
+                    background: '#fee2e2',
+                    border: '1px solid #fecaca',
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: '.95rem',
+                  }}
+                >
+                  {qrError}
+                </div>
+              )}
+              {qrMsg && (
+                <div
+                  style={{
+                    color: '#166534',
+                    background: '#ecfdf3',
+                    border: '1px solid #bbf7d0',
+                    borderRadius: 10,
+                    padding: 10,
+                    fontSize: '.95rem',
+                  }}
+                >
+                  {qrMsg}
+                </div>
+              )}
+
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 4 }}>
+                <button
+                  onClick={resetQr}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #ddd',
+                    background: '#f7f7f7',
+                    cursor: 'pointer',
+                    minWidth: 100,
+                  }}
+                >
+                  Cerrar
+                </button>
+                <button
+                  onClick={lookupClaim}
+                  disabled={qrLoading}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: '1px solid #111',
+                    background: '#fff',
+                    color: '#111',
+                    cursor: 'pointer',
+                    minWidth: 120,
+                    opacity: qrLoading ? 0.6 : 1,
+                  }}
+                >
+                  {qrLoading ? 'Buscando...' : 'Validar'}
+                </button>
+                <button
+                  onClick={redeemClaim}
+                  disabled={qrLoading || !qrClaim}
+                  style={{
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: 'none',
+                    background: '#111',
+                    color: '#fff',
+                    cursor: qrClaim ? 'pointer' : 'not-allowed',
+                    minWidth: 120,
+                    opacity: qrLoading || !qrClaim ? 0.6 : 1,
+                  }}
+                >
+                  {qrLoading ? 'Procesando...' : 'Canjear'}
+                </button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Popover para nombre/precio */}

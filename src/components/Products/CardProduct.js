@@ -41,6 +41,17 @@ const ACCENTS = {
   Otros: '#64748b',
 };
 
+const PRODUCTS_WITH_MODAL = [
+  '1/4 kg',
+  '1/2 kg',
+  '1 kg',
+  'paleta clásica',
+  'paleta dubai',
+  'pote gio',
+  'mini torta',
+  'alfajor helado',
+];
+
 const theme = createTheme({ palette: { primary: teal, secondary: purple } });
 
 function explodeOptionsFromRecords(records = []) {
@@ -130,7 +141,7 @@ export default function CardProduct({ name, price, id, category }) {
       if (!hasCache) {
         setLoadingSabores(true);
       }
-      
+
       try {
         const list = await pb.collection('sabores').getFullList({
           batch: 200,
@@ -144,7 +155,6 @@ export default function CardProduct({ name, price, id, category }) {
 
         // Guardar la nueva lista en el caché
         localStorage.setItem('cachedSabores', JSON.stringify(list));
-
       } catch (e) {
         console.error('PB sabores:', e);
       } finally {
@@ -163,16 +173,14 @@ export default function CardProduct({ name, price, id, category }) {
 
   useEffect(() => {
     // aplica en <html> y <body> por compatibilidad
-    document.documentElement.classList.toggle('modal-open', open);
     document.body.classList.toggle('modal-open', open);
 
     return () => {
-      document.documentElement.classList.remove('modal-open');
       document.body.classList.remove('modal-open');
     };
   }, [open]);
 
-  const dubai = ['Chocolate Dubai', 'Blanco Dubai'];
+  const dubai = ['Dubai Negro', 'Dubai Blanco', 'Dubai Nutella'];
   const clasica = [
     'Pistacho',
     'Kinder Bueno',
@@ -182,24 +190,56 @@ export default function CardProduct({ name, price, id, category }) {
     'Tramontana',
     'Rama Negro',
     'Rama Blanco',
+    'Ferrero Rocher',
     'Hello Kitty',
     'Spiderman',
   ];
+
+  const tortas = ['Chocotorta', 'Oreo', 'Lemon Pie', 'Cheesecake', 'Tiramisu', 'Brownie'];
+  const gio = ['Doble Chocolate', 'American Cookies', 'Frutilla Doble', 'Amargo Vegan'];
+  const alfajores = ['Clásico', 'Dark', 'Delicia', 'Patagónico'];
+  const smoothies = ['Naranja-Frutilla', 'Frutos del Bosque'];
+
+  const PRODUCT_OPTIONS = {
+    'mini torta': ['Chocotorta', 'Oreo', 'Lemon Pie', 'Cheesecake', 'Tiramisu', 'Brownie'],
+    'pote gio': ['Doble Chocolate', 'American Cookies', 'Frutilla Doble', 'Amargo Vegan'],
+    'alfajor helado': ['Clásico', 'Dark', 'Delicia', 'Patagónico'],
+    smoothie: ['Naranja-Frutilla', 'Frutos del Bosque'],
+  };
+
+  const tortasOptions = tortas.map((t) => ({ value: t, label: t }));
 
   // Máximo de sabores por producto (ajustá si querés otras reglas)
   const maxSabores = name === '1 kg' ? 4 : 3;
   // Máximo de sabores por producto
   const isPaleta = category === 'Paletas';
 
+  const normalizedName = (name || '').toLowerCase();
+
+  const productWithOptionsKey = Object.keys(PRODUCT_OPTIONS).find((key) =>
+    normalizedName.includes(key)
+  );
+
+  const hasCustomOptions = Boolean(productWithOptionsKey);
+
   const getOptions = () => {
-    const nm = (name || '').toLowerCase();
+    if (hasCustomOptions) {
+      return PRODUCT_OPTIONS[productWithOptionsKey].map((o) => ({
+        value: o,
+        label: o,
+      }));
+    }
+
+    const nm = normalizedName;
+
     if (nm.includes('dubai')) {
       return dubai.map((s) => ({ value: s, label: s }));
     }
+
     if (nm.includes('clásica') || nm.includes('clasica')) {
       return clasica.map((s) => ({ value: s, label: s }));
     }
-    // fallback a PB
+
     return groupOptions.length ? groupOptions : flatOptions;
   };
 
@@ -306,9 +346,11 @@ export default function CardProduct({ name, price, id, category }) {
 
   const hasFlavors = flatOptions.length > 0 || groupOptions.length > 0;
 
+  const shouldOpenModal = PRODUCTS_WITH_MODAL.includes(normalizedName);
+
   return (
     <ThemeProvider theme={theme}>
-      {category !== 'Helado' && category !== 'Paletas' ? (
+      {!shouldOpenModal ? (
         <CardProductStyled
           $accent={ACCENTS[category]}
           onClick={() => dispatch(addToCart({ name, price, id, category }))}
@@ -329,7 +371,7 @@ export default function CardProduct({ name, price, id, category }) {
         <>
           <Background onClick={closeModal} />
           <WindowProductStyled onSubmit={handleSubmit(onSubmit)}>
-            {isPaleta ? (
+            {isPaleta || hasCustomOptions ? (
               <>
                 <Header>
                   <a>{name}</a>

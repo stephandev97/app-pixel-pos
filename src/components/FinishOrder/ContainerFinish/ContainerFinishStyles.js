@@ -46,7 +46,7 @@ export const Tab = styled.div`
   justify-content: center;
   width: 100%;
   max-width: 520px;
-  height: 46px;
+  height: 50px;
   margin: 12px 0;
   padding: 6px;
   overflow: hidden !important;
@@ -59,19 +59,21 @@ export const Tab = styled.div`
 `;
 
 export const ButtonToggle = styled.button`
-  flex: 1 1 0;
+  flex: 1;
+  min-width: 0;
   overflow: hidden !important;
-  height: 34px;
-  border-radius: 12px;
+  height: 40px;
+  border-radius: 10px;
   border: 1px solid transparent;
   background: transparent;
   color: #111;
   font-weight: 700;
-  font-size: 0.95rem;
+  font-size: 14px;
   letter-spacing: 0.2px;
   cursor: pointer;
-  padding: 0 14px;
   font-family: 'Satoshi', sans-serif;
+  text-align: center;
+  justify-content: center;
   transition:
     transform 0.12s ease,
     box-shadow 0.12s ease,
@@ -91,7 +93,7 @@ export const ButtonToggle = styled.button`
 
   /* Estado ACTIVO (via data-active="true") */
   &[data-active='true'] {
-    background: #111;
+    background: #000;
     color: #fff;
     border-color: #111;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
@@ -455,6 +457,8 @@ export const motionSafe = css`
   @media (prefers-reduced-motion: reduce) {
     animation: none !important;
     transition: none !important;
+    opacity: 1 !important;
+    transform: none !important;
   }
 `;
 
@@ -470,7 +474,7 @@ export const AnimSection = styled.div`
 /* Lista con “stagger” para sus hijos (cada item un poquito después) */
 export const StaggerList = styled.div`
   & > * {
-    opacity: 0;
+    opacity: 1;
     transform: translateY(6px);
     animation: ${fadeSlideIn} 0.22s ease-out forwards;
     ${motionSafe}

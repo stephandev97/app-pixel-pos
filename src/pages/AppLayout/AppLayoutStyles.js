@@ -61,7 +61,14 @@ export const SidebarFooter = styled.div`
   flex-direction: column;
   gap: 8px;
 
+  .actions {
+    display: flex;
+    gap: 8px;
+    width: 100%;
+  }
+
   .primary {
+    flex: 1;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -75,6 +82,21 @@ export const SidebarFooter = styled.div`
   }
   .primary:hover {
     opacity: 0.92;
+  }
+
+  .ghost {
+    width: 42px;
+    height: 42px;
+    border-radius: 12px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    display: grid;
+    place-items: center;
+    color: #111;
+    cursor: pointer;
+  }
+  .ghost:hover {
+    background: #f8f9fa;
   }
 `;
 

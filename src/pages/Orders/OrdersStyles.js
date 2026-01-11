@@ -1,4 +1,10 @@
-import styled from 'styled-components';
+import { styled, keyframes, css } from 'styled-components';
+
+const pulse = keyframes`
+  0% { transform: scale(1); }
+  40% { transform: scale(1.015); }
+  100% { transform: scale(1); }
+`;
 
 export const NAV_HEIGHT = 60;
 
@@ -92,36 +98,29 @@ export const ContainerCard = styled.div`
   border-radius: 16px;
   background: #fff;
   padding: 16px 16px;
-  margin: 10px 0 14px 0;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+  margin: 14px 0 18px 0;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
   display: flex;
   flex-direction: column;
   overflow: hidden;
 
-  /* franja lateral de estado (no tapa contenido) */
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 6px;
-    height: 100%;
-    border-radius: 8px 0 0 8px;
-    background: ${({ $estado }) => {
-      if ($estado === 'justo') return '#28a745';
-      if ($estado === 'transferencia') return '#007bff';
-      if ($estado === 'cambio') return '#ffc107';
-      return '#dc3545'; // incompleto/otro
-    }};
-    z-index: 0;
-    pointer-events: none;
-  }
+  /* PERF: aísla layout/pintado de cada card */
+  contain: layout paint;
+  transform: translateZ(0);
 
   /* asegurá contenido por encima de la franja */
   & > * {
     position: relative;
     z-index: 1;
   }
+
+  border: ${({ $done }) => ($done ? '1px solid #23a76d' : 'none')};
+
+  ${({ $pulse }) =>
+    $pulse &&
+    css`
+      animation: ${pulse} 420ms ease-out;
+    `}
 `;
 
 /* Encabezado dentro de la card */
@@ -130,7 +129,7 @@ export const TitleCard = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
+  font-weight: 900;
   color: #111;
   font-size: 1.1rem;
   border-bottom: 1px solid #f5f6fa;
@@ -143,11 +142,31 @@ export const ContentButtonsTitle = styled.div`
   display: flex;
   align-items: center;
   gap: 6px;
-  opacity: 0;
-  transition: opacity 0.2s ease;
 
+  /* oculto “de verdad” (evita hover-renders raros) */
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+
+  /* PERF: animación barata (opacity + transform) */
+  transform: translateY(-2px);
+  will-change: opacity, transform;
+  transition:
+    opacity 140ms ease,
+    transform 140ms ease,
+    visibility 0ms linear 140ms;
+
+  /* Tip: mejor engancharlo al hover del header, no de toda la card */
+  ${TitleCard}:hover &,
   ${ContainerCard}:hover & {
     opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateY(0);
+    transition:
+      opacity 140ms ease,
+      transform 140ms ease,
+      visibility 0ms;
     z-index: 200;
   }
 `;
@@ -174,12 +193,14 @@ export const ButtonTitle = styled.span`
 
 /* Footer de la card (totales/estado de pago) */
 export const FooterCard = styled.div`
-  border-top: 2px solid #f5f6fa;
-  padding-top: 12px;
+  border-top: 1px solid #dfe3ea;
+  padding: 12px 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   width: 100%;
+  background: #f7f9fc;
+  border-radius: 20px;
 `;
 
 /* “Píldora” de total protagonista */
@@ -216,6 +237,7 @@ export const Hora = styled.span`
   margin-left: 8px;
   color: #9ca3af;
   opacity: 0;
+  will-change: opacity;
   transition: opacity 0.15s ease;
 
   ${ContainerCard}:hover & {
@@ -230,7 +252,7 @@ export const DirCard = styled.div`
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  margin: 12px 0 8px 0;
+  margin: 12px 0 16px 0;
   font-weight: 700;
   font-size: 1.05rem;
 
@@ -427,24 +449,24 @@ export const TotalPrint = styled.div`
 `;
 
 export const LoadMoreButton = styled.button`
-    padding: 10px 20px;
-    font-size: 1rem;
-    font-weight: bold;
-    color: #fff;
-    background-color: #007bff;
-    border: none;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background-color 0.3s ease;
-    margin: 20px auto;
-    display: block;
+  padding: 10px 20px;
+  font-size: 1rem;
+  font-weight: bold;
+  color: #fff;
+  background-color: #007bff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  margin: 20px auto;
+  display: block;
 
-    &:disabled {
-        background-color: #ccc;
-        cursor: not-allowed;
-    }
+  &:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+  }
 
-    &:hover:not(:disabled) {
-        background-color: #0056b3;
-    }
+  &:hover:not(:disabled) {
+    background-color: #0056b3;
+  }
 `;

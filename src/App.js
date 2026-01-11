@@ -12,8 +12,10 @@ import FinishOrder from './pages/FinishOrder/FinishOrder';
 import Home from './pages/Home/Home';
 import OrderFinished from './pages/OrderFinished/OrderFinished';
 import Orders from './pages/Orders/Orders';
+import RewardsList from './pages/RewardsList';
 import { persistor } from './redux/store';
 import { createGlobalStyle } from 'styled-components';
+import TvSaboresPanel from './pages/TVSaboresPanel/TVSaboresPanel';
 
 const GlobalNoDialogScroll = createGlobalStyle`
   .MuiDialogContent-root { overflow-y: clip !important; }
@@ -23,10 +25,23 @@ const GlobalNoDialogScroll = createGlobalStyle`
 export default function App() {
   const activeOrders = useSelector((s) => s.actions.toggleOrders);
   const activeConfig = useSelector((s) => s.actions.toggleConfig);
+  const activeRewards =
+    useSelector((s) => s.actions.toggleRewards) && process.env.NODE_ENV === 'development';
   const activeDaily = useSelector((s) => s.actions.toggleDailyStats);
+  const activeTvSabores = useSelector((s) => s.actions.toggleTvSabores);
 
   // elegimos UNA sola pantalla y le damos un key único
-  const screen = activeOrders ? 'orders' : activeConfig ? 'config' : activeDaily ? 'daily' : 'home';
+  const screen = activeTvSabores
+    ? 'tv_sabores'
+    : activeRewards
+      ? 'rewards'
+      : activeOrders
+        ? 'orders'
+        : activeConfig
+          ? 'config'
+          : activeDaily
+            ? 'daily'
+            : 'home';
 
   return (
     <PersistGate loading={null} persistor={persistor}>
@@ -71,6 +86,10 @@ export default function App() {
                 <Config />
               ) : screen === 'daily' ? (
                 <DailyStats />
+              ) : screen === 'rewards' ? (
+                <RewardsList />
+              ) : screen === 'tv_sabores' ? (
+                <TvSaboresPanel />
               ) : (
                 <Home />
               )}

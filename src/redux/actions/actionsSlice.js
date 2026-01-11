@@ -9,6 +9,8 @@ const INITIAL_STATE = {
   toggleConfig: false,
   toggleEditor: false,
   toggleOrders: false,
+  toggleRewards: false,
+  toggleTvSabores: false,
   toggleEditorSabores: false,
   finishOrder: false,
   pago: 0,
@@ -45,6 +47,9 @@ const actionsSlice = createSlice({
     toggleHome: (state, action) => {
       state.toggleHome = action.payload;
     },
+    toggleTvSabores: (state, action) => {
+      state.toggleTvSabores = action.payload;
+    },
     toggleEditor: (state, action) => {
       state.toggleEditor = action.payload;
     },
@@ -59,6 +64,9 @@ const actionsSlice = createSlice({
     },
     toggleOrders: (state, action) => {
       state.toggleOrders = action.payload;
+    },
+    toggleRewards: (state, action) => {
+      state.toggleRewards = action.payload;
     },
     toggleDailyStats: (state, action) => {
       state.toggleDailyStats = action.payload;
@@ -77,6 +85,7 @@ export const {
   setIsAdmin,
   toggleDailyStats,
   toggleOrders,
+  toggleRewards,
   toggleConfig,
   toggleFinishOrder,
   toggleHiddenCart,
@@ -88,6 +97,7 @@ export const {
   toggleHome,
   toggleEditor,
   toggleEditorSabores,
+  toggleTvSabores,
 } = actionsSlice.actions;
 
 export default actionsSlice.reducer;

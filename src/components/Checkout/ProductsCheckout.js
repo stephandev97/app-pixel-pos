@@ -17,7 +17,7 @@ import {
 
 const ProductsCheckout = ({ cartItems, price, cantidad }) => {
   const dispatch = useDispatch();
-   const { orders, totalOrdersCount } = useSelector((s) => s.orders);
+  const { orders } = useSelector((s) => s.orders);
   const numPedido = useSelector((state) => state.orders.orders.length);
   const removeAndHide = (id) => {
     dispatch(removeFromCart(id));
@@ -25,6 +25,10 @@ const ProductsCheckout = ({ cartItems, price, cantidad }) => {
       dispatch(toggleHiddenCart());
     }
   };
+
+  const totalOrdersCount = useSelector((s) => s.orders.totalOrdersCount);
+
+  const nextOrderNumber = Number.isFinite(totalOrdersCount) ? totalOrdersCount + 1 : '—';
 
   return (
     <ProductsContainer>
@@ -36,7 +40,7 @@ const ProductsCheckout = ({ cartItems, price, cantidad }) => {
         >
           <FaChevronLeft />
         </ButtonTitle>
-        <span>Pedido #{totalOrdersCount + 1}</span>
+        <span>Pedido #{nextOrderNumber}</span>
       </TitleCheckout>
       <ContainerCards>
         {cartItems.length ? (

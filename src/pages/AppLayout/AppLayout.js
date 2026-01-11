@@ -1,4 +1,5 @@
 import { Home, List, MoreHorizontal, Plus } from 'react-feather';
+import { FiQrcode } from 'react-icons/fi';
 
 import { Content, Sidebar, SidebarFooter, SidebarItem } from './AppLayoutStyles';
 
@@ -29,10 +30,15 @@ export default function AppLayout({ tab, onChangeTab, children }) {
           />
         </div>
         <SidebarFooter>
-          <button className="primary" onClick={() => onChangeTab('nuevo')}>
-            <Plus size={16} />
-            <span>Nuevo</span>
-          </button>
+          <div className="actions">
+            <button className="ghost" aria-label="QR" title="QR" onClick={() => onChangeTab('qr')}>
+              <FiQrcode size={16} />
+            </button>
+            <button className="primary" onClick={() => onChangeTab('nuevo')}>
+              <Plus size={16} />
+              <span>Nuevo</span>
+            </button>
+          </div>
         </SidebarFooter>
       </Sidebar>
 

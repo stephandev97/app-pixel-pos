@@ -47,6 +47,7 @@ export const ButtonFinished = styled.button`
   color: #04a485;
   cursor: pointer;
   font-family: 'Satoshi', sans-serif;
+  margin-top: 2em;
 
   &:hover {
   }

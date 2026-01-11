@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { fetchTotalOrdersCount } from '../../redux/orders/ordersSlice';
 
 import { toggleHiddenCart } from '../../redux/actions/actionsSlice';
 import { clearCart } from '../../redux/cart/cartSlice';
@@ -33,6 +34,10 @@ export default function Home() {
     const t = setTimeout(() => setBump(false), 600);
     return () => clearTimeout(t);
   }, [cantidad, total, hasCart]); // dispara cuando sube cantidad o cambia total
+
+  useEffect(() => {
+    dispatch(fetchTotalOrdersCount());
+  }, [dispatch]);
 
   return (
     <>

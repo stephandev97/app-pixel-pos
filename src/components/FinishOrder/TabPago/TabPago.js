@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { BsCash } from 'react-icons/bs';
 import { FaEquals, FaLock, FaLockOpen } from 'react-icons/fa6';
-import { useDispatch, useSelector } from 'react-redux';
+import { useDispatch } from 'react-redux';
 
 import mpIcon from '../../../assets/mercadopago.png';
 import { changePago, toggleEfectivo } from '../../../redux/actions/actionsSlice';
@@ -12,29 +12,28 @@ import {
   Icon,
   Input,
   InputGroup,
-  Prefix,
   StaggerList,
   Tab,
 } from '../ContainerFinish/ContainerFinishStyles';
 import { TabContainer } from './TabPagoStyles';
+import { CreditCard } from 'lucide-react';
 
-const stripLeadingZeros = (raw) => {
-  const s = String(raw ?? '');
-  if (s === '' || s === '0') return s === '0' ? '' : '';
-  const cleaned = s.replace(/[^\d]/g, '');
-  const noZeros = cleaned.replace(/^0+/, '');
-  return noZeros === '' ? '' : noZeros;
-};
-
-const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
+const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
   const dispatch = useDispatch();
-  const pagoState = useSelector((s) => s.actions.pago);
+
   const [isMixed, setIsMixed] = useState(false);
   const [mpLocked, setMpLocked] = useState(false);
 
+  // NUEVO: modo simple para soportar "debito"
+  const [simpleMode, setSimpleMode] = useState('efectivo'); // 'efectivo' | 'transferencia' | 'debito'
+
   useEffect(() => {
-    setValue('modePago', isMixed ? 'mixto' : isEfectivo ? 'efectivo' : 'transferencia');
-  }, [isMixed, isEfectivo, setValue]);
+    const mode = isMixed ? 'mixto' : simpleMode;
+    setValue('modePago', mode);
+
+    // mantenemos el toggleEfectivo para tu lógica existente
+    dispatch(toggleEfectivo(mode === 'efectivo'));
+  }, [isMixed, simpleMode, setValue, dispatch]);
 
   const clickPasteTotal = () => {
     const envio = Number(watch('envioTarifa') || 0);
@@ -50,33 +49,59 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
 
   const stripDollar = (val) => String(val ?? '').replace(/[^\d]/g, '');
 
+  const modePago = watch('modePago');
+
+  useEffect(() => {
+    if (!isRetiro && simpleMode === 'debito') {
+      setSimpleMode('transferencia');
+    }
+  }, [isRetiro, simpleMode]);
+
   return (
     <TabContainer>
       <Tab>
         <ButtonToggle
           type="button"
           role="tab"
-          aria-selected={!isMixed && isEfectivo}
-          data-active={!isMixed && isEfectivo}
+          aria-selected={!isMixed && simpleMode === 'efectivo'}
+          data-active={!isMixed && simpleMode === 'efectivo'}
           onClick={() => {
             setIsMixed(false);
-            dispatch(toggleEfectivo(true));
+            setSimpleMode('efectivo');
           }}
         >
           Efectivo
         </ButtonToggle>
+
         <ButtonToggle
           type="button"
           role="tab"
-          aria-selected={!isMixed && !isEfectivo}
-          data-active={!isMixed && !isEfectivo}
+          disabled={!isRetiro}
+          aria-selected={!isMixed && simpleMode === 'debito'}
+          data-active={!isMixed && simpleMode === 'debito'}
+          onClick={() => {
+            if (!isRetiro) return; // 🧯 safety
+            setIsMixed(false);
+            setSimpleMode('debito');
+          }}
+          style={!isRetiro ? { opacity: 0.4, cursor: 'not-allowed' } : {}}
+        >
+          Débito
+        </ButtonToggle>
+
+        <ButtonToggle
+          type="button"
+          role="tab"
+          aria-selected={!isMixed && simpleMode === 'transferencia'}
+          data-active={!isMixed && simpleMode === 'transferencia'}
           onClick={() => {
             setIsMixed(false);
-            dispatch(toggleEfectivo(false));
+            setSimpleMode('transferencia');
           }}
         >
           MercadoPago
         </ButtonToggle>
+
         <ButtonToggle
           type="button"
           role="tab"
@@ -96,7 +121,7 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
       <input type="hidden" {...register('modePago')} />
 
       {/* EFECTIVO */}
-      {!isMixed && isEfectivo && (
+      {!isMixed && modePago === 'efectivo' && (
         <AnimSection>
           <InputGroup>
             <Icon>
@@ -131,8 +156,20 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
         </AnimSection>
       )}
 
+      {/* DÉBITO */}
+      {!isMixed && modePago === 'debito' && (
+        <AnimSection>
+          <InputGroup>
+            <Icon>
+              <CreditCard size={18} />
+            </Icon>
+            <Input disabled value="Débito" />
+          </InputGroup>
+        </AnimSection>
+      )}
+
       {/* TRANSFERENCIA */}
-      {!isMixed && !isEfectivo && (
+      {!isMixed && modePago === 'transferencia' && (
         <AnimSection>
           <InputGroup>
             <Icon>
@@ -199,13 +236,18 @@ const TabPago = ({ watch, price, isEfectivo, register, setValue, errors }) => {
                 disabled={mpLocked}
                 value={formatWithDollar(watch('pagoMp'))}
                 onChange={(e) => {
-                  setValue('pagoMp', e.target.value, { shouldValidate: true });
+                  const raw = stripDollar(e.target.value);
+                  setValue('pagoMp', raw, { shouldValidate: true });
                 }}
                 placeholder="MercadoPago"
                 inputMode="numeric"
                 style={{ paddingLeft: '60px' }}
               />
-              <ButtonPaste type="button" onClick={() => setMpLocked(!mpLocked)} title={mpLocked ? "Desbloquear el monto" : "Bloquear el monto"}>
+              <ButtonPaste
+                type="button"
+                onClick={() => setMpLocked(!mpLocked)}
+                title={mpLocked ? 'Desbloquear el monto' : 'Bloquear el monto'}
+              >
                 {mpLocked ? <FaLock /> : <FaLockOpen />}
               </ButtonPaste>
             </InputGroup>
