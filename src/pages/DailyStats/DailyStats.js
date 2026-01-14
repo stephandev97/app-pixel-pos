@@ -47,6 +47,10 @@ export default function DailyStats() {
   const [detail, setDetail] = useState(null); // detalle día
   const [view, setView] = useState('days'); // "days" | "week" | "month"
   const [cursor, setCursor] = useState(new Date()); // fecha base para navegar semana/mes
+  const [flavorsList, setFlavorsList] = useState([]); // <-- NUEVO ESTADO
+  const [loadingFlavors, setLoadingFlavors] = useState(false); // <-- NUEVO ESTADO
+
+  const flavorsMap = {};
 
   const goBackToConfig = () => {
     dispatch(toggleDailyStats(false));
@@ -97,6 +101,56 @@ export default function DailyStats() {
       }
     })();
   }, [view, monthlyRange.startKey, monthlyRange.endKey]);
+
+  useEffect(() => {
+    if (!detail) {
+      setFlavorsList([]);
+      return;
+    }
+
+    (async () => {
+      setLoadingFlavors(true);
+      try {
+        let filter = "";
+
+        // Si es un resumen (semana/mes), usamos el rango de fechas que ya calculaste
+        if (detail.__summary === 'week' && weekly?.range) {
+          filter = `businessDate >= "${weekly.range.startKey}" && businessDate <= "${weekly.range.endKey}"`;
+        } else if (detail.__summary === 'month' && monthly?.range) {
+          filter = `businessDate >= "${monthly.range.startKey}" && businessDate <= "${monthly.range.endKey}"`;
+        } else {
+          // Si es un día individual
+          filter = `businessDate = "${detail.day}"`;
+        }
+
+        const orders = await pb.collection('orders').getFullList({ filter });
+
+        const counts = {};
+        orders.forEach(order => {
+          const items = Array.isArray(order.items) ? order.items : [];
+          items.forEach(item => {
+            // Procesamos el array de sabores de cada item
+            if (Array.isArray(item.sabores)) {
+              item.sabores.forEach(sabor => {
+                // Sumamos por cada vez que aparece el sabor
+                counts[sabor] = (counts[sabor] || 0) + 1;
+              });
+            }
+          });
+        });
+
+        const sorted = Object.entries(counts)
+          .map(([name, qty]) => ({ name, qty }))
+          .sort((a, b) => b.qty - a.qty);
+
+        setFlavorsList(sorted);
+      } catch (e) {
+        console.error("Error al obtener sabores:", e);
+      } finally {
+        setLoadingFlavors(false);
+      }
+    })();
+  }, [detail, weekly?.range, monthly?.range]); // Dependencias para que refresque al cambiar de periodo
 
   // --------- RENDER ---------
   if (loading) {
@@ -456,6 +510,30 @@ export default function DailyStats() {
                 </div>
               ))}
             </div>
+
+            {/* --- SECCIÓN NUEVA: SABORES MÁS VENDIDOS --- */}
+            <div style={{ display: 'grid', gap: 6, width: '100%', marginTop: 10, borderTop: '1px solid #eee', paddingTop: 10 }}>
+              <div style={rowLine}>
+                <span style={{ ...rowLabel, color: '#d35400', fontWeight: 'bold' }}>
+                  Sabores más vendidos
+                </span>
+                {loadingFlavors && <small style={{ color: '#aaa' }}>Calculando...</small>}
+              </div>
+
+              {flavorsList.length > 0 ? (
+                flavorsList.slice(0, 10).map((f) => ( // Muestra los top 10 para no saturar
+                  <div key={f.name} style={{ ...rowLine, paddingLeft: 12 }}>
+                    <span style={{ fontWeight: 400, fontSize: '0.9em', color: '#b4b4b4' }}>{f.name}</span>
+                    <span style={{ fontWeight: 600, fontSize: '0.9em' }}>{f.qty}</span>
+                  </div>
+                ))
+              ) : !loadingFlavors && (
+                <span style={{ paddingLeft: 12, opacity: 0.5, fontSize: '0.8em' }}>
+                  Sin datos de sabores en este período
+                </span>
+              )}
+            </div>
+
 
             {/* Take away / Delivery */}
             <div style={{ display: 'grid', gap: 6, width: '100%' }}>

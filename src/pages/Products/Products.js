@@ -17,7 +17,7 @@ import {
   TitleCategory,
 } from './ProductsStyled';
 
-const { ipcRenderer } = window.require('electron');
+const ipc = window.electron?.ipcRenderer;
 
 // ===== Config =====
 const CACHE_KEY = 'pb_products_v1';
@@ -119,7 +119,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
       if (expiresMs && expiresMs < now) {
         try {
           await pb.collection('reward_claims').update(claim.id, { status: 'expired' });
-        } catch {}
+        } catch { }
         setQrError('Cupón vencido.');
         setQrClaim(null);
         return;
@@ -142,10 +142,10 @@ function SearchBar({ q, setQ, onQuickAdd }) {
         expiresAt: claim.expiresAt,
         product: product
           ? {
-              id: product.id,
-              name: product.name || rewardTitle,
-              price: Number(product.price || 0),
-            }
+            id: product.id,
+            name: product.name || rewardTitle,
+            price: Number(product.price || 0),
+          }
           : null,
       });
       setQrMsg('');
@@ -680,11 +680,17 @@ export default function Products() {
   }
 
   useEffect(() => {
-    ipcRenderer.on('update-download-progress', (_e, percent) => {
+    const ipc = window.electron?.ipcRenderer;
+    if (!ipc) return;
+
+    const handler = (_e, percent) => {
       setDownloadProgress(percent);
-    });
+    };
+
+    ipc.on('update-download-progress', handler);
+
     return () => {
-      ipcRenderer.removeAllListeners('update-download-progress');
+      ipc.removeListener('update-download-progress', handler);
     };
   }, []);
 

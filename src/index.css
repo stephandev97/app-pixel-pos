@@ -1,13 +1,25 @@
-html, body, #root { height: 100%; overflow: hidden; -webkit-text-size-adjust: 100%; }
-* { box-sizing: border-box; }
+html,
+body,
+#root {
+  height: 100%;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
 
-.modal-root {            /* el wrapper del modal */
+* {
+  box-sizing: border-box;
+}
+
+.modal-root {
+  /* el wrapper del modal */
   max-height: 100vh;
   overflow: hidden;
 }
 
-.modal-scroll-area {     /* el contenedor interno scrolleable SI hace falta */
-  max-height: calc(100vh - 160px); /* deja cabeza y footer */
+.modal-scroll-area {
+  /* el contenedor interno scrolleable SI hace falta */
+  max-height: calc(100vh - 160px);
+  /* deja cabeza y footer */
   overflow: auto;
 }
 
@@ -19,23 +31,41 @@ body {
   /* ancho de la barra */
   ::-webkit-scrollbar {
     width: 8px;
-    height: 8px; /* si querés scroll horizontal también */
+    height: 8px;
+    /* si querés scroll horizontal también */
   }
 
   /* track (fondo) */
   ::-webkit-scrollbar-track {
-    background: #f3f4f6; /* gris suave */
+    background: #f3f4f6;
+    /* gris suave */
     border-radius: 4px;
   }
 
   /* thumb (la parte que se arrastra) */
   ::-webkit-scrollbar-thumb {
-    background: #9ca3af; /* gris medio */
+    background: #9ca3af;
+    /* gris medio */
     border-radius: 4px;
   }
 
   /* hover del thumb */
   ::-webkit-scrollbar-thumb:hover {
-    background: #6b7280; /* gris más oscuro */
+    background: #6b7280;
+    /* gris más oscuro */
+  }
+}
+
+@media print {
+  @page {
+    size: 58mm auto;
+    /* Fuerza el tamaño del papel */
+    margin: 0;
+    /* Elimina los márgenes del sistema */
+  }
+
+  body {
+    margin: 0;
+    padding: 0;
   }
 }

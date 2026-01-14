@@ -51,6 +51,21 @@ import {
 } from './OrdersStyles';
 import { Banknote, CreditCard, Logs, Search, TriangleAlert, ArrowUp } from 'lucide-react';
 
+// Agrega esto en tu archivo Orders.js
+const ticketStyles = {
+  container: {
+    width: "280px",      // Ancho ideal para 58mm
+    padding: "0",
+    margin: "0",
+    fontSize: "12px",    // Tamaño de fuente legible para térmica
+    fontFamily: "monospace", // Las térmicas aman las fuentes monoespaciadas
+    backgroundColor: "white",
+    color: "black"
+  }
+};
+
+const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
 function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
   const [method, setMethod] = useState(initial.method); // "Efectivo" | "Transferencia" | "Mixto"
@@ -431,6 +446,8 @@ const CardOrders = ({
   copied,
   pagoDebito,
 }) => {
+
+
   const [editPayOpen, setEditPayOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [localPay, setLocalPay] = useState(null);
@@ -861,11 +878,12 @@ const CardOrders = ({
           ref={ref}
           className="ticket58"
           style={{
-            width: '40mm',
-            maxWidth: '40mm',
+            width: '48mm',
+            maxWidth: '48mm',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+            padding: '0 2mm',
             boxSizing: 'border-box',
-            margin: 0,
-            padding: 0,
             lineHeight: 1.25,
             fontSize: '3.2mm',
           }}
@@ -885,7 +903,7 @@ const CardOrders = ({
               style={{
                 fontSize: '3.5mm',
                 lineHeight: 1.2,
-                maxWidth: '52mm',
+                maxWidth: '100%',
                 margin: '0 auto',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
@@ -984,28 +1002,37 @@ const CardOrders = ({
   const contentRef = useRef(null);
 
   const pageStyle = `
-  @page { size: 58mm auto; margin: 0; }
-  @media print {
-    html, body { margin: 0 !important; padding: 0 !important; }
-    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+@page {
+  margin: 0;
+}
+@media print {
+  html, body {
+    width: 48mm;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: hidden;
   }
+  * {
+    box-sizing: border-box;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
 `;
+
+
 
   const [isPrinting, setIsPrinting] = useState(false);
 
-  const reactToPrintFn = useReactToPrint({
-    contentRef,
+  const _reactToPrint = useReactToPrint({
+    content: () => contentRef.current,
     pageStyle,
-    removeAfterPrint: false, // <- mejor para evitar refs/DOM stale
+    removeAfterPrint: false,
     onBeforePrint: async () => {
-      setIsPrinting(true);
+      if (!isLinux) setIsPrinting(true);
 
-      // 1) Esperar fuentes (si el navegador las soporta)
-      if (document.fonts?.ready) {
-        await document.fonts.ready;
-      }
+      if (document.fonts?.ready) await document.fonts.ready;
 
-      // 2) Esperar imágenes dentro del ticket (logo)
       const root = contentRef.current;
       if (root) {
         const imgs = Array.from(root.querySelectorAll('img'));
@@ -1014,23 +1041,62 @@ const CardOrders = ({
             img.complete
               ? Promise.resolve()
               : new Promise((res) => {
-                  img.onload = res;
-                  img.onerror = res;
-                })
+                img.onload = res;
+                img.onerror = res;
+              })
           )
         );
       }
 
-      // 3) Forzar un frame de layout
       await new Promise((r) => requestAnimationFrame(r));
     },
     onAfterPrint: () => {
-      setIsPrinting(false);
+      if (!isLinux) setIsPrinting(false);
     },
     onPrintError: () => {
-      setIsPrinting(false);
+      if (!isLinux) setIsPrinting(false);
     },
   });
+
+  // En Linux lo anulamos completamente
+  const reactToPrintFn = isLinux ? () => { } : _reactToPrint;
+
+  const handlePrint = async () => {
+    if (isPrinting) return;
+
+    const el = contentRef.current;
+    if (!el) return;
+
+    setIsPrinting(true);
+
+    try {
+      if (isLinux && window.electron?.ipcRenderer) {
+        const styles = Array.from(document.querySelectorAll('style'))
+          .map(s => s.outerHTML)
+          .join('\n');
+
+        const html = `
+<!DOCTYPE html>
+<html>
+  <head>${styles}</head>
+  <body>${el.outerHTML}</body>
+</html>
+`;
+
+        // ⏳ Espera real hasta que CUPS termine
+        await window.electron.ipcRenderer.invoke('print-ticket', html);
+
+      } else {
+        await reactToPrintFn?.();
+      }
+    } catch (err) {
+      console.error('Error al imprimir:', err);
+    } finally {
+      setIsPrinting(false);   // ← recién acá se vuelve a habilitar
+    }
+  };
+
+
 
   const groupedItems = useMemo(() => {
     const map = {};
@@ -1148,7 +1214,7 @@ const CardOrders = ({
           <ButtonPrint
             variant="contained"
             disabled={isPrinting}
-            onClick={() => !isPrinting && reactToPrintFn()}
+            onClick={handlePrint}
           >
             <PrintIcon />
           </ButtonPrint>
@@ -1527,13 +1593,16 @@ const CardOrders = ({
       </FooterCard>
 
       <div
+        id="ticket-root"
         style={{
           position: 'fixed',
           top: 0,
-          left: '-10000px',
+          left: '0',
+          transform: 'translateX(-100%)',
           zIndex: -1,
           background: '#fff',
         }}
+
       >
         <Ticket58
           ref={contentRef}

@@ -3,6 +3,9 @@ const { app, BrowserWindow, dialog, ipcMain, globalShortcut } = require('electro
 const path = require('path');
 const log = require('electron-log');
 
+app.commandLine.appendSwitch('disable-site-isolation-trials');
+app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
+
 if (process.platform === 'win32') {
   app.disableHardwareAcceleration();
 }
@@ -41,8 +44,9 @@ function createWindow() {
     resizable: false,
     autoHideMenuBar: true,
     webPreferences: {
-      nodeIntegration: true,
-      contextIsolation: false,
+      preload: path.join(__dirname, 'preload.js'),
+      nodeIntegration: false,
+      contextIsolation: true,
     },
   });
 
@@ -55,7 +59,9 @@ function createWindow() {
     win.loadURL('http://localhost:3000');
     win.webContents.openDevTools();
   } else {
-    win.loadFile(path.join(__dirname, '../build/index.html'));
+    win.loadURL(
+      `file://${path.join(__dirname, '../build/index.html')}?v=${Date.now()}`
+    );
   }
 }
 
@@ -88,6 +94,94 @@ ipcMain.on('quit-and-install', () => {
   if (!app.isPackaged || !autoUpdater) return;
   autoUpdater.quitAndInstall();
 });
+
+ipcMain.handle('print-ticket', async (e, html) => {
+  console.log('[MAIN] print-ticket recibido');
+
+  return new Promise(async (resolve, reject) => {
+    const printWin = new BrowserWindow({
+      show: false,
+      width: 200,
+      height: 600,
+      webPreferences: {
+        offscreen: true,
+      },
+    });
+
+    const styledHtml = `
+<!DOCTYPE html>
+<html>
+  <head>
+    <base href="file://${path.join(__dirname, '../build/')}/" />
+    <style>
+      @page { margin: 0; }
+      html, body {
+        width: 48mm;
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    </style>
+  </head>
+  ${html}
+</html>
+`;
+
+    try {
+      // 1) Registramos el listener ANTES de cargar
+      printWin.webContents.once('did-finish-load', async () => {
+        try {
+          await printWin.webContents.executeJavaScript('document.fonts.ready');
+
+          await printWin.webContents.setZoomFactor(1);
+          await printWin.webContents.executeJavaScript(`document.body.style.zoom = "100%"`);
+
+
+          printWin.webContents.print(
+            {
+              silent: true,
+              printBackground: true,
+              margins: { marginType: 'none' },
+
+              // 👇 ESTO ES LA CLAVE
+              pageSize: {
+                width: 48000,   // micrones → 48mm
+                height: 200000  // 200mm (ticket largo)
+              },
+
+              scaleFactor: 100
+            },
+            (success, error) => {
+              console.log('[MAIN] print result:', success, error);
+              printWin.destroy();
+              if (!success) reject(error);
+              else resolve(true);
+            }
+          );
+        } catch (err) {
+          console.error('[MAIN] print error', err);
+          printWin.destroy();
+          reject(err);
+        }
+      });
+
+      // 2) Recién ahora cargamos el HTML
+      await printWin.loadURL(
+        'data:text/html;charset=utf-8,' + encodeURIComponent(styledHtml)
+      );
+    } catch (e) {
+      console.error('[MAIN] loadURL error', e);
+      reject(e);
+    }
+  });
+});
+
+
 
 // ======================================================
 // App ready

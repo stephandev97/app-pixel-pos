@@ -1,6 +1,10 @@
 {
   "name": "pixel-pos",
-  "version": "1.0.0",
+  "version": "1.0.1",
+  "author": {
+    "name": "Pixel Helados",
+    "email": "emi@pixelhelados.com"
+  },
   "build": {
     "appId": "com.pixelhelados.pos",
     "productName": "pixel-pos2",
