@@ -283,6 +283,26 @@ export function itemsCountFrom(items = []) {
   return acc;
 }
 
+export function getLeastSoldFlavors(itemsCount = {}, limit = 5) {
+  const flavors = {};
+
+  // Extraer sabores de los productos con sabores
+  for (const [productKey, qty] of Object.entries(itemsCount)) {
+    if (productKey.includes(' - ')) {
+      const flavor = productKey.split(' - ')[1];
+      if (flavor) {
+        flavors[flavor] = (flavors[flavor] || 0) + qty;
+      }
+    }
+  }
+
+  // Ordenar de menor a mayor y devolver los menos vendidos
+  return Object.entries(flavors)
+    .sort(([, a], [, b]) => a - b)
+    .slice(0, limit)
+    .map(([flavor, qty]) => ({ flavor, quantity: qty }));
+}
+
 const FIELD_DELIVERY_BY_ADDRESS = 'deliveryByAddress';
 
 export async function upsertDailyStatsJsonSmart({

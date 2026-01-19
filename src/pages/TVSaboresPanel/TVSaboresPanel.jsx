@@ -20,6 +20,9 @@ export default function TvSaboresPanel() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+  const [screens, setScreens] = useState([])
+  const [savingScreenId, setSavingScreenId] = useState(null)
+
 
   // ✅ accordion: categoría abierta (una sola)
   const [openCategory, setOpenCategory] = useState(null);
@@ -36,23 +39,47 @@ export default function TvSaboresPanel() {
     }
   };
 
-  useEffect(() => {
-    load();
+  const loadScreens = async () => {
+    try {
+      const data = await pb.collection('tv_screens').getFullList({
+        sort: 'device_id,display_index',
+      })
+      setScreens(data)
+    } catch (e) {
+      console.error('Error cargando tv_screens', e)
+    }
+  }
 
-    let unsub = null;
-    (async () => {
-      try {
-        unsub = await pb.collection('tv_sabores').subscribe('*', () => load());
-      } catch {}
-    })();
+  useEffect(() => {
+    load()
+    loadScreens()
+
+    let unsub1 = null
+    let unsub2 = null
+
+      ; (async () => {
+        try {
+          unsub1 = await pb.collection('tv_sabores').subscribe('*', () => load())
+          unsub2 = await pb.collection('tv_screens').subscribe('*', () => loadScreens())
+        } catch { }
+      })()
 
     return () => {
-      try {
-        unsub?.();
-      } catch {}
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      unsub1?.()
+      unsub2?.()
+    }
+  }, [])
+
+  const updateScreenUrl = async (screen, url) => {
+    setSavingScreenId(screen.id)
+    try {
+      await pb.collection('tv_screens').update(screen.id, { url })
+    } catch (e) {
+      alert('No se pudo guardar la URL')
+    } finally {
+      setSavingScreenId(null)
+    }
+  }
 
   const grouped = useMemo(() => groupByCategory(items), [items]);
 
@@ -188,6 +215,55 @@ export default function TvSaboresPanel() {
           </div>
         );
       })}
+      <hr style={{ margin: '28px 0', opacity: 0.2 }} />
+
+      <h2 style={{ marginBottom: 12 }}>Pantallas TV (URLs)</h2>
+
+      <div style={{ display: 'grid', gap: 10 }}>
+        {screens.map((screen) => {
+          const busy = savingScreenId === screen.id
+
+          return (
+            <div
+              key={screen.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 4fr 1fr',
+                gap: 8,
+                alignItems: 'center',
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: '1px solid rgba(0,0,0,0.08)',
+                background: 'rgba(255,255,255,0.55)',
+              }}
+            >
+              <span style={{ opacity: 0.7, width: "20px" }}>
+                #{screen.display_index}
+              </span>
+
+              <input
+                defaultValue={screen.url}
+                disabled={busy}
+                onBlur={(e) => {
+                  if (e.target.value !== screen.url) {
+                    updateScreenUrl(screen, e.target.value)
+                  }
+                }}
+                style={{
+                  padding: '8px 10px',
+                  borderRadius: 8,
+                  border: '1px solid rgba(0,0,0,0.15)',
+                  width: '300px',
+                }}
+              />
+
+              <span style={{ fontSize: 12, opacity: 0.6 }}>
+                {busy ? 'Guardando…' : 'OK'}
+              </span>
+            </div>
+          )
+        })}
+      </div>
     </div>
   );
 }

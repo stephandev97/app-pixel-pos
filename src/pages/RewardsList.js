@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { pb, ensureServiceAuth } from '../lib/pb';
 import { formatPrice } from '../utils/formatPrice';
+import { pointsApiClient } from '../utils/pointsApiClient';
 
 function formatDate(d) {
   if (!d) return '';
@@ -16,42 +17,48 @@ export default function RewardsList() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const fetchLocalClaims = async () => {
+    try {
+      await pointsApiClient.authenticate();
+      const list = await pointsApiClient.pb.collection('reward_claims')
+        .getList(1, 200, {
+          filter: 'status = "redeemed"',
+          sort: '-created',
+          expand: 'reward,client,reward.product',
+        });
+      return list.items;
+    } catch (e) {
+      console.error('Error obteniendo claims del PB local:', e);
+      return [];
+    }
+  };
+
+
+
   useEffect(() => {
     let abort = false;
-    const fetchClaims = async () => {
+    
+    const fetchData = async () => {
       try {
         setLoading(true);
         setError('');
-        await ensureServiceAuth();
-        const list = await pb.collection('reward_claims').getList(1, 200, {
-          filter: 'status = "redeemed"',
-          sort: '-updated',
-          expand: 'reward,client,reward.product',
-        });
-        if (abort) return;
-        const mapped = list.items.map((c) => ({
-          id: c.id,
-          code: c.code,
-          rewardTitle: c.expand?.reward?.title || c.reward || 'Premio',
-          pointsCost: c.pointsCost,
-          client:
-            `${c.expand?.client?.name || ''} ${c.expand?.client?.surname || ''}`.trim() ||
-            c.expand?.client?.email ||
-            c.expand?.client?.id ||
-            '',
-          status: c.status,
-          updated: c.updated,
-          productPrice: c.expand?.reward?.expand?.product?.price,
-        }));
-        setClaims(mapped);
-      } catch (e) {
-        if (abort) return;
-        setError(e?.message || 'No se pudieron cargar los canjes.');
-      } finally {
-        if (!abort) setLoading(false);
+        
+      // Obtener canjeados de fuente local
+      const localClaims = await fetchLocalClaims();
+      
+      if (!abort) {
+        setClaims(localClaims);
       }
+      } catch (e) {
+        console.error('Error obteniendo todos los claims:', e);
+        setError(e?.message || 'No se pudieron cargar los claims');
+    } finally {
+      setLoading(false);
+    }
     };
-    fetchClaims();
+    
+    fetchData();
+    
     return () => {
       abort = true;
     };
@@ -89,6 +96,7 @@ export default function RewardsList() {
         >
           <div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>Canjes completados</div>
+            <div style={{ fontSize: '1rem', color: '#666', marginTop: '8px' }}>POS + App de Puntos</div>
           </div>
           <div
             style={{
@@ -142,90 +150,93 @@ export default function RewardsList() {
               padding: 14,
               border: '1px solid #e5e7eb',
               boxShadow: '0 8px 24px rgba(0,0,0,0.06)',
-              opacity: 0.8,
+              fontSize: '1.2rem',
+              textAlign: 'center',
             }}
           >
-            No hay canjes redeemed.
+            No hay canjes para mostrar
           </div>
         )}
 
-        <div
-          style={{
-            display: 'grid',
-            gap: 16,
-            gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-          }}
-        >
-          {claims.map((c) => (
-            <div
-              key={c.id}
-              style={{
-                position: 'relative',
-                borderRadius: 16,
-                padding: 16,
-                background: '#fff',
-                display: 'grid',
-                gap: 8,
-                boxShadow: '0 16px 36px rgba(0,0,0,0.1)',
-                overflow: 'hidden',
-              }}
-            >
+        {!loading && claims.length > 0 && (
+          <div
+            style={{
+              display: 'grid',
+              gap: 16,
+              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+            }}
+          >
+            {claims.map((c) => (
               <div
+                key={c.id}
                 style={{
-                  position: 'absolute',
-                  inset: 0,
-                  pointerEvents: 'none',
-                  background:
-                    'radial-gradient(circle at 20% 20%, rgba(17,24,39,0.04), transparent 35%), radial-gradient(circle at 80% 0%, rgba(37,99,235,0.04), transparent 30%)',
+                  position: 'relative',
+                  borderRadius: 16,
+                  padding: 16,
+                  background: '#fff',
+                  display: 'grid',
+                  gap: 8,
+                  boxShadow: '0 16px 36px rgba(0,0,0,0.1)',
+                  overflow: 'hidden',
                 }}
-              />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>{c.rewardTitle}</div>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <span
-                    style={{
-                      padding: '5px 10px',
-                      borderRadius: 999,
-                      background: '#e0f2fe',
-                      color: '#0b3e70',
-                      fontWeight: 800,
-                      fontSize: '0.85rem',
-                      border: '1px solid #bfdbfe',
-                    }}
-                  >
-                    {c.code}
-                  </span>
-                  <span
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: 999,
-                      background: '#ecfdf3',
-                      color: '#166534',
-                      fontWeight: 700,
-                      fontSize: '0.85rem',
-                    }}
-                  >
-                    {c.status || 'redeemed'}
-                  </span>
+              >
+                <div
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    pointerEvents: 'none',
+                    background:
+                      'radial-gradient(circle at 20% 20%, rgba(17,24,39,0.04), transparent 35%), radial-gradient(circle at 80% 0%, rgba(37,99,235,0.04), transparent 30%)',
+                  }}
+                />
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>{c.expand?.reward?.title || c.rewardTitle || 'Recompensa'}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <span
+                      style={{
+                        padding: '5px 10px',
+                        borderRadius: 999,
+                        background: '#e0f2fe',
+                        color: '#0b3e70',
+                        fontWeight: 800,
+                        fontSize: '0.85rem',
+                        border: '1px solid #bfdbfe',
+                      }}
+                    >
+                      {c.code}
+                    </span>
+                    <span
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: 999,
+                        background: '#ecfdf3',
+                        color: '#166534',
+                        fontWeight: 700,
+                        fontSize: '0.85rem',
+                      }}
+                    >
+                      {c.status}
+                    </span>
+                  </div>
                 </div>
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
-                Cliente: <strong>{c.client || '-'}</strong>
-              </div>
-              <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
-                Puntos: <strong>{c.pointsCost ?? '-'}</strong>
-              </div>
-              {c.productPrice != null && (
                 <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
-                  Precio producto: <strong>{formatPrice(c.productPrice)}</strong>
+                  Cliente: <strong>{c.expand?.client?.name || c.expand?.client?.email || '-'}</strong>
                 </div>
-              )}
-              <div style={{ fontSize: '0.9rem', color: '#6b7280', zIndex: 1 }}>
-                Actualizado: {formatDate(c.updated)}
+                <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
+                  Puntos: <strong>{c.pointsCost ?? '-'}</strong>
+                </div>
+                {c.productPrice != null && (
+                  <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
+                    Precio producto: <strong>{formatPrice(c.productPrice)}</strong>
+                  </div>
+                )}
+                <div style={{ fontSize: '0.9rem', color: '#6b7280', zIndex: 1 }}>
+                  Actualizado: {formatDate(c.updated)}
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );

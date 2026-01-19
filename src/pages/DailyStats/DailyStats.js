@@ -104,14 +104,14 @@ export default function DailyStats() {
 
   useEffect(() => {
     if (!detail) {
-      setFlavorsList([]);
+      setFlavorsList({ top: [], bottom: [] });
       return;
     }
 
     (async () => {
       setLoadingFlavors(true);
       try {
-        let filter = "";
+        let filter = '';
 
         // Si es un resumen (semana/mes), usamos el rango de fechas que ya calculaste
         if (detail.__summary === 'week' && weekly?.range) {
@@ -126,14 +126,35 @@ export default function DailyStats() {
         const orders = await pb.collection('orders').getFullList({ filter });
 
         const counts = {};
-        orders.forEach(order => {
+        orders.forEach((order) => {
           const items = Array.isArray(order.items) ? order.items : [];
-          items.forEach(item => {
+          items.forEach((item) => {
             // Procesamos el array de sabores de cada item
             if (Array.isArray(item.sabores)) {
-              item.sabores.forEach(sabor => {
+              item.sabores.forEach((sabor) => {
                 // Sumamos por cada vez que aparece el sabor
                 counts[sabor] = (counts[sabor] || 0) + 1;
+              });
+            }
+          });
+        });
+
+        // Sabores menos vendidos (solo potes de helado 1/4, 1/2, 1kg)
+        const countsPotes = {};
+        orders.forEach((order) => {
+          const items = Array.isArray(order.items) ? order.items : [];
+          items.forEach((item) => {
+            // Solo procesar sabores de potes de helado (1/4, 1/2, 1kg)
+            if (
+              Array.isArray(item.sabores) &&
+              item.name?.toLowerCase().includes('pote') &&
+              (item.name?.toLowerCase().includes('1/4') ||
+                item.name?.toLowerCase().includes('1/2') ||
+                item.name?.toLowerCase().includes('1kg') ||
+                item.name?.toLowerCase().includes('1 kg'))
+            ) {
+              item.sabores.forEach((sabor) => {
+                countsPotes[sabor] = (countsPotes[sabor] || 0) + 1;
               });
             }
           });
@@ -143,9 +164,13 @@ export default function DailyStats() {
           .map(([name, qty]) => ({ name, qty }))
           .sort((a, b) => b.qty - a.qty);
 
-        setFlavorsList(sorted);
+        const sortedPotes = Object.entries(countsPotes)
+          .map(([name, qty]) => ({ name, qty }))
+          .sort((a, b) => b.qty - a.qty);
+
+        setFlavorsList({ top: sorted, bottom: sortedPotes });
       } catch (e) {
-        console.error("Error al obtener sabores:", e);
+        console.error('Error al obtener sabores:', e);
       } finally {
         setLoadingFlavors(false);
       }
@@ -512,7 +537,16 @@ export default function DailyStats() {
             </div>
 
             {/* --- SECCIÓN NUEVA: SABORES MÁS VENDIDOS --- */}
-            <div style={{ display: 'grid', gap: 6, width: '100%', marginTop: 10, borderTop: '1px solid #eee', paddingTop: 10 }}>
+            <div
+              style={{
+                display: 'grid',
+                gap: 6,
+                width: '100%',
+                marginTop: 10,
+                borderTop: '1px solid #eee',
+                paddingTop: 10,
+              }}
+            >
               <div style={rowLine}>
                 <span style={{ ...rowLabel, color: '#d35400', fontWeight: 'bold' }}>
                   Sabores más vendidos
@@ -520,20 +554,47 @@ export default function DailyStats() {
                 {loadingFlavors && <small style={{ color: '#aaa' }}>Calculando...</small>}
               </div>
 
-              {flavorsList.length > 0 ? (
-                flavorsList.slice(0, 10).map((f) => ( // Muestra los top 10 para no saturar
-                  <div key={f.name} style={{ ...rowLine, paddingLeft: 12 }}>
-                    <span style={{ fontWeight: 400, fontSize: '0.9em', color: '#b4b4b4' }}>{f.name}</span>
-                    <span style={{ fontWeight: 600, fontSize: '0.9em' }}>{f.qty}</span>
+              {flavorsList.top && flavorsList.top.length > 0
+                ? flavorsList.top.slice(0, 10).map(
+                    (
+                      f // Muestra los top 10 para no saturar
+                    ) => (
+                      <div key={f.name} style={{ ...rowLine, paddingLeft: 12 }}>
+                        <span style={{ fontWeight: 400, fontSize: '0.9em', color: '#b4b4b4' }}>
+                          {f.name}
+                        </span>
+                        <span style={{ fontWeight: 600, fontSize: '0.9em' }}>{f.qty}</span>
+                      </div>
+                    )
+                  )
+                : !loadingFlavors && (
+                    <span style={{ paddingLeft: 12, opacity: 0.5, fontSize: '0.8em' }}>
+                      Sin datos de sabores en este período
+                    </span>
+                  )}
+
+              {/* --- SABORES MENOS VENDIDOS (POTES) --- */}
+              {flavorsList.bottom && flavorsList.bottom.length > 0 && (
+                <div style={{ marginTop: 10, borderTop: '1px solid #eee', paddingTop: 10 }}>
+                  <div style={rowLine}>
+                    <span style={{ ...rowLabel, color: '#7f8c8d', fontWeight: 'bold' }}>
+                      Sabores menos vendidos (potes)
+                    </span>
                   </div>
-                ))
-              ) : !loadingFlavors && (
-                <span style={{ paddingLeft: 12, opacity: 0.5, fontSize: '0.8em' }}>
-                  Sin datos de sabores en este período
-                </span>
+                  {flavorsList.bottom
+                    .slice(-5)
+                    .reverse()
+                    .map((f) => (
+                      <div key={f.name} style={{ ...rowLine, paddingLeft: 12 }}>
+                        <span style={{ fontWeight: 400, fontSize: '0.9em', color: '#b4b4b4' }}>
+                          {f.name}
+                        </span>
+                        <span style={{ fontWeight: 600, fontSize: '0.9em' }}>{f.qty}</span>
+                      </div>
+                    ))}
+                </div>
               )}
             </div>
-
 
             {/* Take away / Delivery */}
             <div style={{ display: 'grid', gap: 6, width: '100%' }}>

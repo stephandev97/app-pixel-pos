@@ -64,7 +64,42 @@ const ticketStyles = {
   }
 };
 
-const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+
+const SCAN_MAP = {
+  y: "0",
+  "9": "1",
+  w: "2",
+  e: "3",
+  r: "4",
+  t: "5",
+  "1": "6",
+  "2": "7",
+  k: "8",
+  l: "9",
+};
+
+function normalizeScan(raw) {
+  if (!raw) return "";
+
+  const cleaned = raw.trim().toLowerCase();
+
+  // Si ya es numérico puro, no tocar
+  if (/^\d+$/.test(cleaned)) {
+    return cleaned;
+  }
+
+  let fixed = "";
+  for (const ch of cleaned) {
+    if (/\d/.test(ch)) {
+      fixed += ch;
+    } else if (SCAN_MAP[ch]) {
+      fixed += SCAN_MAP[ch];
+    }
+  }
+
+  return fixed;
+}
+
 
 function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
@@ -447,6 +482,9 @@ const CardOrders = ({
   pagoDebito,
 }) => {
 
+  const isLinux = navigator.userAgent.toLowerCase().includes('linux');
+ 
+
 
   const [editPayOpen, setEditPayOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -533,6 +571,14 @@ const CardOrders = ({
     repetidos2[item.name] = (repetidos2[item.name] || 0) + q;
   });
 
+  function onScan(rawValue) {
+  const code = normalizeScan(rawValue);
+
+  console.log("RAW:", rawValue);
+  console.log("FIXED:", code);
+
+}
+
   // Reset de input/preview al cerrar el modal
   useEffect(() => {
     if (!linkOpen) {
@@ -550,7 +596,7 @@ const CardOrders = ({
       setClientPreviewError('');
       return;
     }
-    const trimmed = linkId.trim();
+    const trimmed = normalizeScan(linkId);
     if (!trimmed) {
       setClientPreview(null);
       setClientPreviewError('');
@@ -1061,6 +1107,7 @@ const CardOrders = ({
   // En Linux lo anulamos completamente
   const reactToPrintFn = isLinux ? () => { } : _reactToPrint;
 
+
   const handlePrint = async () => {
     if (isPrinting) return;
 
@@ -1070,29 +1117,48 @@ const CardOrders = ({
     setIsPrinting(true);
 
     try {
-      if (isLinux && window.electron?.ipcRenderer) {
-        const styles = Array.from(document.querySelectorAll('style'))
-          .map(s => s.outerHTML)
-          .join('\n');
+      // juntamos TODOS los estilos runtime (styled-components)
+      const styles = Array.from(document.querySelectorAll('style'))
+        .map(s => s.outerHTML)
+        .join('\n');
 
-        const html = `
+      const html = `
 <!DOCTYPE html>
 <html>
-  <head>${styles}</head>
-  <body>${el.outerHTML}</body>
+  <head>
+    ${styles}
+    <style>
+      @page { margin: 0; }
+      html, body {
+        width: 48mm;
+        margin: 0;
+        padding: 0;
+        background: white;
+      }
+      * {
+        box-sizing: border-box;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+    </style>
+  </head>
+  <body>
+    ${el.outerHTML}
+  </body>
 </html>
 `;
 
-        // ⏳ Espera real hasta que CUPS termine
+      if (isLinux && window.electron?.ipcRenderer) {
+        // ⏳ espera REAL hasta que termina de imprimir
         await window.electron.ipcRenderer.invoke('print-ticket', html);
-
       } else {
+        // Windows / navegador
         await reactToPrintFn?.();
       }
     } catch (err) {
       console.error('Error al imprimir:', err);
     } finally {
-      setIsPrinting(false);   // ← recién acá se vuelve a habilitar
+      setIsPrinting(false);
     }
   };
 
@@ -1700,19 +1766,34 @@ const CardOrders = ({
               Escanea el QR (pega el ID) para sumar puntos al cliente.
             </div>
             <input
-              autoFocus
-              placeholder="ID del cliente"
-              value={linkId}
-              onChange={(e) => setLinkId(e.target.value)}
-              style={{
-                width: '100%',
-                padding: '16px 18px',
-                borderRadius: 14,
-                border: '1px solid #ddd',
-                fontSize: '1rem',
-                fontFamily: 'inherit',
-              }}
-            />
+  autoFocus
+  placeholder="ID del cliente"
+  value={linkId}
+  onChange={(e) => setLinkId(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter") {
+      const fixed = normalizeScan(linkId);
+
+      console.log("RAW SCAN:", linkId);
+      console.log("FIXED SCAN:", fixed);
+
+if (fixed.length === 6) {
+  setLinkId(fixed);
+  handleLinkClient();
+}
+
+      setLinkId("");
+    }
+  }}
+  style={{
+    width: "100%",
+    padding: "16px 18px",
+    borderRadius: 14,
+    border: "1px solid #ddd",
+    fontSize: "1rem",
+    fontFamily: "inherit",
+  }}
+/>
             {clientPreview && (
               <div
                 style={{

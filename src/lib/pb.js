@@ -1,14 +1,11 @@
 import PocketBase from 'pocketbase';
+import { PB_CONFIG } from './pb-config.js';
 
 // Compatibilidad CRA (process.env.REACT_APP_*) y Vite (import.meta.env.VITE_*)
 const ENV = (typeof import.meta !== 'undefined' ? import.meta.env : {}) || {};
 const PROC = typeof process !== 'undefined' ? process.env || {} : {};
 
-const PB_URL =
-  ENV.VITE_PB_URL ||
-  PROC.REACT_APP_PB_URL ||
-  ENV.REACT_APP_PB_URL ||
-  'https://railway-production-857d.up.railway.app/';
+const PB_URL = ENV.VITE_PB_URL || PROC.REACT_APP_PB_URL || ENV.REACT_APP_PB_URL || PB_CONFIG.URL;
 
 export const pb = new PocketBase(PB_URL);
 pb.autoCancellation(false);
@@ -19,14 +16,20 @@ export async function login(email, password) {
 }
 
 const SERVICE_EMAIL =
-  ENV.VITE_PB_SERVICE_EMAIL || PROC.REACT_APP_PB_SERVICE_EMAIL || ENV.REACT_APP_PB_SERVICE_EMAIL;
+  ENV.VITE_PB_SERVICE_EMAIL ||
+  PROC.REACT_APP_PB_SERVICE_EMAIL ||
+  ENV.REACT_APP_PB_SERVICE_EMAIL ||
+  PB_CONFIG.SERVICE.EMAIL;
 const SERVICE_PASS =
-  ENV.VITE_PB_SERVICE_PASS || PROC.REACT_APP_PB_SERVICE_PASS || ENV.REACT_APP_PB_SERVICE_PASS;
+  ENV.VITE_PB_SERVICE_PASS ||
+  PROC.REACT_APP_PB_SERVICE_PASS ||
+  ENV.REACT_APP_PB_SERVICE_PASS ||
+  PB_CONFIG.SERVICE.PASS;
 const SERVICE_COLLECTION =
   ENV.VITE_PB_SERVICE_COLLECTION ||
   PROC.REACT_APP_PB_SERVICE_COLLECTION ||
   ENV.REACT_APP_PB_SERVICE_COLLECTION ||
-  'users';
+  PB_CONFIG.SERVICE.COLLECTION;
 
 async function authAsAdmin(email, pass) {
   return pb.collection('_superusers').authWithPassword(email, pass);
