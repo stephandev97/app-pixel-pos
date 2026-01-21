@@ -31,8 +31,8 @@ export class PointsApiClient {
     } catch (error) {
       console.error('❌ Error autenticando usuario POS:', error);
       this.isAuthenticated = false;
-      return { 
-        success: false, 
+      return {
+        success: false,
         message: `Error de autenticación: ${error.message}`,
         error: error.message
       };
@@ -51,7 +51,7 @@ export class PointsApiClient {
   async findQRCode(qrData) {
     try {
       console.log('🔍 POS: Buscando QR en app de puntos:', qrData);
-      
+
       // Asegurar autenticación
       const authResult = await this.ensureAuthenticated();
       if (!authResult.success) {
@@ -64,7 +64,7 @@ export class PointsApiClient {
       }
 
       console.log('🔐 Usuario autenticado, buscando en colecciones...');
-      
+
       // Verificar qué colecciones están disponibles
       try {
         const collections = await this.pb.collections.get();
@@ -72,17 +72,22 @@ export class PointsApiClient {
       } catch (e) {
         console.log('⚠️ No se pueden listar colecciones:', e.message);
       }
-      
+
       // Buscar en reward_claims (cupones/claims) - esto es lo más común para POS
       console.log('🎫 Buscando en reward_claims (cupones)...');
       let claim = null;
       try {
+        // Buscamos principalmente por 'code' (código de cupón) o por 'id'
         claim = await this.pb.collection('reward_claims')
-          .getFirstListItem(`code = "${qrData}" || qr_code = "${qrData}"`, {
+          .getFirstListItem(`code = "${qrData}" || id = "${qrData}"`, {
             expand: 'reward,client'
           })
           .catch((err) => {
-            console.log('⚠️ Error en búsqueda de reward_claims:', err.message);
+            // Si no se encuentra (404) o hay error de campo (400), retornamos null
+            // para que siga buscando en otras colecciones
+            if (err.status !== 404) {
+              console.log('⚠️ Error en búsqueda de reward_claims:', err.message);
+            }
             return null;
           });
       } catch (err) {
@@ -91,13 +96,26 @@ export class PointsApiClient {
 
       if (claim) {
         console.log('✅ Cupón encontrado:', claim);
+
+        // Construir nombre del cliente de forma robusta
+        let clientName = 'Cliente';
+        let clientDni = '';
+
+        if (claim.expand?.client) {
+          const c = claim.expand.client;
+          clientName = `${c.name || ''} ${c.surname || ''}`.trim() || c.email || 'Cliente';
+          // Intentamos obtener el DNI de varios campos posibles por seguridad
+          clientDni = c.dni || c.document || c.cedula || '';
+        }
+
         return {
           found: true,
           type: 'claim',
           data: claim,
           message: '🎫 Cupón encontrado en sistema de puntos',
           rewardTitle: claim.expand?.reward?.title || 'Premio',
-          clientName: `${claim.expand?.client?.name || ''} ${claim.expand?.client?.surname || ''}`.trim() || claim.expand?.client?.email || 'Cliente',
+          clientName: clientName,
+          clientDni: clientDni, // Nuevo campo DNI
           pointsCost: claim.pointsCost || 0,
           claimId: claim.id,
           status: claim.status
@@ -134,15 +152,40 @@ export class PointsApiClient {
       // Buscar en clientes (si el QR es de un cliente)
       console.log('👤 Buscando en clients...');
       let client = null;
+
+      // Estrategia secuencial para evitar error 400 si un campo no existe
+
+      // 1. Intentar búsqueda directa por ID (siempre seguro)
       try {
-        client = await this.pb.collection('clients')
-          .getFirstListItem(`qr_code = "${qrData}" || id = "${qrData}"`)
-          .catch((err) => {
-            console.log('⚠️ Error en búsqueda de clients:', err.message);
-            return null;
-          });
-      } catch (err) {
-        console.log('❌ Error crítico en clients:', err.message);
+        client = await this.pb.collection('clients').getOne(qrData);
+      } catch (e) {
+        // Ignorar error si no es un ID válido o no se encuentra
+      }
+
+      // 2. Si no es ID, intentar buscar por otros campos comunes
+      if (!client) {
+        // Lista de campos posibles donde podría estar el código
+        // 'qrCodeValue' es el campo específico de esta app, luego fallbacks comunes
+        const fieldsToTry = ['qrCodeValue', 'code', 'qr_code', 'dni'];
+
+        for (const field of fieldsToTry) {
+          try {
+            client = await this.pb.collection('clients')
+              .getFirstListItem(`${field} = "${qrData}"`);
+
+            if (client) {
+              console.log(`✅ Cliente encontrado por campo: ${field}`);
+              break; // Éxito
+            }
+          } catch (err) {
+            // Si el error es 400, significa que el campo probablemente no existe en la colección.
+            // Si es 404, es que no encontró coincidencia.
+            // En ambos casos, continuamos al siguiente campo.
+            if (err.status !== 404 && err.status !== 400) {
+              console.log(`⚠️ Error buscando en campo ${field}:`, err.message);
+            }
+          }
+        }
       }
 
       if (client) {
@@ -185,7 +228,7 @@ export class PointsApiClient {
     try {
       await this.ensureAuthenticated();
       const client = await this.pb.collection('clients').getOne(clientId);
-      
+
       // Obtener transacciones recientes
       const transactions = await this.pb.collection('points_transactions')
         .getList(1, 10, {
@@ -222,7 +265,7 @@ export class PointsApiClient {
   async redeemRewardFromPos(claimId, posOperator) {
     try {
       await this.ensureAuthenticated();
-      
+
       // Validar que claimId sea válido
       if (!claimId) {
         return {
@@ -230,10 +273,10 @@ export class PointsApiClient {
           message: '❌ ID de cupón inválido'
         };
       }
-      
+
       // Obtener el claim original
       const claim = await this.pb.collection('reward_claims').getOne(claimId);
-      
+
       if (claim.status !== 'pending') {
         return {
           success: false,
@@ -246,8 +289,8 @@ export class PointsApiClient {
 
       // Si hay un reward asociado, descontar puntos del cliente
       if (claim.reward && claim.client) {
-        console.log('💰 Descontando puntos del cliente:', claim.client);
-        
+        console.log('💰 Procesando transacción de puntos para cliente:', claim.client);
+
         try {
           const client = await this.pb.collection('clients').getOne(claim.client);
           const reward = await this.pb.collection('rewards').getOne(claim.reward);
@@ -259,7 +302,21 @@ export class PointsApiClient {
             };
           }
 
-          // Descontar puntos
+          // 1. Crear registro en points_transactions (Historial)
+          try {
+            await this.pb.collection('points_transactions').create({
+              client: claim.client,
+              points: -reward.pointsCost, // Negativo para indicar gasto
+              type: 'redeem', // Valor exacto según esquema
+              related_claim: claim.id,
+              description: claim.expand?.reward?.title || 'Premio',
+            });
+          } catch (txError) {
+            console.error('❌ Error detallado creando transacción:', txError.data);
+            throw new Error(`Error registrando transacción: ${JSON.stringify(txError.data)}`);
+          }
+
+          // 2. Actualizar saldo del cliente (Lógica de descuento)
           await this.pb.collection('clients').update(claim.client, {
             pointsBalance: client.pointsBalance - reward.pointsCost,
             last_reward_claimed: claim.reward,
@@ -290,7 +347,7 @@ export class PointsApiClient {
       const finalResult = {
         success: true,
         claim: updatedClaim,
-        message: rewardTitle 
+        message: rewardTitle
           ? `✅ Cupón "${rewardTitle}" canjeado exitosamente`
           : `✅ Cupón canjeado exitosamente (sin descuento de puntos)`,
         newBalance: clientPoints,
@@ -312,23 +369,19 @@ export class PointsApiClient {
     try {
       await this.ensureAuthenticated();
       const client = await this.pb.collection('clients').getOne(clientId);
-      
+
       // Crear transacción de puntos
+      // Schema: client (relation), points (number), type (earn, redeem), related_claim (relation), description (text)
       const transaction = await this.pb.collection('points_transactions').create({
         client: clientId,
         points: pointsToAdd,
-        type: 'earned',
-        reason: reason || 'Compra en POS',
-        source: 'pos',
-        pos_operator: posOperator,
-        created: new Date().toISOString()
+        type: 'earn',
+        description: reason || 'Compra en POS',
       });
 
       // Actualizar balance del cliente
       const updatedClient = await this.pb.collection('clients').update(clientId, {
         pointsBalance: client.pointsBalance + pointsToAdd,
-        last_earned: pointsToAdd,
-        last_earned_date: new Date().toISOString()
       });
 
       return {

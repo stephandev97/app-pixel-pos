@@ -120,7 +120,8 @@ function SearchBar({ q, setQ, onQuickAdd }) {
             data: result.data,
             pointsCost: result.pointsCost || 0,
             rewardTitle: result.title || result.data.title,
-            clientName: result.name || result.data.name,
+            clientName: result.clientName || result.data.name,
+            clientDni: result.clientDni, // Recibir DNI
             message: result.message,
             pointsBalance: result.pointsBalance || 0,
           });
@@ -580,6 +581,11 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                       {qrClaim.clientName && (
                         <div>
                           👤 Cliente: <strong>{qrClaim.clientName}</strong>
+                          {qrClaim.clientDni && (
+                            <span style={{ marginLeft: 8, fontSize: '0.9em', color: '#666' }}>
+                              (DNI: {qrClaim.clientDni})
+                            </span>
+                          )}
                         </div>
                       )}
                       {qrClaim.status && (

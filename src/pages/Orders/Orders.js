@@ -50,6 +50,7 @@ import {
   LoadMoreButton,
 } from './OrdersStyles';
 import { Banknote, CreditCard, Logs, Search, TriangleAlert, ArrowUp } from 'lucide-react';
+import { pointsApiClient } from '../../utils/pointsApiClient';
 
 // Agrega esto en tu archivo Orders.js
 const ticketStyles = {
@@ -80,24 +81,9 @@ const SCAN_MAP = {
 
 function normalizeScan(raw) {
   if (!raw) return "";
-
-  const cleaned = raw.trim().toLowerCase();
-
-  // Si ya es numérico puro, no tocar
-  if (/^\d+$/.test(cleaned)) {
-    return cleaned;
-  }
-
-  let fixed = "";
-  for (const ch of cleaned) {
-    if (/\d/.test(ch)) {
-      fixed += ch;
-    } else if (SCAN_MAP[ch]) {
-      fixed += SCAN_MAP[ch];
-    }
-  }
-
-  return fixed;
+  // Permitir alfanuméricos: eliminamos espacios y caracteres de control
+  // Si el scanner envía basura, aquí se limpia, pero permitimos letras y números.
+  return raw.trim();
 }
 
 
@@ -483,7 +469,7 @@ const CardOrders = ({
 }) => {
 
   const isLinux = navigator.userAgent.toLowerCase().includes('linux');
- 
+
 
 
   const [editPayOpen, setEditPayOpen] = useState(false);
@@ -572,12 +558,12 @@ const CardOrders = ({
   });
 
   function onScan(rawValue) {
-  const code = normalizeScan(rawValue);
+    const code = normalizeScan(rawValue);
 
-  console.log("RAW:", rawValue);
-  console.log("FIXED:", code);
+    console.log("RAW:", rawValue);
+    console.log("FIXED:", code);
 
-}
+  }
 
   // Reset de input/preview al cerrar el modal
   useEffect(() => {
@@ -605,39 +591,32 @@ const CardOrders = ({
 
     const lookupId = Date.now();
     lastLookupRef.current = lookupId;
-    const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        await ensureServiceAuth();
-        const safeVal = trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        const list = await pb.collection('clients').getList(1, 1, {
-          filter: `qrCodeValue = "${safeVal}" || qrCodeValue ~ "${safeVal}"`,
-          signal: controller.signal,
-        });
+        const res = await pointsApiClient.findQRCode(trimmed);
+
         if (lastLookupRef.current !== lookupId) return;
-        const rec = list?.items?.[0] || null;
-        if (!rec) {
+
+        if (res.found && res.type === 'client') {
+          setClientPreview({
+            name: res.name || res.data.name || 'Cliente',
+            dni: res.clientDni || res.data.dni || '',
+            email: res.data.email
+          });
+          setClientPreviewError('');
+        } else {
           setClientPreview(null);
-          setClientPreviewError('Cliente no encontrado');
-          return;
+          setClientPreviewError('Cliente no encontrado en sistema de puntos');
         }
-        const name =
-          `${rec.name || ''} ${rec.surname || ''}`.trim() || rec.name || rec.email || rec.id;
-        const dni = rec.dni || rec.document || rec.documento || '';
-        setClientPreview({ name, dni, email: rec.email });
-        setClientPreviewError('');
       } catch (err) {
-        if (controller.signal.aborted) return;
         if (lastLookupRef.current !== lookupId) return;
         setClientPreview(null);
-        if (err?.status === 404) setClientPreviewError('Cliente no encontrado');
-        else setClientPreviewError('No se pudo buscar cliente');
+        setClientPreviewError('Error buscando cliente');
       }
     }, 250);
 
     return () => {
       clearTimeout(timer);
-      controller.abort();
     };
   }, [linkId, linkOpen]);
 
@@ -660,7 +639,7 @@ const CardOrders = ({
     }
     try {
       if (pending) {
-        alert('No se puede vincular mientras el pedido est� offline.');
+        alert('No se puede vincular mientras el pedido está offline.');
         return;
       }
       // solo retiro
@@ -674,61 +653,58 @@ const CardOrders = ({
       }
       const trimmed = linkId.trim();
       if (!trimmed) {
-        setLinkMsg('Escane�/peg� el c�digo QR del cliente.');
+        setLinkMsg('Escaneá/pegá el código QR del cliente.');
         return;
       }
       setLinkLoading(true);
       setLinkMsg('');
 
-      // asegurar sesi��n de servicio antes de consultar PB
-      try {
-        const authModel = await ensureServiceAuth();
-        if (!pb.authStore.isValid) {
-          setLinkMsg('No se pudo iniciar sesi�n de servicio (revis� variables y reglas).');
-          return;
-        }
-        console.info('[link-client] autenticado como', authModel?.email || authModel?.id);
-      } catch (authErr) {
-        console.error('No se pudo autenticar service user', authErr);
-        if (authErr?.message === 'missing-service-env') {
-          setLinkMsg('Faltan variables REACT_APP_PB_SERVICE_EMAIL / PASS (reinicia la app).');
-        } else if (authErr?.message === 'service-auth-failed') {
-          setLinkMsg('Login del servicio fall��: revis� email/pass o crea el usuario/admin en PB.');
-        } else {
-          setLinkMsg('No se pudo autenticar servicio. Revis� email/pass y reglas en PB.');
-        }
+      // 1. Buscar cliente en sistema de puntos
+      const res = await pointsApiClient.findQRCode(trimmed);
+
+      if (!res.found || res.type !== 'client') {
+        setLinkMsg('No se encontró un cliente válido con ese QR.');
+        setLinkLoading(false);
         return;
       }
 
-      // buscar cliente por qrCodeValue (escapando) o por ID directo como fallback
-      const safeVal = trimmed.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-      let clientRec = null;
-      try {
-        const list = await pb.collection('clients').getList(1, 1, {
-          filter: `qrCodeValue = "${safeVal}" || qrCodeValue ~ "${safeVal}"`,
-        });
-        clientRec = list?.items?.[0] || null;
-      } catch (e) {
-        if (e?.status !== 404) throw e;
-      }
-      if (!clientRec) {
-        setLinkMsg('No se encontr� un cliente con ese c�digo QR.');
-        return;
-      }
-
-      const currentBalance = Number(clientRec?.pointsBalance || 0);
-
+      const clientRec = res.data;
       const pts = Math.floor(Number(total || 0) / 1100);
 
-      await pb.collection('clients').update(clientRec.id, {
-        pointsBalance: currentBalance + pts,
-      });
+      if (pts <= 0) {
+        setLinkMsg('El monto es muy bajo para sumar puntos.');
+        setLinkLoading(false);
+        return;
+      }
 
-      await pb.collection('orders').update(id, {
-        client: clientRec.id,
-        points: pts,
-        pointsClaimed: true,
-      });
+      // 2. Sumar puntos en sistema externo
+      const addRes = await pointsApiClient.addPointsFromPos(
+        clientRec.id,
+        pts,
+        `Compra #${numeracion}`,
+        'cajero'
+      );
+
+      if (!addRes.success) {
+        setLinkMsg(`Error sumando puntos: ${addRes.message}`);
+        setLinkLoading(false);
+        return;
+      }
+
+      // 3. Actualizar orden local
+      try {
+        await pb.collection('orders').update(id, {
+          client: clientRec.id,
+          points: pts,
+          pointsClaimed: true,
+        });
+      } catch (localErr) {
+        console.warn('No se pudo vincular client ID localmente, pero se sumaron puntos.', localErr);
+        await pb.collection('orders').update(id, {
+          points: pts,
+          pointsClaimed: true,
+        });
+      }
 
       dispatch(
         upsertOrder({
@@ -1766,34 +1742,34 @@ const CardOrders = ({
               Escanea el QR (pega el ID) para sumar puntos al cliente.
             </div>
             <input
-  autoFocus
-  placeholder="ID del cliente"
-  value={linkId}
-  onChange={(e) => setLinkId(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key === "Enter") {
-      const fixed = normalizeScan(linkId);
+              autoFocus
+              placeholder="ID del cliente"
+              value={linkId}
+              onChange={(e) => setLinkId(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const fixed = normalizeScan(linkId);
 
-      console.log("RAW SCAN:", linkId);
-      console.log("FIXED SCAN:", fixed);
+                  console.log("RAW SCAN:", linkId);
+                  console.log("FIXED SCAN:", fixed);
 
-if (fixed.length === 6) {
-  setLinkId(fixed);
-  handleLinkClient();
-}
+                  if (fixed.length === 6) {
+                    setLinkId(fixed);
+                    handleLinkClient();
+                  }
 
-      setLinkId("");
-    }
-  }}
-  style={{
-    width: "100%",
-    padding: "16px 18px",
-    borderRadius: 14,
-    border: "1px solid #ddd",
-    fontSize: "1rem",
-    fontFamily: "inherit",
-  }}
-/>
+                  setLinkId("");
+                }
+              }}
+              style={{
+                width: "100%",
+                padding: "16px 18px",
+                borderRadius: 14,
+                border: "1px solid #ddd",
+                fontSize: "1rem",
+                fontFamily: "inherit",
+              }}
+            />
             {clientPreview && (
               <div
                 style={{
