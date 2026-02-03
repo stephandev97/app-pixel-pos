@@ -102,18 +102,22 @@ ipcMain.handle('print-ticket', async (_e, html) => {
 // ======================================================
 autoUpdater.logger = log;
 autoUpdater.logger.transports.file.level = 'info';
+autoUpdater.autoDownload = true;
+autoUpdater.autoInstallOnAppQuit = true;
 
 let updateReady = false;
 autoUpdater.on('download-progress', (p) => {
   try {
     win?.webContents?.send('update-progress', p?.percent ?? 0);
-  } catch {}
+  } catch { }
 });
 autoUpdater.on('update-downloaded', () => {
   updateReady = true;
   try {
     win?.webContents?.send('update-ready');
-  } catch {}
+    // Instalar inmediatamente como solicitado
+    autoUpdater.quitAndInstall();
+  } catch { }
 });
 
 ipcMain.handle('check-for-updates', async () => {
@@ -121,9 +125,8 @@ ipcMain.handle('check-for-updates', async () => {
     const result = await autoUpdater.checkForUpdates();
     const info = result?.updateInfo;
     if (info && info.version && info.version !== app.getVersion()) {
-      try {
-        autoUpdater.downloadUpdate();
-      } catch {}
+      // autoDownload está activo, así que no es necesario llamar a downloadUpdate explícitamente,
+      // pero lo dejamos por si acaso o para feedback inmediato en chequeo manual
       return { updateAvailable: true, version: info.version };
     }
     return { updateAvailable: false };
@@ -160,6 +163,25 @@ app.whenReady().then(() => {
   log.info('🚀 App iniciada', app.getVersion());
 
   createWindow();
+
+  // Chequear actualizaciones cada 10 minutos
+  setInterval(() => {
+    try {
+      log.info('🔄 Buscando actualizaciones (intervalo 10m)...');
+      autoUpdater.checkForUpdates().catch((err) => {
+        log.error('Error buscando actualizaciones en intervalo:', err);
+      });
+    } catch (e) {
+      log.error('Error iniciando chequeo de actualizaciones:', e);
+    }
+  }, 10 * 60 * 1000);
+
+  // Buscar actualizaciones al iniciar también
+  try {
+    setTimeout(() => {
+      autoUpdater.checkForUpdates().catch(() => { });
+    }, 5000); // Esperar 5s para no bloquear inicio
+  } catch { }
 
   // Atajo DevTools
   globalShortcut.register('CommandOrControl+Shift+D', () => {
