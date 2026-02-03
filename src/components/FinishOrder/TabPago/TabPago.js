@@ -1,3 +1,4 @@
+import { CreditCard } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 import { BsCash } from 'react-icons/bs';
 import { FaEquals, FaLock, FaLockOpen } from 'react-icons/fa6';
@@ -16,7 +17,6 @@ import {
   Tab,
 } from '../ContainerFinish/ContainerFinishStyles';
 import { TabContainer } from './TabPagoStyles';
-import { CreditCard } from 'lucide-react';
 
 const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
   const dispatch = useDispatch();

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { pb, ensureServiceAuth } from '../lib/pb';
+
 import { formatPrice } from '../utils/formatPrice';
 import { pointsApiClient } from '../utils/pointsApiClient';
 
@@ -20,12 +20,11 @@ export default function RewardsList() {
   const fetchLocalClaims = async () => {
     try {
       await pointsApiClient.authenticate();
-      const list = await pointsApiClient.pb.collection('reward_claims')
-        .getList(1, 200, {
-          filter: 'status = "redeemed"',
-          sort: '-created',
-          expand: 'reward,client,reward.product',
-        });
+      const list = await pointsApiClient.pb.collection('reward_claims').getList(1, 200, {
+        filter: 'status = "redeemed"',
+        sort: '-created',
+        expand: 'reward,client,reward.product',
+      });
       return list.items;
     } catch (e) {
       console.error('Error obteniendo claims del PB local:', e);
@@ -33,32 +32,30 @@ export default function RewardsList() {
     }
   };
 
-
-
   useEffect(() => {
     let abort = false;
-    
+
     const fetchData = async () => {
       try {
         setLoading(true);
         setError('');
-        
-      // Obtener canjeados de fuente local
-      const localClaims = await fetchLocalClaims();
-      
-      if (!abort) {
-        setClaims(localClaims);
-      }
+
+        // Obtener canjeados de fuente local
+        const localClaims = await fetchLocalClaims();
+
+        if (!abort) {
+          setClaims(localClaims);
+        }
       } catch (e) {
         console.error('Error obteniendo todos los claims:', e);
         setError(e?.message || 'No se pudieron cargar los claims');
-    } finally {
-      setLoading(false);
-    }
+      } finally {
+        setLoading(false);
+      }
     };
-    
+
     fetchData();
-    
+
     return () => {
       abort = true;
     };
@@ -69,7 +66,7 @@ export default function RewardsList() {
       style={{
         minHeight: '100vh',
         background: 'linear-gradient(135deg, #f5f7fb 0%, #eef2ff 100%)',
-        fontFamily: "'Satoshi', sans-serif",
+        fontFamily: "'Inter', sans-serif",
         padding: '20px 16px 28px',
         boxSizing: 'border-box',
       }}
@@ -96,7 +93,9 @@ export default function RewardsList() {
         >
           <div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>Canjes completados</div>
-            <div style={{ fontSize: '1rem', color: '#666', marginTop: '8px' }}>POS + App de Puntos</div>
+            <div style={{ fontSize: '1rem', color: '#666', marginTop: '8px' }}>
+              POS + App de Puntos
+            </div>
           </div>
           <div
             style={{
@@ -189,8 +188,17 @@ export default function RewardsList() {
                       'radial-gradient(circle at 20% 20%, rgba(17,24,39,0.04), transparent 35%), radial-gradient(circle at 80% 0%, rgba(37,99,235,0.04), transparent 30%)',
                   }}
                 />
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 1 }}>
-                  <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>{c.expand?.reward?.title || c.rewardTitle || 'Recompensa'}</div>
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    zIndex: 1,
+                  }}
+                >
+                  <div style={{ fontWeight: 800, fontSize: '1.05rem' }}>
+                    {c.expand?.reward?.title || c.rewardTitle || 'Recompensa'}
+                  </div>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <span
                       style={{
@@ -220,7 +228,8 @@ export default function RewardsList() {
                   </div>
                 </div>
                 <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
-                  Cliente: <strong>{c.expand?.client?.name || c.expand?.client?.email || '-'}</strong>
+                  Cliente:{' '}
+                  <strong>{c.expand?.client?.name || c.expand?.client?.email || '-'}</strong>
                 </div>
                 <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
                   Puntos: <strong>{c.pointsCost ?? '-'}</strong>

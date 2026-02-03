@@ -2,20 +2,30 @@
 
 import React from 'react';
 
+import logo from '../../styles/img/logoprint.png';
 // Asegúrate de que estas rutas de importación sean correctas desde este nuevo archivo
 import { formatPrice } from '../../utils/formatPrice';
-import logo from '../../styles/img/logoprint.png';
 
 const Ticket58 = React.forwardRef(
-  ({ direccion, items, total, method, pago, pagoEfectivo, pagoMp }, ref) => {
-    const totalPagado = method === 'mixto' ? (pagoEfectivo || 0) + (pagoMp || 0) : total;
+  ({ direccion, items, total, method, pagoEfectivo, pagoMp }, ref) => {
     return (
       <div
         ref={ref}
-        style={{ width: '40mm', padding: '1mm', lineHeight: 1.25, fontSize: '3.2mm', color: '#000', fontFamily: 'sans-serif' }}
+        style={{
+          width: '40mm',
+          padding: '1mm',
+          lineHeight: 1.25,
+          fontSize: '3.2mm',
+          color: '#000',
+          fontFamily: 'sans-serif',
+        }}
       >
         <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
-          <img src={logo} alt="Logo" style={{ width: '30mm', height: 'auto', display: 'block', margin: '0 auto' }} />
+          <img
+            src={logo}
+            alt="Logo"
+            style={{ width: '30mm', height: 'auto', display: 'block', margin: '0 auto' }}
+          />
         </div>
         <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
           <div style={{ fontSize: '3.5mm', fontWeight: 700 }}>{direccion || ''}</div>
@@ -43,5 +53,7 @@ const Ticket58 = React.forwardRef(
     );
   }
 );
+
+Ticket58.displayName = 'Ticket58';
 
 export default Ticket58;

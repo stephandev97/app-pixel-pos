@@ -72,7 +72,14 @@ export default [
 
   // Override para proceso MAIN/PRELOAD de Electron (Node)
   {
-    files: ['electron/**', 'main/**', 'src/main/**', 'src/preload/**', 'public/main.js'],
+    files: [
+      'electron/**',
+      'main/**',
+      'src/main/**',
+      'src/preload/**',
+      'public/main.js',
+      'public/preload.js',
+    ],
     languageOptions: { globals: { ...globals.node } },
   },
 

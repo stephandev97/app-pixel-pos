@@ -1,7 +1,9 @@
 import './App.css';
+
 import { AnimatePresence, motion } from 'framer-motion';
 import { useSelector } from 'react-redux';
 import { PersistGate } from 'redux-persist/integration/react';
+import { createGlobalStyle } from 'styled-components';
 
 import Sidebar from './components/Sidebar/Sidebar';
 import { SIDEBAR_W } from './components/Sidebar/SidebarStyles';
@@ -13,9 +15,8 @@ import Home from './pages/Home/Home';
 import OrderFinished from './pages/OrderFinished/OrderFinished';
 import Orders from './pages/Orders/Orders';
 import RewardsList from './pages/RewardsList';
-import { persistor } from './redux/store';
-import { createGlobalStyle } from 'styled-components';
 import TvSaboresPanel from './pages/TVSaboresPanel/TVSaboresPanel';
+import { persistor } from './redux/store';
 
 const GlobalNoDialogScroll = createGlobalStyle`
   .MuiDialogContent-root { overflow-y: clip !important; }
@@ -26,7 +27,8 @@ export default function App() {
   const activeOrders = useSelector((s) => s.actions.toggleOrders);
   const activeConfig = useSelector((s) => s.actions.toggleConfig);
   const activeRewards =
-    useSelector((s) => s.actions.toggleRewards) && process.env.NODE_ENV === 'development';
+    useSelector((s) => s.actions.toggleRewards) &&
+    (typeof import.meta !== 'undefined' ? !!import.meta.env?.DEV : false);
   const activeDaily = useSelector((s) => s.actions.toggleDailyStats);
   const activeTvSabores = useSelector((s) => s.actions.toggleTvSabores);
 

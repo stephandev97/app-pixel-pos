@@ -1,4 +1,9 @@
+import { CreditCard } from 'lucide-react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useForm } from 'react-hook-form';
+import { BsCash } from 'react-icons/bs';
+import { FaCheck } from 'react-icons/fa6';
+import { MdOutlineClear, MdOutlineCurrencyExchange } from 'react-icons/md';
 import { useDispatch, useSelector } from 'react-redux';
 import uniqid from 'uniqid';
 
@@ -37,11 +42,6 @@ import {
   TotalFinish,
   Value,
 } from './ContainerFinishStyles';
-import { useMemo, useEffect, useRef } from 'react';
-import { BsCash } from 'react-icons/bs';
-import { FaCheck } from 'react-icons/fa6';
-import { MdOutlineClear, MdOutlineCurrencyExchange } from 'react-icons/md';
-import { CreditCard } from 'lucide-react';
 
 function getMixtoFromForm(getValues) {
   const ef = Number(getValues('pagoEfectivo') || 0);
@@ -193,7 +193,9 @@ const ContainerFinish = ({ cartItems, price }) => {
         setError('pago', { type: 'manual', message: 'El efectivo debe ser ≥ Total + Envío' });
         try {
           document.querySelector('input[name="pago"]')?.focus();
-        } catch {}
+        } catch (e) {
+          console.error('focus pago input error', e);
+        }
         return;
       }
     }
@@ -356,7 +358,9 @@ const ContainerFinish = ({ cartItems, price }) => {
           'raw error (stringified):',
           JSON.stringify(err, Object.getOwnPropertyNames(err), 2)
         );
-      } catch {}
+      } catch (e) {
+        console.error('error stringify failed', e);
+      }
       console.log('payload sent:', {
         ...orderToSave,
         method: methodForOrder,

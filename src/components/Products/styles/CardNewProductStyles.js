@@ -46,7 +46,7 @@ export const Input = styled.input`
   font-weight: bold;
   border-radius: 5px;
   font-size: 1.1em;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   padding: 0.5em 2em;
 
   &::-webkit-input-placeholder {
@@ -61,7 +61,7 @@ export const Button = styled.button`
   margin-top: 1.2em;
   height: 42px;
   border: 0;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: bold;
   color: white;
   font-size: 1em;

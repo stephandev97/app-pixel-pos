@@ -96,7 +96,7 @@ export const ButtonNext = styled.button`
   border: 0;
   cursor: pointer;
   font-size: 1.1em;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   transition: all 0.2s;
   background: black;
   color: white;

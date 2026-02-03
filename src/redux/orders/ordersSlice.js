@@ -1,4 +1,5 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
+
 import { pb } from '../../lib/pb';
 import {
   computeBusinessDate,
@@ -195,6 +196,47 @@ export const fetchMoreOrders = createAsyncThunk(
   }
 );
 
+export const hydrateAllTodayOrders = createAsyncThunk(
+  'orders/hydrateAllToday',
+  async (_, { rejectWithValue }) => {
+    try {
+      const startOfBusinessDay = computeBusinessDate(new Date(), 3);
+      const filter = `businessDate = "${startOfBusinessDay}"`;
+      const perPage = 20;
+      let page = 1;
+      let allItems = [];
+
+      const first = await pb.collection('orders').getList(page, perPage, {
+        filter,
+        sort: '-clientCreatedAt,-created',
+      });
+
+      allItems = [...first.items];
+      const totalPages = first.totalPages || 1;
+      const totalItems = first.totalItems || allItems.length;
+
+      while (page < totalPages) {
+        page += 1;
+        const next = await pb.collection('orders').getList(page, perPage, {
+          filter,
+          sort: '-clientCreatedAt,-created',
+        });
+        allItems.push(...next.items);
+      }
+
+      return {
+        items: allItems,
+        page,
+        perPage,
+        totalItems,
+        totalPages,
+      };
+    } catch (err) {
+      return rejectWithValue(err?.message || 'Error al cargar todos los pedidos del día');
+    }
+  }
+);
+
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
   async (payload, { dispatch }) => {
@@ -233,7 +275,7 @@ export const addOrderOnBoth = createAsyncThunk(
 
 export const removeOrderFromBoth = createAsyncThunk(
   'orders/removeOrderFromBoth',
-  async ({ id, number }, { getState, rejectWithValue }) => {
+  async ({ id, number, reason }, { getState, rejectWithValue }) => {
     try {
       const orders = getState()?.orders?.orders ?? [];
       let target = orders.find((o) => (id && o.id === id) || (number && o.number === number));
@@ -248,6 +290,64 @@ export const removeOrderFromBoth = createAsyncThunk(
       if (!target) return rejectWithValue('Orden no encontrada');
 
       await pb.collection('orders').delete(target.id);
+
+      try {
+        const deletedAtIso = new Date().toISOString();
+        const createdMs =
+          typeof target.clientCreatedAt === 'number'
+            ? target.clientCreatedAt
+            : target.created
+              ? new Date(target.created).getTime()
+              : Date.now();
+        const createdDate = new Date(createdMs);
+        const dayForLog = target.businessDate || computeBusinessDate(createdDate, 3);
+        const { method: detectedMethod, revenueAmount: detectedRevenue } = detectPayment(
+          target.pago,
+          target.total
+        );
+        const method = target.method ?? detectedMethod ?? null;
+        const revenueAmount = Number(target.revenueAmount ?? detectedRevenue ?? 0);
+        const ef = Number(target.pagoEfectivo ?? 0);
+        const mp = Number(target.pagoMp ?? 0);
+        const db = Number(target.pagoDebito ?? 0);
+        const paidAmount =
+          target.paidAmount && typeof target.paidAmount === 'object'
+            ? target.paidAmount
+            : ef || mp || db
+              ? {
+                  ...(ef ? { efectivo: ef } : {}),
+                  ...(mp ? { transferencia: mp } : {}),
+                  ...(db ? { debito: db } : {}),
+                }
+              : method
+                ? { [method]: revenueAmount }
+                : {};
+        const { mode, address } = detectFulfillment(target.direccion);
+
+        await pb.collection('order_deletions').create({
+          orderId: target.id,
+          number: target.number ?? target.id,
+          businessDate: dayForLog,
+          deletedAt: deletedAtIso,
+          total: Number(target.total ?? 0),
+          reason: String(reason || '').trim() || null,
+          method,
+          revenueAmount,
+          paidAmount,
+          pagoEfectivo: ef,
+          pagoMp: mp,
+          pagoDebito: db,
+          mode,
+          address,
+          phone: target.phone ?? null,
+          name: target.name ?? null,
+          itemsCount: itemsCountFrom(target.items),
+          clientCreatedAt: new Date(createdMs).toISOString(),
+          items: Array.isArray(target.items) ? target.items : [],
+        });
+      } catch (_) {
+        void 0;
+      }
 
       const createdMs =
         typeof target.clientCreatedAt === 'number'
@@ -484,6 +584,28 @@ const ordersSlice = createSlice({
     b.addCase(hydrateOrdersFromPocket.rejected, (s, { payload }) => {
       s.status = 'failed';
       s.error = payload || 'Fallo al hidratar';
+    });
+
+    b.addCase(hydrateAllTodayOrders.pending, (s) => {
+      s.status = 'loading';
+      s.error = null;
+    });
+    b.addCase(hydrateAllTodayOrders.fulfilled, (s, { payload }) => {
+      s.status = 'succeeded';
+      const pendings = s.orders.filter((o) => o.pending);
+      s.orders = [...pendings, ...payload.items.map(pbToOrder)];
+      s.pagination = {
+        page: payload.page,
+        perPage: payload.perPage,
+        totalItems: payload.totalItems,
+        totalPages: payload.totalPages,
+        hasMore: payload.page < payload.totalPages,
+      };
+      savePendingToStorage(s.orders);
+    });
+    b.addCase(hydrateAllTodayOrders.rejected, (s, { payload }) => {
+      s.status = 'failed';
+      s.error = payload || 'Fallo al hidratar todos';
     });
 
     b.addCase(fetchMoreOrders.pending, (s) => {

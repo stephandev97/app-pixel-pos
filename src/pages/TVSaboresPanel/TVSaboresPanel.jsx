@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+
 import { pb } from '../../lib/pb';
 
 function groupByCategory(items) {
@@ -20,9 +21,8 @@ export default function TvSaboresPanel() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
-  const [screens, setScreens] = useState([])
-  const [savingScreenId, setSavingScreenId] = useState(null)
-
+  const [screens, setScreens] = useState([]);
+  const [savingScreenId, setSavingScreenId] = useState(null);
 
   // ✅ accordion: categoría abierta (una sola)
   const [openCategory, setOpenCategory] = useState(null);
@@ -43,43 +43,45 @@ export default function TvSaboresPanel() {
     try {
       const data = await pb.collection('tv_screens').getFullList({
         sort: 'device_id,display_index',
-      })
-      setScreens(data)
+      });
+      setScreens(data);
     } catch (e) {
-      console.error('Error cargando tv_screens', e)
+      console.error('Error cargando tv_screens', e);
     }
-  }
+  };
 
   useEffect(() => {
-    load()
-    loadScreens()
+    load();
+    loadScreens();
 
-    let unsub1 = null
-    let unsub2 = null
+    let unsub1 = null;
+    let unsub2 = null;
 
-      ; (async () => {
-        try {
-          unsub1 = await pb.collection('tv_sabores').subscribe('*', () => load())
-          unsub2 = await pb.collection('tv_screens').subscribe('*', () => loadScreens())
-        } catch { }
-      })()
+    (async () => {
+      try {
+        unsub1 = await pb.collection('tv_sabores').subscribe('*', () => load());
+        unsub2 = await pb.collection('tv_screens').subscribe('*', () => loadScreens());
+      } catch (e) {
+        console.error('Error suscribiendo a tv_sabores/tv_screens', e);
+      }
+    })();
 
     return () => {
-      unsub1?.()
-      unsub2?.()
-    }
-  }, [])
+      unsub1?.();
+      unsub2?.();
+    };
+  }, []);
 
   const updateScreenUrl = async (screen, url) => {
-    setSavingScreenId(screen.id)
+    setSavingScreenId(screen.id);
     try {
-      await pb.collection('tv_screens').update(screen.id, { url })
+      await pb.collection('tv_screens').update(screen.id, { url });
     } catch (e) {
-      alert('No se pudo guardar la URL')
+      alert('No se pudo guardar la URL');
     } finally {
-      setSavingScreenId(null)
+      setSavingScreenId(null);
     }
-  }
+  };
 
   const grouped = useMemo(() => groupByCategory(items), [items]);
 
@@ -131,7 +133,7 @@ export default function TvSaboresPanel() {
                 border: '1px solid rgba(0,0,0,0.06)',
                 background: 'rgba(255,255,255,0.55)',
                 cursor: 'pointer',
-                fontFamily: 'Satoshi',
+                fontFamily: 'Inter',
               }}
               title="Abrir/cerrar categoría"
             >
@@ -201,7 +203,7 @@ export default function TvSaboresPanel() {
                           cursor: busy ? 'not-allowed' : 'pointer',
                           fontWeight: 800,
                           minWidth: 120,
-                          fontFamily: 'Satoshi',
+                          fontFamily: 'Inter',
                         }}
                         title="spent=true significa desactivado"
                       >
@@ -221,7 +223,7 @@ export default function TvSaboresPanel() {
 
       <div style={{ display: 'grid', gap: 10 }}>
         {screens.map((screen) => {
-          const busy = savingScreenId === screen.id
+          const busy = savingScreenId === screen.id;
 
           return (
             <div
@@ -237,16 +239,14 @@ export default function TvSaboresPanel() {
                 background: 'rgba(255,255,255,0.55)',
               }}
             >
-              <span style={{ opacity: 0.7, width: "20px" }}>
-                #{screen.display_index}
-              </span>
+              <span style={{ opacity: 0.7, width: '20px' }}>#{screen.display_index}</span>
 
               <input
                 defaultValue={screen.url}
                 disabled={busy}
                 onBlur={(e) => {
                   if (e.target.value !== screen.url) {
-                    updateScreenUrl(screen, e.target.value)
+                    updateScreenUrl(screen, e.target.value);
                   }
                 }}
                 style={{
@@ -257,11 +257,9 @@ export default function TvSaboresPanel() {
                 }}
               />
 
-              <span style={{ fontSize: 12, opacity: 0.6 }}>
-                {busy ? 'Guardando…' : 'OK'}
-              </span>
+              <span style={{ fontSize: 12, opacity: 0.6 }}>{busy ? 'Guardando…' : 'OK'}</span>
             </div>
-          )
+          );
         })}
       </div>
     </div>

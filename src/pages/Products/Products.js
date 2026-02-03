@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
 import { QrCode } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { useDispatch } from 'react-redux';
+
 import CardProduct from '../../components/Products/CardProduct';
-import { pb, ensureServiceAuth } from '../../lib/pb';
+import { pb } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
 import { pointsApiClient } from '../../utils/pointsApiClient';
 import {
@@ -77,7 +78,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
   const [qrMsg, setQrMsg] = useState('');
   const [qrError, setQrError] = useState('');
   const [pointsConnectionStatus, setPointsConnectionStatus] = useState('checking');
-  const [searchInPoints, setSearchInPoints] = useState(false);
 
   const submit = () => {
     onQuickAdd?.({ name: name.trim(), price });
@@ -92,7 +92,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
     setQrClaim(null);
     setQrMsg('');
     setQrError('');
-    setSearchInPoints(false);
   };
 
   const lookupClaim = async () => {
@@ -101,87 +100,29 @@ function SearchBar({ q, setQ, onQuickAdd }) {
       setQrError('Ingresá un código válido');
       return;
     }
-    
+
     try {
       setQrLoading(true);
       setQrError('');
       setQrMsg('');
-
-      if (searchInPoints) {
-        // Buscar en la app de puntos
-        console.log('🔍 Buscando en app de puntos...');
-        const result = await pointsApiClient.findQRCode(codeVal);
-        
-        if (result.found) {
-          setQrClaim({
-            id: result.data.id,
-            code: codeVal,
-            type: result.type,
-            data: result.data,
-            pointsCost: result.pointsCost || 0,
-            rewardTitle: result.title || result.data.title,
-            clientName: result.clientName || result.data.name,
-            clientDni: result.clientDni, // Recibir DNI
-            message: result.message,
-            pointsBalance: result.pointsBalance || 0,
-          });
-          setQrMsg(result.message);
-        } else {
-          setQrError(result.message);
-          setQrClaim(null);
-        }
-      } else {
-        // Búsqueda original en PB local del POS
-        console.log('🔍 Buscando en PB local del POS...');
-        await ensureServiceAuth();
-        const safe = codeVal.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-        const claim = await pb
-          .collection('reward_claims')
-          .getFirstListItem(`code = "${safe}" && status = "pending"`, {
-            expand: 'reward,client',
-          });
-        if (!claim) {
-          setQrError('Cupón no encontrado o ya usado en sistema local.');
-          setQrClaim(null);
-          return;
-        }
-
-        const now = Date.now();
-        const expiresMs = claim.expiresAt ? new Date(claim.expiresAt).getTime() : null;
-        if (expiresMs && expiresMs < now) {
-          try {
-            await pb.collection('reward_claims').update(claim.id, { status: 'expired' });
-          } catch {}
-          setQrError('Cupón vencido.');
-          setQrClaim(null);
-          return;
-        }
-
-        const rewardTitle = claim?.expand?.reward?.title || claim.reward || 'Premio';
-        const product = claim?.expand?.reward?.expand?.product || null;
-        const clientName =
-          `${claim?.expand?.client?.name || ''} ${claim?.expand?.client?.surname || ''}`.trim() ||
-          claim?.expand?.client?.email ||
-          claim?.expand?.client?.id ||
-          '';
-
+      const result = await pointsApiClient.findQRCode(codeVal);
+      if (result.found) {
         setQrClaim({
-          id: claim.id,
-          code: claim.code,
-          type: 'local_claim',
-          rewardTitle,
-          pointsCost: claim.pointsCost,
-          clientName,
-          expiresAt: claim.expiresAt,
-          product: product
-            ? {
-                id: product.id,
-                name: product.name || rewardTitle,
-                price: Number(product.price || 0),
-              }
-            : null,
+          id: result.data.id,
+          code: codeVal,
+          type: result.type,
+          data: result.data,
+          pointsCost: result.pointsCost || 0,
+          rewardTitle: result.title || result.data.title,
+          clientName: result.clientName || result.data.name,
+          clientDni: result.clientDni,
+          message: result.message,
+          pointsBalance: result.pointsBalance || 0,
         });
-        setQrMsg('✅ Cupón encontrado en sistema local');
+        setQrMsg(result.message);
+      } else {
+        setQrError(result.message);
+        setQrClaim(null);
       }
     } catch (err) {
       setQrClaim(null);
@@ -200,23 +141,22 @@ function SearchBar({ q, setQ, onQuickAdd }) {
     try {
       setQrLoading(true);
       setQrError('');
-
-      if (searchInPoints && qrClaim.type === 'claim') {
+      if (qrClaim.type === 'claim') {
         // Canjear cupón en sistema de puntos
         console.log('🎫 Canjeando cupón en sistema de puntos...');
         console.log('📋 Claim ID a canjear:', qrClaim.data.id);
         console.log('📋 Claim completo:', qrClaim.data);
-        
+
         if (!qrClaim.data.id) {
           setQrError('❌ Error: ID de cupón no encontrado');
           return;
         }
-        
+
         const result = await pointsApiClient.redeemRewardFromPos(
           qrClaim.data.id, // claim id
           'pos_operator_001'
         );
-        
+
         if (result.success) {
           setQrMsg(result.message);
           setQrClaim(null);
@@ -225,21 +165,21 @@ function SearchBar({ q, setQ, onQuickAdd }) {
         } else {
           setQrError(result.message);
         }
-      } else if (searchInPoints && qrClaim.type === 'reward') {
+      } else if (qrClaim.type === 'reward') {
         // Canjear premio directo en sistema de puntos
         console.log('🎁 Canjeando premio directo en sistema de puntos...');
         console.log('📋 Reward ID a canjear:', qrClaim.rewardId);
-        
+
         if (!qrClaim.data.id) {
           setQrError('❌ Error: ID de premio no encontrado');
           return;
         }
-        
+
         const result = await pointsApiClient.redeemRewardFromPos(
           qrClaim.data.id, // usar el ID del reward data
           'pos_operator_001'
         );
-        
+
         if (result.success) {
           setQrMsg(result.message);
           setQrClaim(null);
@@ -248,27 +188,10 @@ function SearchBar({ q, setQ, onQuickAdd }) {
         } else {
           setQrError(result.message);
         }
-      } else if (searchInPoints && qrClaim.type === 'client') {
+      } else if (qrClaim.type === 'client') {
         // Mostrar info del cliente y agregar puntos
         setQrMsg(`👤 Cliente: ${qrClaim.clientName} - Puntos: ${qrClaim.pointsBalance}`);
         // Aquí podrías agregar botones para sumar puntos
-      } else {
-        // Canje original en PB local del POS
-        console.log('🎁 Canjeando en sistema local del POS...');
-        await ensureServiceAuth();
-        const now = Date.now();
-        const expiresMs = qrClaim.expiresAt ? new Date(qrClaim.expiresAt).getTime() : null;
-        if (expiresMs && expiresMs < now) {
-          await pb.collection('reward_claims').update(qrClaim.id, { status: 'expired' });
-          setQrError('Cupón vencido.');
-          setQrClaim(null);
-          return;
-        }
-        await pb.collection('reward_claims').update(qrClaim.id, { status: 'redeemed' });
-        setQrMsg('✅ Cupón canjeado en sistema local');
-        setQrClaim(null);
-        setQrCode('');
-        setQrOpen(false);
       }
     } catch (err) {
       const reason = err?.data?.message || err?.message || '';
@@ -288,7 +211,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           gap: 8,
           padding: '10px 14px',
           alignItems: 'center',
-          fontFamily: "'Satoshi', sans-serif",
+          fontFamily: "'Inter', sans-serif",
           fontWeight: 700,
         }}
       >
@@ -326,12 +249,12 @@ function SearchBar({ q, setQ, onQuickAdd }) {
             flex: 1,
             padding: '12px 14px 12px 44px',
             borderRadius: 16,
-            border: '1.5px solid #111',
+            border: 'none',
             background: '#fff',
             color: '#111',
             outline: 'none',
             boxShadow: '0 2px 10px rgba(0,0,0,.06)',
-            fontFamily: "'Satoshi', sans-serif",
+            fontFamily: "'Inter', sans-serif",
             fontWeight: 700,
           }}
         />
@@ -347,7 +270,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
             minWidth: 38,
             minHeight: 38,
             borderRadius: 12,
-            border: '1.5px solid #111',
+            border: 'none',
             background: '#fff',
             color: '#111',
             display: 'grid',
@@ -382,9 +305,9 @@ function SearchBar({ q, setQ, onQuickAdd }) {
               minWidth: 38,
               minHeight: 38,
               borderRadius: 12,
-              border: '1.5px solid #111',
-              background: searchInPoints ? '#780000' : '#fff',
-              color: searchInPoints ? '#fff' : '#111',
+              border: 'none',
+              background: '#780000',
+              color: '#fff',
               display: 'grid',
               placeItems: 'center',
               cursor: 'pointer',
@@ -394,23 +317,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           >
             <QrCode size={18} strokeWidth={2} />
           </button>
-          
-          {/* Indicador de modo */}
-          {searchInPoints && (
-            <div
-              style={{
-                position: 'absolute',
-                top: -4,
-                right: -4,
-                width: 12,
-                height: 12,
-                borderRadius: '50%',
-                background: '#007bff',
-                border: '2px solid #fff',
-              }}
-              title="Buscando en sistema de puntos"
-            />
-          )}
         </div>
 
         {/* Limpiar */}
@@ -420,13 +326,13 @@ function SearchBar({ q, setQ, onQuickAdd }) {
             aria-label="Limpiar"
             style={{
               borderRadius: 12,
-              border: '1.5px solid #111',
+              border: 'none',
               background: '#fff',
               color: '#111',
               cursor: 'pointer',
               padding: '10px 12px',
               lineHeight: 1,
-              fontFamily: "'Satoshi', sans-serif",
+              fontFamily: "'Inter', sans-serif",
             }}
           >
             Limpiar
@@ -461,14 +367,14 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 boxShadow: '0 12px 36px rgba(0,0,0,0.25)',
                 display: 'grid',
                 gap: 12,
-                fontFamily: "'Satoshi', sans-serif",
+                fontFamily: "'Inter', sans-serif",
               }}
             >
               <div
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
                 <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>
-                  Canjear cupón {searchInPoints && '(Sistema de Puntos)'}
+                  Canjear cupón (Sistema de Puntos)
                 </div>
                 <button
                   onClick={resetQr}
@@ -482,37 +388,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 >
                   ×
                 </button>
-              </div>
-
-              {/* Selector de modo de búsqueda */}
-              <div style={{ 
-                display: 'flex', 
-                gap: 10, 
-                marginBottom: 15, 
-                padding: '10px 15px', 
-                background: '#f8f9fa', 
-                borderRadius: 8 
-              }}>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="searchMode"
-                    checked={!searchInPoints}
-                    onChange={() => setSearchInPoints(false)}
-                    style={{ marginRight: 8 }}
-                  />
-                  <span style={{ fontSize: '0.9rem' }}>🏪 Sistema Local</span>
-                </label>
-                <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
-                  <input
-                    type="radio"
-                    name="searchMode"
-                    checked={searchInPoints}
-                    onChange={() => setSearchInPoints(true)}
-                    style={{ marginRight: 8 }}
-                  />
-                  <span style={{ fontSize: '0.9rem' }}>🎯 Sistema de Puntos</span>
-                </label>
               </div>
 
               <label style={{ display: 'grid', gap: 6, fontSize: '.95rem', color: '#444' }}>
@@ -536,8 +411,8 @@ function SearchBar({ q, setQ, onQuickAdd }) {
               {qrClaim && (
                 <div
                   style={{
-                    background: searchInPoints ? '#e3f2fd' : '#f7f8fa',
-                    border: `1px solid ${searchInPoints ? '#90caf9' : '#e5e7eb'}`,
+                    background: '#e3f2fd',
+                    border: '1px solid #90caf9',
                     borderRadius: 12,
                     padding: 12,
                     display: 'grid',
@@ -556,7 +431,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                       )}
                     </>
                   )}
-                  
+
                   {qrClaim.type === 'client' && (
                     <>
                       <div>
@@ -596,24 +471,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                     </>
                   )}
 
-                  {qrClaim.type === 'local_claim' && (
-                    <>
-                      <div>
-                        🎁 Premio: <strong>{qrClaim.rewardTitle}</strong>
-                      </div>
-                      {qrClaim.pointsCost && (
-                        <div>
-                          💰 Costo: <strong>{qrClaim.pointsCost} pts</strong>
-                        </div>
-                      )}
-                      {qrClaim.clientName && (
-                        <div>
-                          👤 Cliente: <strong>{qrClaim.clientName}</strong>
-                        </div>
-                      )}
-                    </>
-                  )}
-
                   {qrClaim.type === 'error' && (
                     <div style={{ fontSize: '0.85rem', color: '#dc3545' }}>
                       🔧 Error técnico: {qrClaim.error || 'Error desconocido'}
@@ -640,14 +497,16 @@ function SearchBar({ q, setQ, onQuickAdd }) {
 
                   {/* Mensaje del sistema */}
                   {qrClaim.message && (
-                    <div style={{ 
-                      fontSize: '0.85rem', 
-                      color: searchInPoints ? '#1565c0' : '#666',
-                      fontStyle: 'italic',
-                      padding: '4px 8px',
-                      background: searchInPoints ? '#f3f9ff' : '#f8f9fa',
-                      borderRadius: 4
-                    }}>
+                    <div
+                      style={{
+                        fontSize: '0.85rem',
+                        color: '#1565c0',
+                        fontStyle: 'italic',
+                        padding: '4px 8px',
+                        background: '#f3f9ff',
+                        borderRadius: 4,
+                      }}
+                    >
                       {qrClaim.message}
                     </div>
                   )}
@@ -766,7 +625,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 padding: '10px 12px',
                 borderRadius: 10,
                 border: '1px solid #111',
-                fontFamily: "'Satoshi', sans-serif",
+                fontFamily: "'Inter', sans-serif",
                 fontWeight: 700,
               }}
             />
@@ -781,7 +640,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 padding: '10px 12px',
                 borderRadius: 10,
                 border: '1px solid #111',
-                fontFamily: "'Satoshi', sans-serif",
+                fontFamily: "'Inter', sans-serif",
                 fontWeight: 700,
               }}
             />
@@ -889,7 +748,7 @@ export default function Products() {
   const [error, setError] = useState(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [q, setQ] = useState('');
-  const [pointsConnectionStatus, setPointsConnectionStatus] = useState('checking');
+  const [, setPointsConnectionStatus] = useState('checking');
 
   // Verificar conexión con sistema de puntos al montar
   useEffect(() => {
@@ -1046,21 +905,7 @@ export default function Products() {
         </div>
       )}
 
-      {/* Indicador de conexión con sistema de puntos */}
-      <div style={{ 
-        padding: '8px 14px', 
-        fontSize: 12, 
-        background: pointsConnectionStatus === 'connected' ? '#d4edda' : '#f8d7da',
-        color: pointsConnectionStatus === 'connected' ? '#155724' : '#721c24',
-        borderRadius: 6,
-        margin: '0 14px 8px',
-        textAlign: 'center',
-        fontWeight: 600
-      }}>
-        {pointsConnectionStatus === 'checking' && '🔄 Verificando conexión con sistema de puntos...'}
-        {pointsConnectionStatus === 'connected' && '✅ Conectado a sistema de puntos'}
-        {pointsConnectionStatus === 'error' && '❌ Sin conexión con sistema de puntos'}
-      </div>
+      {/* indicador de conexión ocultado */}
 
       {offline && (
         <div style={{ padding: '8px 14px', fontSize: 12, opacity: 0.8 }}>

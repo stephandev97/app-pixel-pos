@@ -1,5 +1,13 @@
 import { createAsyncThunk } from '@reduxjs/toolkit';
+
 import { pb } from '../../lib/pb';
+// Secciones de importación de acciones de Redux
+import {
+  addLocalOrder,
+  markOrderSynced,
+  removeOrderById,
+  upsertOrder,
+} from '../../redux/orders/ordersSlice';
 import {
   computeBusinessDate,
   detectFulfillment,
@@ -7,14 +15,6 @@ import {
   upsertCustomerFromOrder,
   upsertDailyStatsJsonSmart,
 } from '../../utils/stats';
-
-// Secciones de importación de acciones de Redux
-import {
-  upsertOrder,
-  removeOrderById,
-  addLocalOrder,
-  markOrderSynced,
-} from '../../redux/orders/ordersSlice';
 
 // ---------- Helpers de persistencia ----------
 function normalizePaymentFields({ pago, total, pagoDetalle, pagoEfectivo, pagoMp }) {
@@ -99,12 +99,12 @@ export const hydrateOrdersFromPocket = createAsyncThunk(
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
+
       const list = await pb.collection('orders').getList(page, perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
-      
+
       return list;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
@@ -118,8 +118,11 @@ export const fetchTotalOrdersCount = createAsyncThunk(
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
-      const totalCount = await pb.collection('orders').getList(1, 1, { filter }).then(res => res.totalItems);
+
+      const totalCount = await pb
+        .collection('orders')
+        .getList(1, 1, { filter })
+        .then((res) => res.totalItems);
       return totalCount;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al obtener el conteo total');
@@ -137,12 +140,12 @@ export const fetchMoreOrders = createAsyncThunk(
       const nextPage = pagination.page + 1;
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
-      
+
       const list = await pb.collection('orders').getList(nextPage, pagination.perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
-      
+
       return list;
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al obtener más pedidos');

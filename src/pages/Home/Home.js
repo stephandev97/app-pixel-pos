@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchTotalOrdersCount } from '../../redux/orders/ordersSlice';
 
 import { toggleHiddenCart } from '../../redux/actions/actionsSlice';
 import { clearCart } from '../../redux/cart/cartSlice';
+import { fetchTotalOrdersCount } from '../../redux/orders/ordersSlice';
 import Products from '../Products/Products';
 import {
   CartBar,

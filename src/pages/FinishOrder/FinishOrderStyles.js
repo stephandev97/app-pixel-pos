@@ -26,7 +26,7 @@ export const Background = styled.div`
 `;
 
 export const ContentDialogStyled = styled(DialogContent)`
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
 `;
 
 export const ContainerCheckout = styled.div`
@@ -40,6 +40,6 @@ export const ContainerCheckout = styled.div`
   border-top-left-radius: 20px;
   border-top-right-radius: 20px;
   z-index: 101;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   overflow: hidden;
 `;

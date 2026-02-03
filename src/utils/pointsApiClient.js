@@ -2,13 +2,17 @@
 import PocketBase from 'pocketbase';
 
 // URL de la app de puntos
-const POINTS_PB_URL = import.meta.env.VITE_POINTS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+const POINTS_PB_URL =
+  import.meta.env.VITE_POINTS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
 
 // Credenciales del usuario POS
 const POS_CREDENTIALS = {
   email: import.meta.env.VITE_POS_EMAIL || 'pos@pixelhelados.com',
-  password: import.meta.env.VITE_POS_PASSWORD || '12345678'
+  password: import.meta.env.VITE_POS_PASSWORD || '12345678',
 };
+
+// Factor de puntos configurable (ARS por punto)
+export const POINTS_RATE = Number(import.meta.env.VITE_POINTS_RATE || 1100) || 1100;
 
 export class PointsApiClient {
   constructor() {
@@ -21,10 +25,9 @@ export class PointsApiClient {
   async authenticate() {
     try {
       console.log('🔐 Autenticando usuario POS en app de puntos...');
-      await this.pb.collection('users').authWithPassword(
-        POS_CREDENTIALS.email,
-        POS_CREDENTIALS.password
-      );
+      await this.pb
+        .collection('users')
+        .authWithPassword(POS_CREDENTIALS.email, POS_CREDENTIALS.password);
       this.isAuthenticated = true;
       console.log('✅ Usuario POS autenticado exitosamente');
       return { success: true, message: 'Usuario POS autenticado' };
@@ -34,7 +37,7 @@ export class PointsApiClient {
       return {
         success: false,
         message: `Error de autenticación: ${error.message}`,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -59,7 +62,7 @@ export class PointsApiClient {
           found: false,
           type: 'auth_error',
           data: null,
-          message: `❌ Error de autenticación: ${authResult.message}`
+          message: `❌ Error de autenticación: ${authResult.message}`,
         };
       }
 
@@ -68,7 +71,10 @@ export class PointsApiClient {
       // Verificar qué colecciones están disponibles
       try {
         const collections = await this.pb.collections.get();
-        console.log('📋 Colecciones disponibles:', collections.map(c => c.name));
+        console.log(
+          '📋 Colecciones disponibles:',
+          collections.map((c) => c.name)
+        );
       } catch (e) {
         console.log('⚠️ No se pueden listar colecciones:', e.message);
       }
@@ -78,9 +84,10 @@ export class PointsApiClient {
       let claim = null;
       try {
         // Buscamos principalmente por 'code' (código de cupón) o por 'id'
-        claim = await this.pb.collection('reward_claims')
+        claim = await this.pb
+          .collection('reward_claims')
           .getFirstListItem(`code = "${qrData}" || id = "${qrData}"`, {
-            expand: 'reward,client'
+            expand: 'reward,client',
           })
           .catch((err) => {
             // Si no se encuentra (404) o hay error de campo (400), retornamos null
@@ -118,7 +125,7 @@ export class PointsApiClient {
           clientDni: clientDni, // Nuevo campo DNI
           pointsCost: claim.pointsCost || 0,
           claimId: claim.id,
-          status: claim.status
+          status: claim.status,
         };
       }
 
@@ -126,7 +133,8 @@ export class PointsApiClient {
       console.log('🎁 Buscando en rewards (premios directos)...');
       let reward = null;
       try {
-        reward = await this.pb.collection('rewards')
+        reward = await this.pb
+          .collection('rewards')
           .getFirstListItem(`qr_code = "${qrData}" || short_code = "${qrData}"`)
           .catch((err) => {
             console.log('⚠️ Error en búsqueda de rewards:', err.message);
@@ -145,7 +153,7 @@ export class PointsApiClient {
           message: '🎁 Premio directo encontrado en sistema de puntos',
           pointsCost: reward.pointsCost,
           title: reward.title,
-          rewardId: reward.id
+          rewardId: reward.id,
         };
       }
 
@@ -170,8 +178,7 @@ export class PointsApiClient {
 
         for (const field of fieldsToTry) {
           try {
-            client = await this.pb.collection('clients')
-              .getFirstListItem(`${field} = "${qrData}"`);
+            client = await this.pb.collection('clients').getFirstListItem(`${field} = "${qrData}"`);
 
             if (client) {
               console.log(`✅ Cliente encontrado por campo: ${field}`);
@@ -198,7 +205,7 @@ export class PointsApiClient {
           pointsBalance: client.pointsBalance || 0,
           name: client.name || client.email,
           level: client.level || 'basic',
-          clientId: client.id
+          clientId: client.id,
         };
       }
 
@@ -208,9 +215,8 @@ export class PointsApiClient {
         type: 'not_found',
         data: null,
         message: '❌ QR no encontrado en sistema de puntos',
-        searchedCode: qrData
+        searchedCode: qrData,
       };
-
     } catch (error) {
       console.error('❌ Error general buscando QR en app de puntos:', error);
       return {
@@ -218,7 +224,7 @@ export class PointsApiClient {
         type: 'error',
         data: null,
         message: `❌ Error de conexión: ${error.message}`,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -230,33 +236,31 @@ export class PointsApiClient {
       const client = await this.pb.collection('clients').getOne(clientId);
 
       // Obtener transacciones recientes
-      const transactions = await this.pb.collection('points_transactions')
-        .getList(1, 10, {
-          filter: `client = "${clientId}"`,
-          sort: '-created'
-        });
+      const transactions = await this.pb.collection('points_transactions').getList(1, 10, {
+        filter: `client = "${clientId}"`,
+        sort: '-created',
+      });
 
       // Obtener premios canjeados
-      const claims = await this.pb.collection('reward_claims')
-        .getList(1, 10, {
-          filter: `client = "${clientId}"`,
-          expand: 'reward',
-          sort: '-created'
-        });
+      const claims = await this.pb.collection('reward_claims').getList(1, 10, {
+        filter: `client = "${clientId}"`,
+        expand: 'reward',
+        sort: '-created',
+      });
 
       return {
         success: true,
         client: {
           ...client,
           recentTransactions: transactions.items,
-          recentClaims: claims.items
-        }
+          recentClaims: claims.items,
+        },
       };
     } catch (error) {
       console.error('Error obteniendo info del cliente:', error);
       return {
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -270,7 +274,7 @@ export class PointsApiClient {
       if (!claimId) {
         return {
           success: false,
-          message: '❌ ID de cupón inválido'
+          message: '❌ ID de cupón inválido',
         };
       }
 
@@ -280,7 +284,7 @@ export class PointsApiClient {
       if (claim.status !== 'pending') {
         return {
           success: false,
-          message: `❌ Cupón no está pendiente. Estado actual: ${claim.status}`
+          message: `❌ Cupón no está pendiente. Estado actual: ${claim.status}`,
         };
       }
 
@@ -298,7 +302,7 @@ export class PointsApiClient {
           if (client.pointsBalance < reward.pointsCost) {
             return {
               success: false,
-              message: `⚠️ Puntos insuficientes. Tiene ${client.pointsBalance}, necesita ${reward.pointsCost}`
+              message: `⚠️ Puntos insuficientes. Tiene ${client.pointsBalance}, necesita ${reward.pointsCost}`,
             };
           }
 
@@ -320,17 +324,16 @@ export class PointsApiClient {
           await this.pb.collection('clients').update(claim.client, {
             pointsBalance: client.pointsBalance - reward.pointsCost,
             last_reward_claimed: claim.reward,
-            last_claim_date: new Date().toISOString()
+            last_claim_date: new Date().toISOString(),
           });
 
           clientPoints = client.pointsBalance - reward.pointsCost;
           rewardTitle = claim.expand?.reward?.title || 'Premio';
-
         } catch (clientError) {
           console.log('❌ Error obteniendo cliente o reward:', clientError.message);
           return {
             success: false,
-            message: `❌ Error obteniendo datos del cliente: ${clientError.message}`
+            message: `❌ Error obteniendo datos del cliente: ${clientError.message}`,
           };
         }
       }
@@ -341,7 +344,7 @@ export class PointsApiClient {
         claimed_from: 'pos',
         pos_operator: posOperator,
         claimed_at: new Date().toISOString(),
-        pos_location: 'main'
+        pos_location: 'main',
       });
 
       const finalResult = {
@@ -351,7 +354,7 @@ export class PointsApiClient {
           ? `✅ Cupón "${rewardTitle}" canjeado exitosamente`
           : `✅ Cupón canjeado exitosamente (sin descuento de puntos)`,
         newBalance: clientPoints,
-        rewardTitle: rewardTitle
+        rewardTitle: rewardTitle,
       };
 
       return finalResult;
@@ -359,13 +362,13 @@ export class PointsApiClient {
       console.error('Error canjeando cupón desde POS:', error);
       return {
         success: false,
-        message: `❌ Error al canjear: ${error.message}`
+        message: `❌ Error al canjear: ${error.message}`,
       };
     }
   }
 
   // Agregar puntos desde POS
-  async addPointsFromPos(clientId, pointsToAdd, reason, posOperator) {
+  async addPointsFromPos(clientId, pointsToAdd, reason, _posOperator) {
     try {
       await this.ensureAuthenticated();
       const client = await this.pb.collection('clients').getOne(clientId);
@@ -389,13 +392,13 @@ export class PointsApiClient {
         transaction: transaction,
         updatedClient: updatedClient,
         message: `✅ ${pointsToAdd} puntos agregados exitosamente`,
-        newBalance: updatedClient.pointsBalance
+        newBalance: updatedClient.pointsBalance,
       };
     } catch (error) {
       console.error('Error agregando puntos desde POS:', error);
       return {
         success: false,
-        message: `❌ Error al agregar puntos: ${error.message}`
+        message: `❌ Error al agregar puntos: ${error.message}`,
       };
     }
   }
@@ -410,7 +413,7 @@ export class PointsApiClient {
           success: false,
           message: authResult.message,
           url: POINTS_PB_URL,
-          error: authResult.error
+          error: authResult.error,
         };
       }
 
@@ -419,7 +422,7 @@ export class PointsApiClient {
       return {
         success: true,
         message: '✅ Conectado y autenticado en app de puntos',
-        url: POINTS_PB_URL
+        url: POINTS_PB_URL,
       };
     } catch (error) {
       console.log('❌ Error de conexión con app de puntos:', error);
@@ -427,7 +430,7 @@ export class PointsApiClient {
         success: false,
         message: `❌ Error de conexión con app de puntos: ${error.message}`,
         url: POINTS_PB_URL,
-        error: error.message
+        error: error.message,
       };
     }
   }

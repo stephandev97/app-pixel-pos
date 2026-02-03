@@ -1,42 +1,40 @@
-import { useEffect, useState } from 'react'
-import { pb } from '../lib/pb'
+import { useEffect, useState } from 'react';
+
+import { pb } from '../lib/pb';
 
 export function useTvScreenUrl(deviceId, displayIndex) {
-    const [url, setUrl] = useState(null)
-    const [loading, setLoading] = useState(true)
+  const [url, setUrl] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-    useEffect(() => {
-        let unsub = null
+  useEffect(() => {
+    let unsub = null;
 
-        const load = async () => {
-            setLoading(true)
-            try {
-                const record = await pb
-                    .collection('tv_screens')
-                    .getFirstListItem(
-                        `device_id="${deviceId}" && display_index=${displayIndex}`
-                    )
+    const load = async () => {
+      setLoading(true);
+      try {
+        const record = await pb
+          .collection('tv_screens')
+          .getFirstListItem(`device_id="${deviceId}" && display_index=${displayIndex}`);
 
-                setUrl(record.url)
-            } catch {
-                setUrl(null)
-            } finally {
-                setLoading(false)
-            }
-        }
+        setUrl(record.url);
+      } catch {
+        setUrl(null);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-        load()
+    load();
+    (async () => {
+      try {
+        unsub = await pb.collection('tv_screens').subscribe('*', () => load());
+      } catch (e) {
+        console.error('Error suscribiendo a tv_screens', e);
+      }
+    })();
 
-            ; (async () => {
-                try {
-                    unsub = await pb
-                        .collection('tv_screens')
-                        .subscribe('*', () => load())
-                } catch { }
-            })()
+    return () => unsub?.();
+  }, [deviceId, displayIndex]);
 
-        return () => unsub?.()
-    }, [deviceId, displayIndex])
-
-    return { url, loading }
+  return { url, loading };
 }

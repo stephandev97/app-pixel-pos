@@ -1,6 +1,6 @@
 {
   "name": "pixel-pos",
-  "version": "1.0.1",
+  "version": "2.5.3",
   "author": {
     "name": "Pixel Helados",
     "email": "emi@pixelhelados.com"
@@ -13,7 +13,8 @@
     "files": [
       "build/**",
       "package.json",
-      "public/main.js"
+      "public/main.js",
+      "public/preload.js"
     ],
     "directories": {
       "buildResources": "assets"
@@ -144,7 +145,12 @@
     "electron-builder": "^24.13.3",
     "electron-rebuild": "^3.2.9",
     "eslint": "^8.57.1",
+    "eslint-plugin-import": "^2.32.0",
+    "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-simple-import-sort": "^12.1.1",
+    "eslint-plugin-unused-imports": "^4.3.0",
     "globals": "^16.4.0",
     "prettier": "3.6.2",
     "wait-on": "^7.2.0"

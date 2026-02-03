@@ -5,10 +5,9 @@ contextBridge.exposeInMainWorld('electron', {
     invoke: (channel, data) => ipcRenderer.invoke(channel, data),
     on: (channel, listener) =>
       ipcRenderer.on(channel, (_event, ...args) => listener(_event, ...args)),
-    removeListener: (channel, listener) =>
-      ipcRenderer.removeListener(channel, listener),
+    removeListener: (channel, listener) => ipcRenderer.removeListener(channel, listener),
   },
   process: {
-    platform: process.platform,
+    platform: typeof process !== 'undefined' ? process.platform : 'browser',
   },
 });

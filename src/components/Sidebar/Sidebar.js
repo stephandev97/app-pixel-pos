@@ -1,8 +1,8 @@
 // Sidebar.js
+import { QrCode, Tv } from 'lucide-react'; // ✅ nuevo
 import { HiClipboardList, HiOutlineClipboardList } from 'react-icons/hi';
 import { HiOutlineSquares2X2, HiSquares2X2 } from 'react-icons/hi2';
 import { HiCog6Tooth, HiOutlineCog6Tooth } from 'react-icons/hi2';
-import { QrCode, IceCream, Tv } from 'lucide-react'; // ✅ nuevo
 import { useDispatch, useSelector } from 'react-redux';
 
 import logoPixelWhite from '../../assets/logoprintwhite.png';

@@ -26,7 +26,6 @@ import {
   RemoveLink,
   selectCompact,
   SelectStyles,
-  Skeleton,
   Subtitle,
   Title,
   WindowProductStyled,
@@ -310,35 +309,35 @@ export default function CardProduct({ name, price, id, category }) {
         borderColor: state.isFocused ? '#111' : '#e6e6ee',
         boxShadow: state.isFocused ? '0 0 0 3px rgba(0,0,0,.08)' : 'none',
         minHeight: 40,
-        fontFamily: 'Satoshi, sans-serif',
+        fontFamily: 'Inter, sans-serif',
       }),
       singleValue: (base) => ({
         ...base,
         color: '#111', // ← texto seleccionado visible
         fontWeight: 700,
-        fontFamily: 'Satoshi, sans-serif',
+        fontFamily: 'Inter, sans-serif',
       }),
       input: (base) => ({
         ...base,
         color: '#111',
-        fontFamily: 'Satoshi, sans-serif', // ← caret / texto al tipear
+        fontFamily: 'Inter, sans-serif', // ← caret / texto al tipear
       }),
       placeholder: (base) => ({
         ...base,
         color: '#9aa3b2', // ← placeholder gris legible
         fontWeight: 500,
-        fontFamily: 'Satoshi, sans-serif',
+        fontFamily: 'Inter, sans-serif',
       }),
       option: (base, state) => ({
         ...base,
         color: '#111',
         background: state.isFocused ? '#eef2ff' : '#fff',
-        fontFamily: 'Satoshi, sans-serif', // hover suave
+        fontFamily: 'Inter, sans-serif', // hover suave
       }),
       menu: (base) => ({
         ...base,
         zIndex: 9999,
-        fontFamily: 'Satoshi, sans-serif', // evita quedar tapado
+        fontFamily: 'Inter, sans-serif', // evita quedar tapado
       }),
     }),
     []

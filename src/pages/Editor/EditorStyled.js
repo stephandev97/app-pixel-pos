@@ -171,7 +171,7 @@ export const DivInputsCard = styled.div`
     padding: 0.5em;
     border-radius: 10px;
     border: none;
-    font-family: 'Satoshi', sans-serif;
+    font-family: 'Inter', sans-serif;
     background: none;
     font-weight: bold;
   }

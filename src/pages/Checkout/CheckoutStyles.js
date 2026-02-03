@@ -6,5 +6,5 @@ export const ContainerCheckout = styled.div`
   background: white;
   transition: all 0.6s ease;
   z-index: 99;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
 `;

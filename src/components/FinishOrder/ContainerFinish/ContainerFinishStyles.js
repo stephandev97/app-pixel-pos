@@ -1,5 +1,5 @@
 // ContainerFinishStyles.js
-import styled, { keyframes, css } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 
 import { TotalStyled } from '../../Checkout/styles/ProductsCheckoutStyles';
 
@@ -71,7 +71,7 @@ export const ButtonToggle = styled.button`
   font-size: 14px;
   letter-spacing: 0.2px;
   cursor: pointer;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   text-align: center;
   justify-content: center;
   transition:
@@ -211,13 +211,13 @@ export const Input = styled.input`
   width: 100%;
   height: 40px;
   font-size: 1.1em;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   border-radius: 12px;
   padding: 0.2em 1em 0.2em 2.5em; /* deja espacio para el icono */
   width: 100%;
   height: 46px;
   border-radius: 12px;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 700;
   font-size: 1.05rem;
   padding: 0 0.9em 0 2.75em; /* icono a la izquierda */
@@ -348,7 +348,7 @@ export const ShippingBtn = styled.button`
 
   /* título */
   > span.title {
-    font-family: 'Satoshi', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 800;
     color: #111;
   }
@@ -383,7 +383,7 @@ export const ShippingOption = styled.button`
   border: 1.5px dashed #cfd5e3; /* <-- borde punteado */
   background: #fbfbff; /* <-- más claro que los tabs */
   color: #0f172a;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-weight: 800;
   font-size: 0.92rem; /* <-- un toque más chica */
   line-height: 1;

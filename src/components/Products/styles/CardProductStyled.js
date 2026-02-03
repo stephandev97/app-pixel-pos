@@ -10,7 +10,7 @@ const GAP = 10; // gap vertical
 export const selectCompact = {
   control: (base, state) => ({
     ...base,
-    fontFamily: "'Satoshi', sans-serif",
+    fontFamily: "'Inter', sans-serif",
     minHeight: 40,
     height: 40,
     borderRadius: 10,
@@ -23,12 +23,12 @@ export const selectCompact = {
   indicatorsContainer: (b) => ({ ...b, paddingRight: 6 }),
   dropdownIndicator: (b) => ({ ...b, padding: '0 6px', cursor: 'pointer' }),
   clearIndicator: (b) => ({ ...b, padding: '0 6px', cursor: 'pointer' }),
-  input: (b) => ({ ...b, fontFamily: "'Satoshi', sans-serif" }),
-  singleValue: (b) => ({ ...b, fontFamily: "'Satoshi', sans-serif" }),
-  placeholder: (b) => ({ ...b, fontFamily: "'Satoshi', sans-serif" }),
+  input: (b) => ({ ...b, fontFamily: "'Inter', sans-serif" }),
+  singleValue: (b) => ({ ...b, fontFamily: "'Inter', sans-serif" }),
+  placeholder: (b) => ({ ...b, fontFamily: "'Inter', sans-serif" }),
   option: (b, s) => ({
     ...b,
-    fontFamily: "'Satoshi', sans-serif",
+    fontFamily: "'Inter', sans-serif",
     padding: '8px 10px',
     fontSize: 14,
     cursor: 'pointer',
@@ -41,7 +41,8 @@ export const SelectStyles = styled(Select)`
   width: 100%;
   text-align: left;
   padding: 0.2em;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
 
   &.Select--multi {
     .Select-value {
@@ -66,7 +67,7 @@ export const BotonCompraLocal = styled.button`
   background: #57d78a;
   color: #0a291a;
   font-weight: 700;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
   font-weight: 800;
 `;
@@ -166,15 +167,15 @@ export const CardProductStyled = styled.div`
     flex: 0 0 10px;
   }
   .name {
-    font-family: 'Satoshi', sans-serif;
-    font-weight: 800;
+    font-family: 'Inter', sans-serif;
+    font-weight: 600;
     color: #111;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
   .price {
-    font-family: 'Satoshi', sans-serif;
+    font-family: 'Inter', sans-serif;
     font-weight: 900;
     font-size: 13px;
     line-height: 1;
@@ -221,7 +222,7 @@ export const WindowProductStyled = styled.form`
   box-shadow: 0 16px 48px rgba(21, 25, 36, 0.18);
   overflow: hidden;
   z-index: ${Z_BASE + 1};
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
 `;
 
 export const Title = styled.div`
@@ -281,7 +282,7 @@ export const RemoveLink = styled.button`
   &:hover {
     color: red;
   }
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
   font-size: 1.1em;
 `;
@@ -296,7 +297,7 @@ export const GhostPill = styled.button`
   background: #fff;
   font-weight: 600;
   font-size: 13px;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
 `;
 
@@ -337,7 +338,7 @@ export const BotonAgregar = styled.button`
     opacity: 0.6;
     cursor: not-allowed;
   }
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   cursor: pointer;
 
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
@@ -431,7 +432,7 @@ export const OptionsGrid = styled.div`
 
 // Botón de opción “pill” con micro-relieve
 export const OptionBtn = styled.button`
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   appearance: none;
   cursor: pointer;
   border: 1px solid #e5e7eb; /* gris claro */

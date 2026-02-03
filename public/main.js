@@ -2,6 +2,7 @@
 const { app, BrowserWindow, dialog, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const log = require('electron-log');
+const { autoUpdater } = require('electron-updater');
 
 // Evita bugs raros de Chromium en Linux
 app.commandLine.appendSwitch('disable-site-isolation-trials');
@@ -40,9 +41,7 @@ function createWindow() {
     win.loadURL('http://localhost:3000');
     win.webContents.openDevTools();
   } else {
-    win.loadURL(
-      `file://${path.join(__dirname, '../build/index.html')}?v=${Date.now()}`
-    );
+    win.loadURL(`file://${path.join(__dirname, '../build/index.html')}?v=${Date.now()}`);
   }
 }
 
@@ -50,7 +49,7 @@ function createWindow() {
 // IPC impresión (SILENT + 48mm + estilos)
 // ======================================================
 ipcMain.handle('print-ticket', async (_e, html) => {
-  return new Promise(async (resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const printWin = new BrowserWindow({
       show: false,
       width: 200,
@@ -72,7 +71,7 @@ ipcMain.handle('print-ticket', async (_e, html) => {
               printBackground: true,
               margins: { marginType: 'none' },
               pageSize: {
-                width: 48000,   // 48mm
+                width: 48000, // 48mm
                 height: 200000, // ticket largo
               },
               scaleFactor: 100,
@@ -89,13 +88,69 @@ ipcMain.handle('print-ticket', async (_e, html) => {
         }
       });
 
-      await printWin.loadURL(
-        'data:text/html;charset=utf-8,' + encodeURIComponent(html)
-      );
+      printWin
+        .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+        .catch((err) => reject(err));
     } catch (err) {
       reject(err);
     }
   });
+});
+
+// ======================================================
+// Actualizaciones (electron-updater)
+// ======================================================
+autoUpdater.logger = log;
+autoUpdater.logger.transports.file.level = 'info';
+
+let updateReady = false;
+autoUpdater.on('download-progress', (p) => {
+  try {
+    win?.webContents?.send('update-progress', p?.percent ?? 0);
+  } catch {}
+});
+autoUpdater.on('update-downloaded', () => {
+  updateReady = true;
+  try {
+    win?.webContents?.send('update-ready');
+  } catch {}
+});
+
+ipcMain.handle('check-for-updates', async () => {
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    const info = result?.updateInfo;
+    if (info && info.version && info.version !== app.getVersion()) {
+      try {
+        autoUpdater.downloadUpdate();
+      } catch {}
+      return { updateAvailable: true, version: info.version };
+    }
+    return { updateAvailable: false };
+  } catch (e) {
+    return { error: e?.message || String(e) };
+  }
+});
+
+ipcMain.on('quit-and-install', () => {
+  try {
+    if (updateReady) {
+      autoUpdater.quitAndInstall();
+    } else {
+      autoUpdater
+        .downloadUpdate()
+        .then(() => {
+          try {
+            autoUpdater.quitAndInstall();
+          } catch {
+            app.quit();
+          }
+        })
+        .catch(() => app.quit());
+    }
+  } catch {
+    app.quit();
+  }
 });
 
 // ======================================================

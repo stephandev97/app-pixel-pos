@@ -1,4 +1,4 @@
-import styled, { keyframes, css } from 'styled-components';
+import styled, { css, keyframes } from 'styled-components';
 
 export const NAV_H = 2; // alto navbar superior
 export const CART_H = 2; // alto cart bar
@@ -147,7 +147,7 @@ export const CheckoutBtn = styled.button`
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
 
   &:hover {
     filter: brightness(1.05);
@@ -187,7 +187,7 @@ export const ClearBtn = styled.button`
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 1rem;
   gap: 6px;
 

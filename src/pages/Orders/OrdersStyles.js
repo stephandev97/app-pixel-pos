@@ -1,4 +1,4 @@
-import { styled, keyframes, css } from 'styled-components';
+import { css, keyframes, styled } from 'styled-components';
 
 const pulse = keyframes`
   0% { transform: scale(1); }
@@ -129,7 +129,7 @@ export const TitleCard = styled.div`
   display: flex;
   align-items: center;
   gap: 8px;
-  font-weight: 900;
+  font-weight: 700;
   color: #111;
   font-size: 1.1rem;
   border-bottom: 1px solid #f5f6fa;
@@ -222,7 +222,7 @@ export const EstadoChip = styled.span`
   border-radius: 12px;
   padding: 2px 10px;
   font-size: 0.8rem;
-  font-weight: 700;
+  font-weight: 600;
   color: ${({ $type }) => ($type === 'cambio' ? '#111' : '#fff')};
   background: ${({ $type }) => {
     if ($type === 'justo') return '#28a745';
@@ -313,7 +313,7 @@ export const ButtonPrint = styled(ButtonTitle)`
 
 export const ButtonCopy = styled.span`
   margin-right: 0.5em;
-  padding: 0.2em 0.8em;
+  padding: 0.4em 0.8em;
   border-radius: 5px;
   font-size: 0.8em;
   background: #f7f7ff;
@@ -359,7 +359,7 @@ export const Print = styled.div`
   align-items: center;
   width: 200px;
   font-size: 1.1em;
-  font-family: 'Satoshi';
+  font-family: 'Inter';
   font-display: swap;
 
   @media print {

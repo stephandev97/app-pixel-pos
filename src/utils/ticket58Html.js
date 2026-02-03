@@ -34,7 +34,7 @@ export function ticket58Html(ticketData, opts = {}) {
   const logoDataUrl = opts?.logoDataUrl ? String(opts.logoDataUrl) : '';
 
   const itemsHtml = items
-    .map((it, idx) => {
+    .map((it) => {
       const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
       const nombre = esc(it?.name || it?.title || it?.label || '');
       const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];

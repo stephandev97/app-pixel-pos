@@ -13,7 +13,7 @@ export const ContainerCategory = styled.div`
 export const TitleCategory = styled.div`
   width: 100%;
   margin: 0 0 12px 0;
-  font-weight: 800;
+  font-weight: 700;
   font-size: 1.2rem;
   text-align: left;
   color: #111;
@@ -88,8 +88,8 @@ export const CategoryTitle = styled.h3`
   display: flex;
   align-items: center;
   gap: 10px;
-  font-family: 'Satoshi', sans-serif;
-  font-weight: 900;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
   letter-spacing: 0.2px;
   font-size: 1rem;
   color: #121316;
@@ -110,7 +110,7 @@ export const CategoryIcon = styled.span`
 
 export const CategoryPill = styled.span`
   margin-left: auto;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   font-size: 0.75rem;
   font-weight: 700;
   color: #0b0b0c;

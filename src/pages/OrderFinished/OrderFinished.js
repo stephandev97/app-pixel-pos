@@ -8,12 +8,9 @@ import Zoom from '@mui/material/Zoom';
 import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
-import { toggleFinishOrder } from '../../redux/actions/actionsSlice';
-import { clearLastCreatedOrder } from '../../redux/orders/ordersSlice';
-import { ButtonFinished, Container } from './OrderFinishedStyles';
-
 // ✅ mismo print que en Orders, con logo + pageStyle + tipografía
-import PrintTicket58 from '../../components/print/PrintTicket58';
+import { toggleFinishOrder } from '../../redux/actions/actionsSlice';
+import { ButtonFinished, Container } from './OrderFinishedStyles';
 
 const Transition = forwardRef(function Transition(props, ref) {
   return <Slide direction="up" ref={ref} {...props} />;

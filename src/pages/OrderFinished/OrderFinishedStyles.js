@@ -10,7 +10,7 @@ export const Container = styled.div`
   justify-content: center;
   align-items: center;
   color: white;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   background: #04a485;
 
   & div {
@@ -46,7 +46,7 @@ export const ButtonFinished = styled.button`
   background: white;
   color: #04a485;
   cursor: pointer;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   margin-top: 2em;
 
   &:hover {

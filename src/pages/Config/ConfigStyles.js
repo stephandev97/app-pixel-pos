@@ -293,3 +293,155 @@ export const StatNumber = styled.div`
   font-weight: 800;
   margin-top: 4px;
 `;
+
+/* ====== Modal: Turnos y Cierre ====== */
+export const ModalSection = styled.div`
+  display: grid;
+  gap: 16px;
+  font-family:
+    'Inter',
+    'Inter-Variable',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
+  color: ${text};
+`;
+
+export const ModalTitle = styled.div`
+  font-size: clamp(20px, 2.6vw, 24px);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+`;
+
+export const ModalGridRows = styled.div`
+  display: grid;
+  gap: 12px;
+  background: ${card2};
+  border: 1px solid ${border};
+  border-radius: 18px;
+  padding: 16px 18px;
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.32),
+    inset 0 1px 0 rgba(255, 255, 255, 0.02);
+`;
+
+export const RowLine = styled.div`
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 0;
+`;
+export const RowLabel = styled.span`
+  color: ${sub};
+  letter-spacing: 0.3px;
+  font-size: 13px;
+`;
+export const RowValue = styled.strong`
+  text-align: right;
+  flex-shrink: 0;
+  font-size: clamp(16px, 2vw, 18px);
+  font-weight: 800;
+  &[data-variant='danger'] {
+    color: #d20062;
+  }
+`;
+
+export const DenomsTitle = styled.div`
+  font-weight: 800;
+  margin-top: 6px;
+  font-size: 16px;
+`;
+export const DenomsGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  @media (min-width: 780px) {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+`;
+export const DenomItem = styled.div`
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  align-items: center;
+  gap: 10px;
+`;
+export const DenomLabel = styled.span`
+  opacity: 0.8;
+  text-align: right;
+  margin-bottom: 2px;
+`;
+export const DenomInput = styled.input`
+  width: 100%;
+  padding: 12px 14px;
+  height: 42px;
+  border-radius: 12px;
+  border: 1px solid ${border};
+  color: ${text};
+  background: ${card2};
+  text-align: right;
+  font-size: 16px;
+  font-family:
+    'Inter',
+    'Inter-Variable',
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    Arial,
+    sans-serif;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+  &:focus {
+    border-color: rgba(76, 205, 153, 0.45);
+    box-shadow: 0 0 0 3px ${accentSoft};
+  }
+`;
+
+export const ActionsRow = styled.div`
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  justify-content: flex-end;
+`;
+export const PrimaryButton = styled.button`
+  all: unset;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: ${accent};
+  color: #0a0f0d;
+  font-weight: 800;
+  box-shadow: 0 10px 24px rgba(76, 205, 153, 0.38);
+  border: 1px solid rgba(76, 205, 153, 0.32);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease;
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px rgba(76, 205, 153, 0.44);
+  }
+`;
+export const SecondaryButton = styled.button`
+  all: unset;
+  cursor: pointer;
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid ${border};
+  background: ${card};
+  color: ${text};
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease;
+  &:hover {
+    transform: translateY(-1px);
+    border-color: rgba(255, 255, 255, 0.12);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.28);
+  }
+`;

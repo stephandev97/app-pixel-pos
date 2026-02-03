@@ -1,18 +1,16 @@
+import { useEffect } from 'react';
 import { FaRegPaste } from 'react-icons/fa6';
 import { MdHome } from 'react-icons/md';
 import { RiTakeawayFill } from 'react-icons/ri';
 import { useDispatch, useSelector } from 'react-redux';
+
+import { toggleAddress } from '../../../redux/actions/actionsSlice';
 import {
-  ShippingGroup,
-  ShippingBtn,
-  ShippingPrice,
+  AnimSection,
   ShippingInline,
   ShippingOptionAnimated as ShippingOption,
   StaggerList,
-  AnimSection,
 } from '../ContainerFinish/ContainerFinishStyles';
-
-import { toggleAddress } from '../../../redux/actions/actionsSlice';
 import {
   ButtonPaste,
   ButtonToggle,
@@ -22,7 +20,6 @@ import {
   Tab,
 } from '../ContainerFinish/ContainerFinishStyles';
 import { TabContainer } from '../TabPago/TabPagoStyles';
-import { useEffect } from 'react';
 
 const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
   const dispatch = useDispatch();

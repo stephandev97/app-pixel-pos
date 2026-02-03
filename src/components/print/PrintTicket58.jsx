@@ -2,9 +2,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 
+import { Print, TotalPrint } from '../../pages/Orders/OrdersStyles'; // ajustá este path según tu proyecto :contentReference[oaicite:2]{index=2}
 import logo from '../../styles/img/logoprint.png'; // igual que en Orders.js :contentReference[oaicite:1]{index=1}
 import { formatPrice } from '../../utils/formatPrice';
-import { Print, TotalPrint } from '../../pages/Orders/OrdersStyles'; // ajustá este path según tu proyecto :contentReference[oaicite:2]{index=2}
 
 /**
  * Props:

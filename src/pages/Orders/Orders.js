@@ -1,33 +1,34 @@
 import PrintIcon from '@mui/icons-material/Print';
+import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import Checkbox from '@mui/material/Checkbox';
-import { useEffect, useMemo, useState, useCallback } from 'react';
+import { ArrowUp, Banknote, CreditCard, Search, TriangleAlert } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import React, { useRef } from 'react';
 import { ChevronDown, ChevronUp, MapPin } from 'react-feather';
 import { BiHomeAlt2 } from 'react-icons/bi';
 import { BsCash } from 'react-icons/bs';
-import { FaExchangeAlt } from 'react-icons/fa';
 import { FaXmark } from 'react-icons/fa6';
 import { HiCheck, HiX } from 'react-icons/hi';
 import { MdEdit } from 'react-icons/md';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
 import { useDispatch, useSelector } from 'react-redux';
 import { useReactToPrint } from 'react-to-print';
-import { computeBusinessDate } from '../../utils/stats';
 
 import logoPixel from '../../assets/logoprint.png';
 import mpLogoWhite from '../../assets/mercadopagowhite.png';
+import { pb } from '../../lib/pb';
 import {
-  hydrateOrdersFromPocket,
+  fetchMoreOrders,
+  hydrateAllTodayOrders,
   removeOrderFromBoth,
   subscribeOrdersRealtime,
   syncPendingOrders,
-  fetchMoreOrders,
   upsertOrder,
 } from '../../redux/orders/ordersSlice';
-import { pb, ensureServiceAuth } from '../../lib/pb';
-import { clearOrders } from '../../redux/orders/ordersSlice';
 import logo from '../../styles/img/logoprint.png';
 import { formatPrice } from '../../utils/formatPrice';
+import { getOrderCashNet } from '../../utils/payments';
+import { POINTS_RATE, pointsApiClient } from '../../utils/pointsApiClient';
+import { computeBusinessDate } from '../../utils/stats';
 import { relativeTimeFrom } from '../../utils/time';
 import {
   ButtonCopy,
@@ -38,54 +39,22 @@ import {
   ContentButtonsTitle,
   DirCard,
   Direccion,
-  DivProducts,
   FooterCard,
   GlobalOrders,
   HaceMin,
   Hora,
-  ListProducts,
+  LoadMoreButton,
   Print,
   TitleCard,
   TotalPrint,
-  LoadMoreButton,
 } from './OrdersStyles';
-import { Banknote, CreditCard, Logs, Search, TriangleAlert, ArrowUp } from 'lucide-react';
-import { pointsApiClient } from '../../utils/pointsApiClient';
-
-// Agrega esto en tu archivo Orders.js
-const ticketStyles = {
-  container: {
-    width: "280px",      // Ancho ideal para 58mm
-    padding: "0",
-    margin: "0",
-    fontSize: "12px",    // Tamaño de fuente legible para térmica
-    fontFamily: "monospace", // Las térmicas aman las fuentes monoespaciadas
-    backgroundColor: "white",
-    color: "black"
-  }
-};
-
-
-const SCAN_MAP = {
-  y: "0",
-  "9": "1",
-  w: "2",
-  e: "3",
-  r: "4",
-  t: "5",
-  "1": "6",
-  "2": "7",
-  k: "8",
-  l: "9",
-};
 
 function normalizeScan(raw) {
-  if (!raw) return "";
+  if (!raw) return '';
   // Permitir alfanuméricos: eliminamos espacios y caracteres de control
   // Si el scanner envía basura, aquí se limpia, pero permitimos letras y números.
   return raw.trim();
 }
-
 
 function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
@@ -147,8 +116,8 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     position: 'absolute',
     inset: 0,
     zIndex: 6,
-    borderRadius: 'inherit',
-    background: '#111',
+    borderRadius: 16,
+    background: 'rgba(0,0,0,0.6)',
     color: '#fff',
     transform:
       phase === 'enter'
@@ -159,43 +128,59 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     transition: 'transform 200ms ease-out, opacity 200ms ease-out',
     opacity: phase === 'open' ? 1 : 0.98,
     display: 'flex',
-    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 12,
+    boxSizing: 'border-box',
   };
 
   const panel = {
     position: 'relative',
     display: 'flex',
     flexDirection: 'column',
-    gap: 10,
-    padding: 12,
+    gap: 12,
+    padding: 16,
     width: '100%',
-    height: '100%',
+    maxWidth: 420,
     boxSizing: 'border-box',
+    background: '#141624',
+    border: '1px solid rgba(255,255,255,0.08)',
+    borderRadius: 18,
+    boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
   };
 
-  const pills = { display: 'flex', gap: 8, flexWrap: 'wrap' };
+  const pills = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: 6,
+    marginTop: 2,
+  };
 
   const pillBtn = (active) => ({
-    padding: '6px 10px',
+    padding: '6px 8px',
     borderRadius: 10,
     cursor: 'pointer',
-    border: active ? '2px solid #23a76d' : '1px solid #2e2e2e',
-    background: active ? '#14261f' : '#1b1b1b',
+    border: active ? '2px solid rgba(76,205,153,0.45)' : '1px solid rgba(255,255,255,0.10)',
+    background: active ? 'linear-gradient(180deg, rgba(76,205,153,0.18), #11121A)' : '#11121A',
     color: '#fff',
-    fontWeight: 700,
-    fontSize: '.9rem',
+    fontWeight: 800,
+    fontSize: '.85rem',
+    transition: 'transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease',
+    width: '100%',
   });
 
   const inputGroup = (hasError) => ({
     display: 'flex',
     alignItems: 'center',
     gap: 6,
-    padding: '6px 10px',
-    borderRadius: 8,
-    border: `1px solid ${hasError ? '#ff4d4d' : '#2e2e2e'}`,
-    background: '#1b1b1b',
+    padding: '8px 10px',
+    borderRadius: 10,
+    border: `1px solid ${hasError ? 'rgba(255,77,77,0.8)' : 'rgba(255,255,255,0.08)'}`,
+    background: '#141624',
     color: '#fff',
     width: '100%',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+    overflow: 'hidden',
   });
   const inputInner = {
     flex: 1,
@@ -203,42 +188,53 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     border: 'none',
     outline: 'none',
     color: '#fff',
-    fontSize: '0.95rem',
+    fontSize: '.95rem',
+    textAlign: 'right',
+    minWidth: 0,
+    width: '100%',
+    boxSizing: 'border-box',
   };
 
   const actions = {
-    position: 'absolute',
-    right: 12,
-    bottom: 12,
+    position: 'relative',
     display: 'flex',
     gap: 8,
+    justifyContent: 'flex-end',
+    marginTop: 12,
   };
   const iconBtn = (primary = false) => ({
-    width: 38,
-    height: 38,
-    borderRadius: 999,
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     display: 'grid',
     placeItems: 'center',
-    border: primary ? 'none' : '2px solid #fff',
-    background: primary ? '#23a76d' : 'transparent',
+    border: primary ? '1px solid rgba(76,205,153,0.32)' : '1px solid rgba(255,255,255,0.12)',
+    background: primary ? '#4CCD99' : '#11121A',
     color: '#fff',
     cursor: 'pointer',
+    boxShadow: primary ? '0 8px 22px rgba(76,205,153,0.38)' : 'none',
+    transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
   });
 
   return (
     <div style={root} role="dialog" aria-modal="true">
       <div style={panel}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontWeight: 900, fontSize: '1rem' }}>Editar forma de pago</div>
+          <div style={{ fontWeight: 900, fontSize: '1.05rem', letterSpacing: 0.2 }}>
+            Editar forma de pago
+          </div>
           <button
             onClick={onClose}
             style={{
-              border: 'none',
-              background: 'transparent',
+              background: '#11121A',
               color: '#fff',
               fontSize: '1.2rem',
               lineHeight: 1,
               cursor: 'pointer',
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+              border: '1px solid rgba(255,255,255,0.10)',
             }}
           >
             ×
@@ -246,7 +242,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
         </div>
 
         <div style={pills}>
-          {['Efectivo', 'Transferencia', 'Mixto'].map((m) => (
+          {['Efectivo', 'Transferencia', 'Débito', 'Mixto'].map((m) => (
             <button key={m} onClick={() => setMethod(m)} style={pillBtn(method === m)}>
               {m}
             </button>
@@ -257,25 +253,35 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
           <div
             style={{
               ...inputGroup(!!errors.cash),
-              maxWidth: 220,
-              marginTop: 6,
+              maxWidth: 180,
+              marginTop: 4,
             }}
           >
-            <BsCash size={18} style={{ color: '#23a76d' }} />
+            <BsCash size={18} style={{ color: '#4CCD99' }} />
             <input
               type="number"
               min={Number(orderTotal) || 0}
+              step={1}
+              inputMode="numeric"
               value={cash}
               onChange={(e) => setCash(Math.max(1, Number(e.target.value) || 0))}
               style={inputInner}
-              placeholder="Efectivo"
+              placeholder="0"
             />
           </div>
+        )}
+        {method === 'Efectivo' && errors.cash && (
+          <div style={{ color: '#ff4d4d', fontSize: '.8rem', marginTop: 4 }}>{errors.cash}</div>
         )}
 
         {method === 'Transferencia' && (
           <div style={{ opacity: 0.85, fontSize: '.95rem', marginTop: 6 }}>
             Se marcará como pagó por transferencia.
+          </div>
+        )}
+        {method === 'Débito' && (
+          <div style={{ opacity: 0.85, fontSize: '.95rem', marginTop: 6 }}>
+            Se marcará como pagó con tarjeta de débito.
           </div>
         )}
 
@@ -285,33 +291,44 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
               display: 'flex',
               flexDirection: 'column',
               gap: 6,
-              maxWidth: 220,
-              marginTop: 6,
+              maxWidth: 180,
+              marginTop: 4,
             }}
           >
             <div style={inputGroup(!!errors.cash)}>
-              <BsCash size={18} style={{ color: '#23a76d' }} />
+              <BsCash size={18} style={{ color: '#4CCD99' }} />
               <input
                 type="number"
                 min={1}
+                step={1}
+                inputMode="numeric"
                 value={cash}
                 onChange={(e) => setCash(Math.max(1, Number(e.target.value) || 0))}
                 style={inputInner}
-                placeholder="Efectivo"
+                placeholder="0"
               />
             </div>
+            {!!errors.cash && (
+              <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.cash}</div>
+            )}
 
             <div style={inputGroup(!!errors.mp)}>
               <img src={mpLogoWhite} alt="MP" width="18" height="18" style={{ display: 'block' }} />
               <input
                 type="number"
                 min={1}
+                step={1}
+                inputMode="numeric"
                 value={mp}
                 onChange={(e) => setMp(Math.max(1, Number(e.target.value) || 0))}
                 style={inputInner}
-                placeholder="Mercado Pago"
+                placeholder="0"
               />
             </div>
+            {!!errors.mp && <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.mp}</div>}
+            {!!errors.sum && (
+              <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.sum}</div>
+            )}
           </div>
         )}
 
@@ -338,6 +355,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
 
 function ConfirmOverlay({ open, onConfirm, onCancel }) {
   const [phase, setPhase] = useState(open ? 'enter' : 'closed');
+  const [reason, setReason] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -396,6 +414,23 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
       <div style={{ opacity: 0.9, fontSize: '0.9rem', maxWidth: 360 }}>
         Esta acción eliminará la orden de la lista.
       </div>
+      <div style={{ width: '100%', maxWidth: 360 }}>
+        <input
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          placeholder="Motivo del borrado"
+          style={{
+            width: '100%',
+            padding: '10px 12px',
+            borderRadius: 10,
+            border: '1px solid rgba(255,255,255,0.65)',
+            background: '#fff',
+            color: '#111',
+            outline: 'none',
+            fontWeight: 600,
+          }}
+        />
+      </div>
       <div
         style={{
           display: 'flex',
@@ -406,7 +441,7 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
         }}
       >
         <button
-          onClick={onConfirm}
+          onClick={() => onConfirm(reason)}
           style={{
             padding: '10px 16px',
             borderRadius: 12,
@@ -416,8 +451,9 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
             background: '#fff',
             color: '#d32f2f',
             minWidth: 120,
-            fontFamily: 'Satoshi',
+            fontFamily: 'Inter',
           }}
+          disabled={!String(reason).trim()}
         >
           Borrar
         </button>
@@ -432,7 +468,7 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
             background: 'transparent',
             color: '#fff',
             minWidth: 120,
-            fontFamily: 'Satoshi',
+            fontFamily: 'Inter',
           }}
         >
           Volver
@@ -444,6 +480,8 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
     </div>
   );
 }
+
+
 
 const CardOrders = ({
   method,
@@ -460,24 +498,17 @@ const CardOrders = ({
   pagoEfectivo,
   pagoMp,
   pagoDetalle,
-  client,
-  points,
   pointsClaimed,
   showDevTicketPreview,
   copied,
   pagoDebito,
 }) => {
-
   const isLinux = navigator.userAgent.toLowerCase().includes('linux');
-
-
 
   const [editPayOpen, setEditPayOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [localPay, setLocalPay] = useState(null);
   const [viewVersion, setViewVersion] = useState(0);
-  const [showPreview, setShowPreview] = useState(false);
-  const [previewText, setPreviewText] = useState('');
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkId, setLinkId] = useState('');
   const [linkLoading, setLinkLoading] = useState(false);
@@ -557,13 +588,7 @@ const CardOrders = ({
     repetidos2[item.name] = (repetidos2[item.name] || 0) + q;
   });
 
-  function onScan(rawValue) {
-    const code = normalizeScan(rawValue);
-
-    console.log("RAW:", rawValue);
-    console.log("FIXED:", code);
-
-  }
+  // scan handler eliminado (no usado)
 
   // Reset de input/preview al cerrar el modal
   useEffect(() => {
@@ -601,7 +626,7 @@ const CardOrders = ({
           setClientPreview({
             name: res.name || res.data.name || 'Cliente',
             dni: res.clientDni || res.data.dni || '',
-            email: res.data.email
+            email: res.data.email,
           });
           setClientPreviewError('');
         } else {
@@ -620,8 +645,8 @@ const CardOrders = ({
     };
   }, [linkId, linkOpen]);
 
-  const removeOrder = (id) => {
-    dispatch(removeOrderFromBoth({ id }));
+  const removeOrder = (id, reason) => {
+    dispatch(removeOrderFromBoth({ id, reason }));
   };
 
   const toggleHidden = () => {
@@ -669,7 +694,7 @@ const CardOrders = ({
       }
 
       const clientRec = res.data;
-      const pts = Math.floor(Number(total || 0) / 1100);
+      const pts = Math.floor(Number(total || 0) / POINTS_RATE);
 
       if (pts <= 0) {
         setLinkMsg('El monto es muy bajo para sumar puntos.');
@@ -740,10 +765,19 @@ const CardOrders = ({
           pagoMp: tot,
           pagoDetalle: 'Transferencia',
         };
+      } else if (method === 'Débito') {
+        payload = {
+          method: 'debito',
+          pago: tot,
+          pagoEfectivo: 0,
+          pagoMp: 0,
+          pagoDebito: tot,
+          pagoDetalle: 'Débito',
+        };
       } else if (method === 'Efectivo') {
         const ef = Number(cash) || 0;
-        if (ef <= 0) {
-          alert('El monto en efectivo debe ser mayor a 0.');
+        if (ef < tot) {
+          alert('En efectivo, el monto debe ser ≥ al total.');
           return;
         }
         payload = {
@@ -777,6 +811,7 @@ const CardOrders = ({
       setViewVersion((v) => v + 1);
 
       await pb.collection('orders').update(id, payload);
+      dispatch(upsertOrder({ id, ...payload }));
 
       setEditPayOpen(false);
     } catch (e) {
@@ -862,9 +897,6 @@ const CardOrders = ({
     setCopiado(true);
 
     try {
-      await pb.collection('orders').update(id, { copied: true });
-
-      // Traer el registro completo (con businessDate, etc.)
       await pb.collection('orders').update(id, { copied: true });
 
       // actualizar Redux sin depender del realtime
@@ -1020,6 +1052,7 @@ const CardOrders = ({
       );
     }
   );
+  Ticket58.displayName = 'Ticket58';
 
   const contentRef = useRef(null);
 
@@ -1042,12 +1075,10 @@ const CardOrders = ({
 }
 `;
 
-
-
   const [isPrinting, setIsPrinting] = useState(false);
 
   const _reactToPrint = useReactToPrint({
-    content: () => contentRef.current,
+    contentRef: contentRef,
     pageStyle,
     removeAfterPrint: false,
     onBeforePrint: async () => {
@@ -1083,7 +1114,6 @@ const CardOrders = ({
   // En Linux lo anulamos completamente
   const reactToPrintFn = isLinux ? () => { } : _reactToPrint;
 
-
   const handlePrint = async () => {
     if (isPrinting) return;
 
@@ -1095,7 +1125,7 @@ const CardOrders = ({
     try {
       // juntamos TODOS los estilos runtime (styled-components)
       const styles = Array.from(document.querySelectorAll('style'))
-        .map(s => s.outerHTML)
+        .map((s) => s.outerHTML)
         .join('\n');
 
       const html = `
@@ -1124,11 +1154,10 @@ const CardOrders = ({
 </html>
 `;
 
-      if (isLinux && window.electron?.ipcRenderer) {
+      if (window.electron?.ipcRenderer) {
         // ⏳ espera REAL hasta que termina de imprimir
         await window.electron.ipcRenderer.invoke('print-ticket', html);
       } else {
-        // Windows / navegador
         await reactToPrintFn?.();
       }
     } catch (err) {
@@ -1137,8 +1166,6 @@ const CardOrders = ({
       setIsPrinting(false);
     }
   };
-
-
 
   const groupedItems = useMemo(() => {
     const map = {};
@@ -1253,11 +1280,7 @@ const CardOrders = ({
             </div>
           )}
 
-          <ButtonPrint
-            variant="contained"
-            disabled={isPrinting}
-            onClick={handlePrint}
-          >
+          <ButtonPrint variant="contained" disabled={isPrinting} onClick={handlePrint}>
             <PrintIcon />
           </ButtonPrint>
 
@@ -1516,7 +1539,14 @@ const CardOrders = ({
             }
 
             // MIXTO (mostrar detalle EF + MP, sin decir "Mixto")
-            const cash = Number(viewEf) || 0;
+            const cashNet = getOrderCashNet({
+              method: 'mixto',
+              pago: viewPago,
+              total,
+              pagoEfectivo: Number(viewEf) || 0,
+              pagoMp: Number(viewMp) || 0,
+              pagoDetalle,
+            });
             const mpAmt = Number(viewMp) || 0;
 
             return (
@@ -1539,7 +1569,7 @@ const CardOrders = ({
                       gap: 6,
                     }}
                   >
-                    <Banknote size={20} /> {formatPrice(cash)}
+                    <Banknote size={20} /> {formatPrice(cashNet)}
                   </span>
                   <span style={{ opacity: 0.6 }}> + </span>
                   <span
@@ -1644,7 +1674,6 @@ const CardOrders = ({
           zIndex: -1,
           background: '#fff',
         }}
-
       >
         <Ticket58
           ref={contentRef}
@@ -1659,7 +1688,7 @@ const CardOrders = ({
           logo={logo}
         />
       </div>
-      {process.env.NODE_ENV === 'development' && showDevTicketPreview && (
+      {showDevTicketPreview && (
         <div style={{ border: '1px solid #ccc', marginTop: 10, padding: 8, background: '#fff' }}>
           <h4>Vista previa ticket (58mm)</h4>
           <Ticket58
@@ -1685,7 +1714,9 @@ const CardOrders = ({
               ? 'Mixto'
               : methodNorm === 'transferencia'
                 ? 'Transferencia'
-                : 'Efectivo',
+                : methodNorm === 'debito'
+                  ? 'Débito'
+                  : 'Efectivo',
           ef: Number(viewEf || 0),
           mp: Number(viewMp || 0),
         }}
@@ -1694,8 +1725,8 @@ const CardOrders = ({
 
       <ConfirmOverlay
         open={confirmOpen}
-        onConfirm={() => {
-          removeOrder(id);
+        onConfirm={(r) => {
+          removeOrder(id, r);
           setConfirmOpen(false);
         }}
         onCancel={() => setConfirmOpen(false)}
@@ -1747,27 +1778,27 @@ const CardOrders = ({
               value={linkId}
               onChange={(e) => setLinkId(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") {
+                if (e.key === 'Enter') {
                   const fixed = normalizeScan(linkId);
 
-                  console.log("RAW SCAN:", linkId);
-                  console.log("FIXED SCAN:", fixed);
+                  console.log('RAW SCAN:', linkId);
+                  console.log('FIXED SCAN:', fixed);
 
                   if (fixed.length === 6) {
                     setLinkId(fixed);
                     handleLinkClient();
                   }
 
-                  setLinkId("");
+                  setLinkId('');
                 }
               }}
               style={{
-                width: "100%",
-                padding: "16px 18px",
+                width: '100%',
+                padding: '16px 18px',
                 borderRadius: 14,
-                border: "1px solid #ddd",
-                fontSize: "1rem",
-                fontFamily: "inherit",
+                border: '1px solid #ddd',
+                fontSize: '1rem',
+                fontFamily: 'inherit',
               }}
             />
             {clientPreview && (
@@ -1954,9 +1985,7 @@ export default function Orders() {
   };
 
   useEffect(() => {
-    dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 14 })).finally(() =>
-      setIsInitialLoading(false)
-    );
+    dispatch(hydrateAllTodayOrders()).finally(() => setIsInitialLoading(false));
   }, [dispatch]);
 
   useEffect(() => {
@@ -1970,7 +1999,7 @@ export default function Orders() {
     const handleOnline = () => {
       dispatch(syncPendingOrders());
       if (navigator.onLine) {
-        dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 14 }));
+        dispatch(hydrateAllTodayOrders());
       }
     };
     window.addEventListener('online', handleOnline);
@@ -1994,8 +2023,9 @@ export default function Orders() {
   const [addressQuery, setAddressQuery] = useState('');
   const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // 'all' | 'retiro' | 'delivery'
 
-  const isDev = process.env.NODE_ENV === 'development';
-  const [showDevTicketPreview, setShowDevTicketPreview] = useState(true);
+  const isDev =
+    typeof window !== 'undefined' && window.location && window.location.protocol === 'http:';
+  const [showDevTicketPreview, setShowDevTicketPreview] = useState(isDev);
 
   const filteredTodayOrders = useMemo(() => {
     const q = addressQuery.trim().toLowerCase();
@@ -2017,7 +2047,7 @@ export default function Orders() {
     });
   }, [sortedTodayOrders, addressQuery, orderTypeFilter]);
 
-  const { totalTodayCount, rankById } = useMemo(() => {
+  const { rankById } = useMemo(() => {
     const pendingCount = sortedTodayOrders.filter((o) => o?.pending).length;
 
     const serverCount =
@@ -2032,30 +2062,45 @@ export default function Orders() {
       map.set(o.id, total - idx);
     });
 
-    return { totalTodayCount: total, rankById: map };
+    return { rankById: map };
   }, [sortedTodayOrders, pagination?.totalItems]);
 
   return (
     <GlobalOrders>
       <ContainerOrders ref={scrollRef} style={{ overflowY: 'auto' }}>
         {isInitialLoading ? (
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: '40px 20px',
-              textAlign: 'center',
-              color: '#666',
-            }}
-          >
-            <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: 8, color: '#333' }}>
-              Cargando pedidos...
-            </h2>
-            <p style={{ fontSize: '1rem', opacity: 0.8 }}>Esto no debería tardar mucho.</p>
-          </div>
+          <>
+            <style>{`
+              @keyframes ordersSpin { to { transform: rotate(360deg) } }
+              .orders-center {
+                position: absolute;
+                inset: 0;
+                display: grid;
+                place-items: center;
+              }
+              .orders-spinner {
+                width: 64px; height: 64px; border-radius: 50%;
+                border: 6px solid #e5e7eb; border-top-color: #111;
+                animation: ordersSpin .9s linear infinite;
+              }
+            `}</style>
+            <div className="orders-center">
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 12,
+                  transform: 'translateY(-10%)',
+                }}
+              >
+                <div className="orders-spinner" />
+                <div style={{ fontWeight: 900, fontSize: '1.4rem', color: '#111', textAlign: 'center' }}>
+                  Cargando pedidos…
+                </div>
+              </div>
+            </div>
+          </>
         ) : todayOrders.length === 0 ? (
           <div
             style={{
@@ -2125,7 +2170,7 @@ export default function Orders() {
                       outline: 'none',
                       fontSize: '1rem',
                       background: 'transparent',
-                      fontFamily: "'Satoshi', sans-serif",
+                      fontFamily: "'Inter', sans-serif",
                       fontWeight: 600,
                     }}
                   />
@@ -2163,7 +2208,7 @@ export default function Orders() {
                         alignItems: 'center',
                         gap: 6,
                       }}
-                      title="Mostrar/ocultar vista ticket (solo dev)"
+                      title="Mostrar/ocultar vista ticket"
                     >
                       <PrintIcon style={{ fontSize: 18 }} />
                       {showDevTicketPreview ? 'Ticket' : 'Normal'}
@@ -2214,7 +2259,7 @@ export default function Orders() {
                         color: active ? 'black' : '#111',
                         boxShadow: active ? '0 6px 16px rgba(0,0,0,0.18)' : 'none',
                         transition: 'all 150ms ease',
-                        fontFamily: "'Satoshi'",
+                        fontFamily: "'Inter'",
                       }}
                     >
                       {label}

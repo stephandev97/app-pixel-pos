@@ -11,7 +11,7 @@ export const ButtonNavCart = styled.a`
   height: 60px;
   font-size: 1.1em;
   cursor: pointer;
-  font-family: 'Satoshi', sans-serif;
+  font-family: 'Inter', sans-serif;
   display: flex;
   justify-content: space-between;
   align-items: center;
