@@ -10,10 +10,21 @@ export function ticket58Html(ticketData, opts = {}) {
   const mp = Number(ticketData?.pagoMp || 0);
   const db = Number(ticketData?.pagoDebito || 0);
 
+  const toNum = (s) => {
+    if (typeof s === 'number') return Number.isFinite(s) ? s : 0;
+    const str = String(s || '').trim();
+    if (!str) return 0;
+    const normalized = str
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.-]/g, '');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  };
   const isMixto = pago === 'Mixto';
   const isTransfer = pago === 'Transferencia';
   const isDebito = pago === 'Debito' || pago === 'Débito';
-  const isCash = !isNaN(Number(pago));
+  const isCash = Number.isFinite(toNum(pago));
 
   const totalPagado = isMixto
     ? ef + mp + db
@@ -21,7 +32,7 @@ export function ticket58Html(ticketData, opts = {}) {
       ? total
       : isDebito
         ? db || total
-        : Number(pago || 0);
+        : toNum(pago || 0);
   const cambio = Math.max(totalPagado - total, 0);
 
   const esc = (s) =>
@@ -72,7 +83,7 @@ export function ticket58Html(ticketData, opts = {}) {
           ? `
             <div class="totrow">
               <div class="l">Paga</div>
-              <div class="r">${Number(pago) === total ? 'JUSTO' : esc(formatPrice(pago))}</div>
+              <div class="r">${toNum(pago) === total ? 'JUSTO' : esc(formatPrice(toNum(pago)))}</div>
             </div>
             ${cambio > 0 ? `<div class="totrow"><div class="l">Cambio</div><div class="r">${esc(formatPrice(cambio))}</div></div>` : ''}
           `
@@ -100,7 +111,7 @@ export function ticket58Html(ticketData, opts = {}) {
       margin: 0;
       padding: 0;
       line-height: 1.25;
-      font-size: 3.2mm;
+      font-size: 3.5mm;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "JetBrains Mono", monospace;
       font-variant-numeric: tabular-nums;
       letter-spacing: -0.02em;
@@ -118,7 +129,7 @@ export function ticket58Html(ticketData, opts = {}) {
     .totrow{
       display:flex;
       justify-content:space-between;
-      margin: .8mm 0;
+      padding: 2mm 0;
       font-size: 3.4mm;
     }
     .l{ text-align:left; font-weight:bold; }

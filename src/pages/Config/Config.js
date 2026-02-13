@@ -1,7 +1,7 @@
 import ArrowCircleUpIcon from '@mui/icons-material/ArrowCircleUp';
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
-import { useMemo, useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Settings } from 'react-feather';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -396,7 +396,7 @@ const Config = () => {
     };
     pb.collection('shift_closures')
       .create(payload)
-      .catch(() => { });
+      .catch(() => {});
     setDenoms({
       20000: '',
       10000: '',
@@ -433,13 +433,13 @@ const Config = () => {
               {updateStatus}
               {(updateStatus.includes('Nueva versión') ||
                 updateStatus.includes('Lista para instalar')) && (
-                  <button
-                    style={{ marginLeft: 12, padding: '4px 8px', borderRadius: 6 }}
-                    onClick={installUpdate}
-                  >
-                    Instalar
-                  </button>
-                )}
+                <button
+                  style={{ marginLeft: 12, padding: '4px 8px', borderRadius: 6 }}
+                  onClick={installUpdate}
+                >
+                  Instalar
+                </button>
+              )}
             </div>
           )}
 
@@ -527,12 +527,12 @@ const Config = () => {
                               .includes('transferencia')
                               ? 'Transferencia'
                               : String(o.method || o.pago || '')
-                                .toLowerCase()
-                                .includes('debito')
+                                    .toLowerCase()
+                                    .includes('debito')
                                 ? 'Débito'
                                 : String(o.method || o.pago || '')
-                                  .toLowerCase()
-                                  .includes('mixto')
+                                      .toLowerCase()
+                                      .includes('mixto')
                                   ? 'Mixto'
                                   : 'Efectivo'}
                           </RowLabel>

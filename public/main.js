@@ -1,6 +1,7 @@
 // public/main.js
 const { app, BrowserWindow, dialog, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
+const fs = require('fs');
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
@@ -88,8 +89,38 @@ ipcMain.handle('print-ticket', async (_e, html) => {
         }
       });
 
+      let fontStyle = '';
+      try {
+        const fontPath = isDev
+          ? path.join(__dirname, 'fonts', 'Inter.ttf')
+          : path.join(__dirname, '../build/fonts/Inter.ttf');
+        const fontBuf = fs.readFileSync(fontPath);
+        const dataUri = 'data:font/ttf;base64,' + fontBuf.toString('base64');
+        fontStyle =
+          "<style>@font-face{font-family:Inter;src:url('" +
+          dataUri +
+          "');font-weight:100 900;font-style:normal;font-display:swap;}html,body,*{font-family:Inter,sans-serif;}</style>";
+      } catch { void 0; }
+
+      const baseHref = isDev
+        ? 'http://localhost:3000/'
+        : 'file://' + path.join(__dirname, '../build/') + '/';
+      const baseTag = '<base href="' + baseHref + '">';
+      let augmentedHtml = html;
+      if (/<head[^>]*>/i.test(augmentedHtml)) {
+        augmentedHtml = augmentedHtml.replace(/<head([^>]*)>/i, '<head$1>' + baseTag + fontStyle);
+      } else {
+        augmentedHtml =
+          '<!DOCTYPE html><html><head>' +
+          baseTag +
+          fontStyle +
+          '</head><body>' +
+          augmentedHtml +
+          '</body></html>';
+      }
+
       printWin
-        .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(html))
+        .loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(augmentedHtml))
         .catch((err) => reject(err));
     } catch (err) {
       reject(err);
@@ -109,7 +140,7 @@ let updateReady = false;
 autoUpdater.on('download-progress', (p) => {
   try {
     win?.webContents?.send('update-progress', p?.percent ?? 0);
-  } catch { }
+  } catch { void 0; }
 });
 autoUpdater.on('update-downloaded', () => {
   updateReady = true;
@@ -117,7 +148,7 @@ autoUpdater.on('update-downloaded', () => {
     win?.webContents?.send('update-ready');
     // Instalar inmediatamente como solicitado
     autoUpdater.quitAndInstall();
-  } catch { }
+  } catch { void 0; }
 });
 
 ipcMain.handle('check-for-updates', async () => {
@@ -165,23 +196,26 @@ app.whenReady().then(() => {
   createWindow();
 
   // Chequear actualizaciones cada 10 minutos
-  setInterval(() => {
-    try {
-      log.info('🔄 Buscando actualizaciones (intervalo 10m)...');
-      autoUpdater.checkForUpdates().catch((err) => {
-        log.error('Error buscando actualizaciones en intervalo:', err);
-      });
-    } catch (e) {
-      log.error('Error iniciando chequeo de actualizaciones:', e);
-    }
-  }, 10 * 60 * 1000);
+  setInterval(
+    () => {
+      try {
+        log.info('🔄 Buscando actualizaciones (intervalo 10m)...');
+        autoUpdater.checkForUpdates().catch((err) => {
+          log.error('Error buscando actualizaciones en intervalo:', err);
+        });
+      } catch (e) {
+        log.error('Error iniciando chequeo de actualizaciones:', e);
+      }
+    },
+    10 * 60 * 1000
+  );
 
   // Buscar actualizaciones al iniciar también
   try {
     setTimeout(() => {
-      autoUpdater.checkForUpdates().catch(() => { });
+      autoUpdater.checkForUpdates().catch(() => {});
     }, 5000); // Esperar 5s para no bloquear inicio
-  } catch { }
+  } catch { void 0; }
 
   // Atajo DevTools
   globalShortcut.register('CommandOrControl+Shift+D', () => {

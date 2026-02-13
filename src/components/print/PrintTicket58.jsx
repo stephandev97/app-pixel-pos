@@ -78,6 +78,18 @@ export default function PrintTicket58({
     }
   }
 
+  const toNum = (s) => {
+    if (typeof s === 'number') return Number.isFinite(s) ? s : 0;
+    const str = String(s || '').trim();
+    if (!str) return 0;
+    const normalized = str
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.-]/g, '');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const pagoParsed = toNum(pagoRaw);
   const totalPagado =
     methodNorm === 'mixto'
       ? ef + mp
@@ -85,7 +97,7 @@ export default function PrintTicket58({
         ? total
         : methodNorm === 'debito'
           ? Number(order?.pagoDebito) || total
-          : Number(pagoRaw || 0);
+          : pagoParsed;
 
   const pageStyle = `
     @page { size: 58mm auto; margin: 0; }
@@ -169,7 +181,7 @@ export default function PrintTicket58({
           margin: 0,
           padding: 0,
           lineHeight: 1.25,
-          fontSize: '3.2mm',
+          fontSize: '3.8mm',
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
@@ -184,7 +196,7 @@ export default function PrintTicket58({
         <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
           <div
             style={{
-              fontSize: '3.5mm',
+              fontSize: '4mm',
               lineHeight: 1.2,
               maxWidth: '52mm',
               margin: '0 auto',
@@ -218,7 +230,7 @@ export default function PrintTicket58({
             const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
             return (
               <div key={idx} style={{ marginBottom: '1mm' }}>
-                <div style={{ display: 'flex', fontSize: '3.4mm' }}>
+                <div style={{ display: 'flex', fontSize: '3.5mm' }}>
                   <span style={{ width: '6mm' }}>{cantidad}</span>
                   <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
                 </div>
@@ -227,7 +239,7 @@ export default function PrintTicket58({
                     style={{
                       marginLeft: '6mm',
                       marginTop: '.6mm',
-                      fontSize: '3mm',
+                      fontSize: '3.3mm',
                       fontWeight: 700,
                       textAlign: 'left',
                     }}
@@ -244,40 +256,88 @@ export default function PrintTicket58({
 
         <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
-        <TotalPrint>
+        <TotalPrint
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            padding: '2mm 0',
+          }}
+        >
           <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
           <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
         </TotalPrint>
 
         {pago === 'Mixto' ? (
           <>
-            <TotalPrint>
+            <TotalPrint
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '2mm 0',
+              }}
+            >
               <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
               <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
             </TotalPrint>
-            <TotalPrint>
+            <TotalPrint
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '2mm 0',
+              }}
+            >
               <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
               <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
             </TotalPrint>
             {totalPagado > total && (
-              <TotalPrint>
+              <TotalPrint
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '2mm 0',
+                }}
+              >
                 <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
                 <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
               </TotalPrint>
             )}
           </>
         ) : (
-          <TotalPrint>
+          <TotalPrint
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '2mm 0',
+            }}
+          >
             <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
               {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
             </a>
             <a style={{ textAlign: 'right' }}>
               {pago === 'Transferencia'
                 ? ''
-                : Number(pagoRaw) === total
+                : pagoParsed === total
                   ? 'JUSTO'
-                  : formatPrice(pagoRaw)}
+                  : formatPrice(pagoParsed)}
             </a>
+          </TotalPrint>
+        )}
+        {pago !== 'Mixto' && pago !== 'Transferencia' && totalPagado > total && (
+          <TotalPrint
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '2mm 0',
+            }}
+          >
+            <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
+            <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
           </TotalPrint>
         )}
 

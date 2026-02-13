@@ -1,5 +1,6 @@
 import PrintIcon from '@mui/icons-material/Print';
 import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
 import Checkbox from '@mui/material/Checkbox';
 import { ArrowUp, Banknote, CreditCard, Search, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -143,10 +144,12 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     width: '100%',
     maxWidth: 420,
     boxSizing: 'border-box',
-    background: '#141624',
-    border: '1px solid rgba(255,255,255,0.08)',
+    background: '#fff',
+    color: '#111',
+    fontFamily: 'Inter, sans-serif',
+    border: '1px solid #e5e7eb',
     borderRadius: 18,
-    boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
+    boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
   };
 
   const pills = {
@@ -160,9 +163,9 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     padding: '6px 8px',
     borderRadius: 10,
     cursor: 'pointer',
-    border: active ? '2px solid rgba(76,205,153,0.45)' : '1px solid rgba(255,255,255,0.10)',
-    background: active ? 'linear-gradient(180deg, rgba(76,205,153,0.18), #11121A)' : '#11121A',
-    color: '#fff',
+    border: active ? '2px solid #111' : '1px solid #e5e7eb',
+    background: active ? '#e9edf5' : '#fff',
+    color: '#111',
     fontWeight: 800,
     fontSize: '.85rem',
     transition: 'transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease',
@@ -175,11 +178,11 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     gap: 6,
     padding: '8px 10px',
     borderRadius: 10,
-    border: `1px solid ${hasError ? 'rgba(255,77,77,0.8)' : 'rgba(255,255,255,0.08)'}`,
-    background: '#141624',
-    color: '#fff',
+    border: `1px solid ${hasError ? '#ff4d4d' : '#e5e7eb'}`,
+    background: '#fff',
+    color: '#111',
     width: '100%',
-    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.03)',
+    boxShadow: 'inset 0 1px 0 rgba(0,0,0,0.02)',
     overflow: 'hidden',
   });
   const inputInner = {
@@ -187,7 +190,7 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     background: 'transparent',
     border: 'none',
     outline: 'none',
-    color: '#fff',
+    color: '#111',
     fontSize: '.95rem',
     textAlign: 'right',
     minWidth: 0,
@@ -208,9 +211,9 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
     borderRadius: 14,
     display: 'grid',
     placeItems: 'center',
-    border: primary ? '1px solid rgba(76,205,153,0.32)' : '1px solid rgba(255,255,255,0.12)',
-    background: primary ? '#4CCD99' : '#11121A',
-    color: '#fff',
+    border: primary ? '1px solid rgba(76,205,153,0.32)' : '1px solid #e5e7eb',
+    background: primary ? '#4CCD99' : '#fff',
+    color: primary ? '#fff' : '#111',
     cursor: 'pointer',
     boxShadow: primary ? '0 8px 22px rgba(76,205,153,0.38)' : 'none',
     transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
@@ -226,15 +229,15 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
           <button
             onClick={onClose}
             style={{
-              background: '#11121A',
-              color: '#fff',
+              background: '#fff',
+              color: '#111',
               fontSize: '1.2rem',
               lineHeight: 1,
               cursor: 'pointer',
               width: 36,
               height: 36,
               borderRadius: 12,
-              border: '1px solid rgba(255,255,255,0.10)',
+              border: '1px solid #e5e7eb',
             }}
           >
             ×
@@ -313,7 +316,13 @@ function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
             )}
 
             <div style={inputGroup(!!errors.mp)}>
-              <img src={mpLogoWhite} alt="MP" width="18" height="18" style={{ display: 'block' }} />
+              <img
+                src={mpLogoWhite}
+                alt="MP"
+                width="18"
+                height="18"
+                style={{ display: 'block', background: '#1e6cff', borderRadius: 4, padding: 2 }}
+              />
               <input
                 type="number"
                 min={1}
@@ -409,16 +418,16 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
   return (
     <div style={style} role="dialog" aria-modal="true" aria-hidden={hidden}>
       <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
-        ¿Seguro que quieres borrar?
+        ¿Seguro que querés borrarlo?
       </div>
       <div style={{ opacity: 0.9, fontSize: '0.9rem', maxWidth: 360 }}>
-        Esta acción eliminará la orden de la lista.
+        Esta acción eliminará el pedido de la lista.
       </div>
       <div style={{ width: '100%', maxWidth: 360 }}>
         <input
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Motivo del borrado"
+          placeholder="Escribí el motivo"
           style={{
             width: '100%',
             padding: '10px 12px',
@@ -480,8 +489,6 @@ function ConfirmOverlay({ open, onConfirm, onCancel }) {
     </div>
   );
 }
-
-
 
 const CardOrders = ({
   method,
@@ -547,6 +554,18 @@ const CardOrders = ({
       mp = toNum(m[2]);
     }
   }
+  const toNum = (s) => {
+    if (typeof s === 'number') return Number.isFinite(s) ? s : 0;
+    const str = String(s || '').trim();
+    if (!str) return 0;
+    const normalized = str
+      .replace(/\./g, '')
+      .replace(',', '.')
+      .replace(/[^\d.-]/g, '');
+    const n = Number(normalized);
+    return Number.isFinite(n) ? n : 0;
+  };
+  const viewPagoParsed = toNum(viewPago);
   const totalPagado =
     methodNorm === 'mixto'
       ? viewEf + viewMp
@@ -554,7 +573,7 @@ const CardOrders = ({
         ? Number(total || 0)
         : methodNorm === 'debito'
           ? Number(viewDb) || Number(total || 0)
-          : Number(viewPago || 0);
+          : viewPagoParsed;
   const dispatch = useDispatch();
   const [copiado, setCopiado] = useState();
   const [hidden, setHidden] = useState(() => {
@@ -939,7 +958,7 @@ const CardOrders = ({
             padding: '0 2mm',
             boxSizing: 'border-box',
             lineHeight: 1.25,
-            fontSize: '3.2mm',
+            fontSize: '4mm',
           }}
         >
           <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
@@ -955,13 +974,13 @@ const CardOrders = ({
           <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
             <div
               style={{
-                fontSize: '3.5mm',
                 lineHeight: 1.2,
                 maxWidth: '100%',
                 margin: '0 auto',
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-word',
                 fontWeight: 700,
+                fontSize: '4.2mm',
               }}
             >
               {direccion || 'Retiro'}
@@ -976,7 +995,6 @@ const CardOrders = ({
                 display: 'flex',
                 fontWeight: 'bold',
                 marginBottom: '1mm',
-                fontSize: '3.4mm',
               }}
             >
               <span style={{ width: '6mm' }}>#</span>
@@ -989,7 +1007,7 @@ const CardOrders = ({
               const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
               return (
                 <div key={idx} style={{ marginBottom: '1mm' }}>
-                  <div style={{ display: 'flex', fontSize: '3.4mm' }}>
+                  <div style={{ display: 'flex', fontSize: '3.8mm' }}>
                     <span style={{ width: '6mm' }}>{cantidad}</span>
                     <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
                   </div>
@@ -998,7 +1016,7 @@ const CardOrders = ({
                       style={{
                         marginLeft: '6mm',
                         marginTop: '.6mm',
-                        fontSize: '3mm',
+                        fontSize: '3.5mm',
                         fontWeight: 700,
                         textAlign: 'left',
                       }}
@@ -1015,36 +1033,88 @@ const CardOrders = ({
 
           <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
-          <TotalPrint>
+          <TotalPrint
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '2mm 0',
+            }}
+          >
             <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
             <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
           </TotalPrint>
 
           {pago === 'Mixto' ? (
             <>
-              <TotalPrint>
+              <TotalPrint
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '2mm 0',
+                }}
+              >
                 <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
                 <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
               </TotalPrint>
-              <TotalPrint>
+              <TotalPrint
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '2mm 0',
+                }}
+              >
                 <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
                 <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
               </TotalPrint>
               {totalPagado > total && (
-                <TotalPrint>
+                <TotalPrint
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'space-between',
+                    alignItems: 'center',
+                    padding: '2mm 0',
+                  }}
+                >
                   <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
                   <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
                 </TotalPrint>
               )}
             </>
           ) : (
-            <TotalPrint>
+            <TotalPrint
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '2mm 0',
+              }}
+            >
               <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
                 {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
               </a>
               <a style={{ textAlign: 'right' }}>
-                {pago === 'Transferencia' ? '' : pago === total ? 'JUSTO' : formatPrice(pago)}
+                {pago === 'Transferencia'
+                  ? ''
+                  : viewPagoParsed === total
+                    ? 'JUSTO'
+                    : formatPrice(viewPagoParsed)}
               </a>
+            </TotalPrint>
+          )}
+          {pago !== 'Mixto' && pago !== 'Transferencia' && totalPagado > Number(total || 0) && (
+            <TotalPrint
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                padding: '2mm 0',
+              }}
+            >
+              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
+              <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - Number(total || 0))}</a>
             </TotalPrint>
           )}
           <div style={{ borderTop: '1px dashed #000', margin: '24px 0' }} />
@@ -1055,6 +1125,7 @@ const CardOrders = ({
   Ticket58.displayName = 'Ticket58';
 
   const contentRef = useRef(null);
+  const [confirmPrintOpen, setConfirmPrintOpen] = useState(false);
 
   const pageStyle = `
 @page {
@@ -1094,9 +1165,9 @@ const CardOrders = ({
             img.complete
               ? Promise.resolve()
               : new Promise((res) => {
-                img.onload = res;
-                img.onerror = res;
-              })
+                  img.onload = res;
+                  img.onerror = res;
+                })
           )
         );
       }
@@ -1112,22 +1183,16 @@ const CardOrders = ({
   });
 
   // En Linux lo anulamos completamente
-  const reactToPrintFn = isLinux ? () => { } : _reactToPrint;
+  const reactToPrintFn = isLinux ? () => {} : _reactToPrint;
 
-  const handlePrint = async () => {
-    if (isPrinting) return;
-
-    const el = contentRef.current;
-    if (!el) return;
-
+  const doPrint = async () => {
     setIsPrinting(true);
-
     try {
-      // juntamos TODOS los estilos runtime (styled-components)
+      const el = contentRef.current;
+      if (!el) return;
       const styles = Array.from(document.querySelectorAll('style'))
         .map((s) => s.outerHTML)
         .join('\n');
-
       const html = `
 <!DOCTYPE html>
 <html>
@@ -1157,14 +1222,29 @@ const CardOrders = ({
       if (window.electron?.ipcRenderer) {
         // ⏳ espera REAL hasta que termina de imprimir
         await window.electron.ipcRenderer.invoke('print-ticket', html);
+        localStorage.setItem(`order-printed-${id}`, 'true');
       } else {
         await reactToPrintFn?.();
+        localStorage.setItem(`order-printed-${id}`, 'true');
       }
     } catch (err) {
       console.error('Error al imprimir:', err);
     } finally {
       setIsPrinting(false);
     }
+  };
+
+  const handlePrint = async () => {
+    if (isPrinting) return;
+    const el = contentRef.current;
+    if (!el) return;
+    const printedKey = `order-printed-${id}`;
+    const alreadyPrinted = localStorage.getItem(printedKey) === 'true';
+    if (alreadyPrinted) {
+      setConfirmPrintOpen(true);
+      return;
+    }
+    await doPrint();
   };
 
   const groupedItems = useMemo(() => {
@@ -1292,6 +1372,61 @@ const CardOrders = ({
             <FaXmark size={16} />
           </ButtonTitle>
         </ContentButtonsTitle>
+        <Dialog
+          open={confirmPrintOpen}
+          onClose={() => setConfirmPrintOpen(false)}
+          PaperProps={{
+            sx: {
+              fontFamily: 'Inter, sans-serif',
+              borderRadius: '16px',
+              boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
+              minWidth: 360,
+            },
+          }}
+        >
+          <DialogTitle
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1,
+              fontWeight: 800,
+              fontSize: '1.1rem',
+            }}
+          >
+            <PrintIcon sx={{ fontSize: 22 }} />
+            Reimprimir pedido #{numeracion}
+          </DialogTitle>
+          <DialogContent
+            sx={{
+              fontSize: '0.95rem',
+              color: '#333',
+              fontWeight: 600,
+              paddingTop: 1,
+            }}
+          >
+            Este pedido ya fue impreso. ¿Querés volver a hacerlo?
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
+            <Button
+              onClick={() => setConfirmPrintOpen(false)}
+              variant="outlined"
+              sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 600 }}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={async () => {
+                setConfirmPrintOpen(false);
+                await doPrint();
+              }}
+              variant="contained"
+              sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 600 }}
+              autoFocus
+            >
+              Imprimir otra vez
+            </Button>
+          </DialogActions>
+        </Dialog>
       </TitleCard>
       <DirCard>
         {direccion === 'Retiro' ? <BiHomeAlt2 size={18} /> : <MapPin size={18} />}
@@ -2095,7 +2230,14 @@ export default function Orders() {
                 }}
               >
                 <div className="orders-spinner" />
-                <div style={{ fontWeight: 900, fontSize: '1.4rem', color: '#111', textAlign: 'center' }}>
+                <div
+                  style={{
+                    fontWeight: 900,
+                    fontSize: '1.4rem',
+                    color: '#111',
+                    textAlign: 'center',
+                  }}
+                >
                   Cargando pedidos…
                 </div>
               </div>
