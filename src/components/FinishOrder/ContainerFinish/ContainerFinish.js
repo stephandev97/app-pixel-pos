@@ -44,11 +44,18 @@ import {
   Value,
 } from '../ContainerFinish/ContainerFinishStyles';
 
+function parseCleanInt(v) {
+  if (v === null || v === undefined) return 0;
+  const str = String(v).trim();
+  const withoutComma = str.includes(',') ? str.split(',')[0] : str;
+  const digitsOnly = withoutComma.replace(/[^\d]/g, '');
+  return digitsOnly ? Math.floor(Number(digitsOnly)) : 0;
+}
+
 function getMixtoFromForm(getValues) {
-  const parseNum = (v) => Math.floor(Number(String(v ?? '').split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
-  const ef = parseNum(getValues('pagoEfectivo'));
-  const mp = parseNum(getValues('pagoMp'));
-  const deb = parseNum(getValues('pagoDebito'));
+  const ef = parseCleanInt(getValues('pagoEfectivo'));
+  const mp = parseCleanInt(getValues('pagoMp'));
+  const deb = parseCleanInt(getValues('pagoDebito'));
 
   const parts = [];
   if (ef > 0) parts.push(`EF $${ef}`);
@@ -152,7 +159,6 @@ const ContainerFinish = ({ cartItems, price }) => {
   const CUTOFF_HOUR = 3; // 3 AM
 
   const modePagoWatch = watch('modePago');
-  const parseCleanInt = (v) => Math.floor(Number(String(v ?? '').split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
   const efWatch = parseCleanInt(watch('pagoEfectivo'));
   const mpWatch = parseCleanInt(watch('pagoMp'));
   const debWatch = parseCleanInt(watch('pagoDebito'));
@@ -279,7 +285,7 @@ const ContainerFinish = ({ cartItems, price }) => {
 
     // EFECTIVO: debe cubrir total + envío
     if (modePago === 'efectivo') {
-      const val = Number(getValues('pago') || 0);
+      const val = parseCleanInt(getValues('pago'));
       if (!(val >= tot)) {
         setError('pago', { type: 'manual', message: 'El efectivo debe ser ≥ Total + Envío' });
         try {
@@ -371,7 +377,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       paidAmountForDaily = { debito: orderToSave.total };
     } else if (isEfectivo) {
       // EFECTIVO simple
-      const pagoNum = Math.floor(Number(String(pagoState || 0).split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
+      const pagoNum = parseCleanInt(pagoState || getValues('pago'));
       orderToSave = {
         ...orderToSave,
         pago: pagoNum,
@@ -513,7 +519,7 @@ const ContainerFinish = ({ cartItems, price }) => {
   // ResizeObserver removed as TotalFinish is now relative
 
   return (
-    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)}>
+    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)} noValidate>
       <ContentTabs>
         <TabDireccion
           isRetiro={isRetiro}

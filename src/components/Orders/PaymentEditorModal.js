@@ -233,7 +233,7 @@ export default function PaymentEditorModal({ open, onClose, onSave, initial, ord
               value={cash}
               onKeyDown={handleKeyDownNoDecimals}
               onChange={(e) => {
-                const val = e.target.value.split(/[.,]/)[0].replace(/[^\d]/g, '');
+                const val = e.target.value.replace(/[^\d]/g, '');
                 setCash(Math.max(1, Math.floor(Number(val)) || 0));
               }}
               style={inputInner}
@@ -276,7 +276,7 @@ export default function PaymentEditorModal({ open, onClose, onSave, initial, ord
                 value={cash}
                 onKeyDown={handleKeyDownNoDecimals}
                 onChange={(e) => {
-                  const val = e.target.value.split(/[.,]/)[0].replace(/[^\d]/g, '');
+                  const val = e.target.value.replace(/[^\d]/g, '');
                   setCash(Math.max(1, Math.floor(Number(val)) || 0));
                 }}
                 style={inputInner}
@@ -303,7 +303,7 @@ export default function PaymentEditorModal({ open, onClose, onSave, initial, ord
                 value={mp}
                 onKeyDown={handleKeyDownNoDecimals}
                 onChange={(e) => {
-                  const val = e.target.value.split(/[.,]/)[0].replace(/[^\d]/g, '');
+                  const val = e.target.value.replace(/[^\d]/g, '');
                   setMp(Math.max(1, Math.floor(Number(val)) || 0));
                 }}
                 style={inputInner}

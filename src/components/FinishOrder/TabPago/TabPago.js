@@ -38,9 +38,9 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
   const stripDollar = (val) => {
     if (val === null || val === undefined) return '';
     const str = String(val).trim();
-    // Prohibir decimales: tomar únicamente la parte entera antes de cualquier punto o coma
-    const withoutDecimals = str.split(/[.,]/)[0];
-    const digitsOnly = withoutDecimals.replace(/[^\d]/g, '');
+    // Prohibir decimales: si contiene coma decimal (formato latino), descartar centavos
+    const withoutComma = str.includes(',') ? str.split(',')[0] : str;
+    const digitsOnly = withoutComma.replace(/[^\d]/g, '');
     return digitsOnly ? String(Math.floor(Number(digitsOnly))) : '';
   };
 
@@ -299,7 +299,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
               }}
               placeholder="Ingresa el monto recibido"
               inputMode="numeric"
-              pattern="[0-9]*"
               style={{ paddingLeft: '56px' }}
             />
             <ButtonPaste type="button" onClick={clickPasteTotal} title="Igualar al total">
@@ -537,7 +536,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="Efectivo"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '56px' }}
                   />
                 </InputGroup>
@@ -570,7 +568,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="MercadoPago"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '60px' }}
                   />
                   <ButtonPaste
@@ -613,7 +610,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="Efectivo"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '56px' }}
                   />
                 </InputGroup>
@@ -636,7 +632,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="Débito"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '56px' }}
                   />
                   <ButtonPaste
@@ -679,7 +674,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="Débito"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '56px' }}
                   />
                 </InputGroup>
@@ -712,7 +706,6 @@ const TabPago = ({ watch, price, register, setValue, errors, isRetiro }) => {
                     }}
                     placeholder="MercadoPago"
                     inputMode="numeric"
-                    pattern="[0-9]*"
                     style={{ paddingLeft: '60px' }}
                   />
                   <ButtonPaste
