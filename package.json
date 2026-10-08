@@ -1,6 +1,6 @@
 {
-  "name": "pixel-pos",
-  "version": "2.5.38",
+  "name": "pixel-pos2",
+  "version": "1.0.12",
   "author": {
     "name": "Pixel Helados",
     "email": "emi@pixelhelados.com"
@@ -8,6 +8,7 @@
   "build": {
     "appId": "com.pixelhelados.pos",
     "productName": "pixel-pos2",
+    "executableName": "pixel-pos2",
     "asar": true,
     "npmRebuild": true,
     "files": [
@@ -36,11 +37,17 @@
       "artifactName": "pixel-pos2-Setup-${version}.${ext}"
     },
     "nsis": {
-      "oneClick": true,
-      "allowElevation": true,
+      "oneClick": false,
+      "allowElevation": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": false,
-      "differentialPackage": true
+      "deleteAppDataOnUninstall": false,
+      "differentialPackage": false,
+      "createDesktopShortcut": "always",
+      "createStartMenuShortcut": true,
+      "shortcutName": "pixel-pos2",
+      "include": "assets/installer.nsh",
+      "guid": "a4b9542d-80d2-5cea-8e2b-51d87fb05450"
     },
     "linux": {
       "target": [
@@ -65,12 +72,14 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier . --write",
-    "publish": "npm run build && electron-builder -w --publish always",
+    "publish": "npm run build && electron-builder -w --publish always && npm run deploy:android",
     "electron:build:win": "npm run build && electron-builder -w",
     "electron:build:linux": "npm run build && electron-builder -l",
     "electron:build:all": "npm run build && electron-builder -wl",
     "publish:win": "npm run build && electron-builder -w --publish always",
-    "publish:linux": "npm run build && electron-builder -l --publish always"
+    "publish:linux": "npm run build && electron-builder -l --publish always",
+    "deploy:android": "node scripts/deploy-android.js",
+    "icons:generate": "node scripts/generate-icons.js"
   },
   "lint-staged": {
     "*.{js,jsx,cjs,mjs,json,md,css}": [
@@ -99,6 +108,10 @@
     ]
   },
   "dependencies": {
+    "@ascentio-it/capacitor-bluetooth-serial": "^8.0.0",
+    "@capacitor/android": "^8.1.0",
+    "@capacitor/cli": "^8.1.0",
+    "@capacitor/core": "^8.1.0",
     "@electron/remote": "^2.1.2",
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.0",
@@ -141,6 +154,7 @@
     "@eslint/js": "^9.35.0",
     "concurrently": "^8.2.2",
     "cross-env": "^7.0.3",
+    "dotenv": "^17.3.1",
     "electron": "^30.0.2",
     "electron-builder": "^24.13.3",
     "electron-rebuild": "^3.2.9",
@@ -151,6 +165,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "eslint-plugin-unused-imports": "^4.3.0",
+    "form-data": "^4.0.5",
     "globals": "^16.4.0",
     "prettier": "3.6.2",
     "wait-on": "^7.2.0"

@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactToPrint } from 'react-to-print';
 
 import { Print, TotalPrint } from '../../pages/Orders/OrdersStyles'; // ajustá este path según tu proyecto :contentReference[oaicite:2]{index=2}
-import logo from '../../styles/img/logoprint.png'; // igual que en Orders.js :contentReference[oaicite:1]{index=1}
+import { logoBase64 as logo } from '../../utils/logoBase64';
 import { formatPrice } from '../../utils/formatPrice';
 
 /**
@@ -52,6 +52,7 @@ export default function PrintTicket58({
   // Ticket "pago" como en Orders.js (Mixto / Transferencia / Débito o monto) :contentReference[oaicite:4]{index=4}
   let ef = Number(order?.pagoEfectivo || 0);
   let mp = Number(order?.pagoMp || 0);
+  let db = Number(order?.pagoDebito || 0);
   const pagoRaw = order?.pago;
 
   const ticketPago =
@@ -68,31 +69,30 @@ export default function PrintTicket58({
     (pagoRaw === 'Mixto' || ticketPago === 'Mixto') &&
     ef === 0 &&
     mp === 0 &&
+    db === 0 &&
     typeof order?.pagoDetalle === 'string'
   ) {
-    const m = order.pagoDetalle.match(/EF\s*\$?\s*([\d.,]+)\s*\+\s*MP\s*\$?\s*([\d.,]+)/i);
-    if (m) {
-      const toNum = (s) => Number(String(s).replace(/[^\d.-]/g, '')) || 0;
-      ef = toNum(m[1]);
-      mp = toNum(m[2]);
-    }
+    const toNum = (s) => Number(String(s).replace(/[^\d.-]/g, '')) || 0;
+    const mEf = order.pagoDetalle.match(/EF\s*\$?\s*([\d.,]+)/i);
+    const mMp = order.pagoDetalle.match(/MP\s*\$?\s*([\d.,]+)/i);
+    const mDb = order.pagoDetalle.match(/(?:DÉB|DEB)\s*\$?\s*([\d.,]+)/i);
+    if (mEf) ef = toNum(mEf[1]);
+    if (mMp) mp = toNum(mMp[1]);
+    if (mDb) db = toNum(mDb[1]);
   }
 
   const toNum = (s) => {
     if (typeof s === 'number') return Number.isFinite(s) ? s : 0;
     const str = String(s || '').trim();
     if (!str) return 0;
-    const normalized = str
-      .replace(/\./g, '')
-      .replace(',', '.')
-      .replace(/[^\d.-]/g, '');
+    const normalized = str.replace(/\./g, '').replace(',', '.').replace(/[^\d.-]/g, '');
     const n = Number(normalized);
     return Number.isFinite(n) ? n : 0;
   };
   const pagoParsed = toNum(pagoRaw);
   const totalPagado =
     methodNorm === 'mixto'
-      ? ef + mp
+      ? ef + mp + db
       : methodNorm === 'transferencia'
         ? total
         : methodNorm === 'debito'
@@ -130,9 +130,9 @@ export default function PrintTicket58({
             img.complete
               ? Promise.resolve()
               : new Promise((res) => {
-                  img.onload = res;
-                  img.onerror = res;
-                })
+                img.onload = res;
+                img.onerror = res;
+              })
           )
         );
       }
@@ -167,7 +167,7 @@ export default function PrintTicket58({
   }, [autoPrint, printedOnce, order, reactToPrintFn, onError]);
 
   const Ticket58 = React.forwardRef(function Ticket58Inner(
-    { direccion, itemsNorm, total, pago, ef, mp, totalPagado, logo },
+    { direccion, itemsNorm, total, pago, ef, mp, db, totalPagado, logo },
     ref
   ) {
     return (
@@ -249,6 +249,27 @@ export default function PrintTicket58({
                     ))}
                   </div>
                 )}
+
+                {/* Detalles (Cafetería, notas, etc.) */}
+                {(it?.size || (it?.extras && it.extras.length > 0) || it?.vaso || it?.note || it?.listdetalle) && (
+                  <div
+                    style={{
+                      marginLeft: '6mm',
+                      marginTop: '.6mm',
+                      fontSize: '3.1mm',
+                      color: '#333',
+                      fontWeight: 700,
+                      textAlign: 'left',
+                    }}
+                  >
+                    {it.size && <div>• Medida: {it.size}</div>}
+                    {it.extras && it.extras.map((ex, i) => (
+                      <div key={i}>• Adicional: {ex}</div>
+                    ))}
+                    {it.vaso && <div>• Vaso: "{it.vaso}"</div>}
+                    {(it?.note || it?.listdetalle) && <div>• Nota: "{it.note || it.listdetalle}"</div>}
+                  </div>
+                )}
               </div>
             );
           })}
@@ -256,65 +277,40 @@ export default function PrintTicket58({
 
         <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
 
-        <TotalPrint
-          style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            padding: '2mm 0',
-          }}
-        >
+        <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
           <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
           <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
         </TotalPrint>
 
         {pago === 'Mixto' ? (
           <>
-            <TotalPrint
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '2mm 0',
-              }}
-            >
-              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
-              <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
-            </TotalPrint>
-            <TotalPrint
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '2mm 0',
-              }}
-            >
-              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
-              <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
-            </TotalPrint>
+            {ef > 0 && (
+              <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
+                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
+                <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
+              </TotalPrint>
+            )}
+            {mp > 0 && (
+              <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
+                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
+                <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
+              </TotalPrint>
+            )}
+            {db > 0 && (
+              <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
+                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Débito</a>
+                <a style={{ textAlign: 'right' }}>{formatPrice(db)}</a>
+              </TotalPrint>
+            )}
             {totalPagado > total && (
-              <TotalPrint
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '2mm 0',
-                }}
-              >
+              <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
                 <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
                 <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
               </TotalPrint>
             )}
           </>
         ) : (
-          <TotalPrint
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '2mm 0',
-            }}
-          >
+          <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
             <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
               {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
             </a>
@@ -328,14 +324,7 @@ export default function PrintTicket58({
           </TotalPrint>
         )}
         {pago !== 'Mixto' && pago !== 'Transferencia' && totalPagado > total && (
-          <TotalPrint
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '2mm 0',
-            }}
-          >
+          <TotalPrint style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2mm 0' }}>
             <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
             <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
           </TotalPrint>
@@ -366,6 +355,7 @@ export default function PrintTicket58({
           pago={ticketPago}
           ef={ef}
           mp={mp}
+          db={db}
           totalPagado={totalPagado}
           logo={logo}
         />
@@ -382,6 +372,7 @@ export default function PrintTicket58({
             pago={ticketPago}
             ef={ef}
             mp={mp}
+            db={db}
             totalPagado={totalPagado}
             logo={logo}
           />

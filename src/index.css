@@ -4,6 +4,24 @@ body,
   height: 100%;
   overflow: hidden;
   -webkit-text-size-adjust: 100%;
+  touch-action: pan-x pan-y;
+  /* Disables pinch zoom */
+}
+
+html {
+  font-size: clamp(16px, 1.5vw, 18px);
+}
+
+@media (max-width: 1024px) {
+  html {
+    font-size: clamp(15px, 1.45vw, 17px);
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: clamp(15px, 2.5vw, 16px);
+  }
 }
 
 * {
@@ -27,33 +45,20 @@ body {
   margin: 0;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
 
-  /* ancho de la barra */
-  ::-webkit-scrollbar {
-    width: 8px;
-    height: 8px;
-    /* si querés scroll horizontal también */
-  }
-
-  /* track (fondo) */
-  ::-webkit-scrollbar-track {
-    background: #f3f4f6;
-    /* gris suave */
-    border-radius: 4px;
-  }
-
-  /* thumb (la parte que se arrastra) */
-  ::-webkit-scrollbar-thumb {
-    background: #9ca3af;
-    /* gris medio */
-    border-radius: 4px;
-  }
-
-  /* hover del thumb */
-  ::-webkit-scrollbar-thumb:hover {
-    background: #6b7280;
-    /* gris más oscuro */
-  }
+/* Ocultar barra de deslizamiento en toda la aplicación */
+* {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+::-webkit-scrollbar,
+*::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
 }
 
 @media print {

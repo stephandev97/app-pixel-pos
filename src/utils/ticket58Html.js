@@ -70,8 +70,8 @@ export function ticket58Html(ticketData, opts = {}) {
 
   const pagosHtml = isMixto
     ? `
-      <div class="totrow"><div class="l">Efectivo</div><div class="r">${esc(formatPrice(ef))}</div></div>
-      <div class="totrow"><div class="l">MercadoPago</div><div class="r">${esc(formatPrice(mp))}</div></div>
+      ${ef > 0 ? `<div class="totrow"><div class="l">Efectivo</div><div class="r">${esc(formatPrice(ef))}</div></div>` : ''}
+      ${mp > 0 ? `<div class="totrow"><div class="l">MercadoPago</div><div class="r">${esc(formatPrice(mp))}</div></div>` : ''}
       ${db > 0 ? `<div class="totrow"><div class="l">Débito</div><div class="r">${esc(formatPrice(db))}</div></div>` : ''}
       ${cambio > 0 ? `<div class="totrow"><div class="l">Cambio</div><div class="r">${esc(formatPrice(cambio))}</div></div>` : ''}
     `

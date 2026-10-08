@@ -1,0 +1,72 @@
+/* Optimizaciones de rendimiento para animaciones en tablet Android - Versión específica */
+
+/* Solo aplicar a elementos que realmente necesitan optimización */
+.app-container, .main-content, .screen-content {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+/* Proteger elementos críticos del UI como la barra de carrito */
+.CartBar, [class*="cart"], [class*="Cart"] {
+  -webkit-transform: none !important;
+  transform: none !important;
+  -webkit-backface-visibility: visible !important;
+  backface-visibility: visible !important;
+  will-change: auto !important;
+  z-index: 99 !important; /* Asegurar que esté por encima de otros elementos */
+}
+
+/* Optimizaciones específicas para animaciones en dispositivos Android */
+@media (max-width: 1024px) and (min-width: 768px) {
+  /* Reducir duración de animaciones en tablets Android */
+  .app-container *, .main-content *, .screen-content * {
+    -webkit-animation-duration: 0.15s !important;
+    animation-duration: 0.15s !important;
+    -webkit-transition-duration: 0.15s !important;
+    transition-duration: 0.15s !important;
+  }
+  
+  /* Asegurar visibilidad de elementos críticos en tablets */
+  .CartBar, [class*="cart"], [class*="Cart"] {
+    -webkit-animation-duration: 0.2s !important;
+    animation-duration: 0.2s !important;
+    -webkit-transition-duration: 0.2s !important;
+    transition-duration: 0.2s !important;
+  }
+}
+
+/* Optimizar para dispositivos con preferencia de movimiento reducido */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    -webkit-animation-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    -webkit-animation-iteration-count: 1 !important;
+    animation-iteration-count: 1 !important;
+    -webkit-transition-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Clases de utilidad para optimización específica */
+.hardware-accelerated {
+  -webkit-transform: translate3d(0, 0, 0);
+  transform: translate3d(0, 0, 0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  -webkit-perspective: 1000px;
+  perspective: 1000px;
+}
+
+.will-change-transform {
+  will-change: transform;
+}
+
+.will-change-opacity {
+  will-change: opacity;
+}
+
+.will-change-auto {
+  will-change: auto;
+}

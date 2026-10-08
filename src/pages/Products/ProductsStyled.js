@@ -2,8 +2,21 @@ import styled from 'styled-components';
 
 export const GlobalProducts = styled.div`
   width: 100%;
-  min-height: 100%;
-  display: block;
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #f7f8fa;
+`;
+
+export const ProductsHeader = styled.div`
+  position: relative;
+  z-index: 30;
+  background: #f7f8fa;
+  flex-shrink: 0;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
 `;
 
 export const ContainerCategory = styled.div`
@@ -13,28 +26,44 @@ export const ContainerCategory = styled.div`
 export const TitleCategory = styled.div`
   width: 100%;
   margin: 0 0 12px 0;
-  font-weight: 700;
+  font-weight: 900;
   font-size: 1.2rem;
   text-align: left;
-  color: #111;
+  color: #4d0012; /* Color bordo */
 `;
 
 export const ContainerProducts = styled.div`
-  padding: 0 16px 24px 16px;
+  padding: 12px 16px 140px 16px;
   width: 100%;
-  height: 95vh;
+  flex: 1;
+  min-height: 0;
   box-sizing: border-box;
-  overflow: scroll;
+  overflow-y: auto;
   overflow-x: hidden;
-  padding-bottom: 100px;
-  scroll-padding-bottom: 100px;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  contain: paint;
+  isolation: isolate;
+
+  @media (max-width: 600px) {
+    padding: 8px 8px 140px 8px;
+  }
 `;
 
 export const GridProducts = styled.div`
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  gap: 16px;
   width: 100%;
+
+  @media (max-width: 768px) {
+    gap: 12px;
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (max-width: 600px) {
+    gap: 8px;
+  }
 `;
 
 export const TitleProducts = styled.div`
@@ -64,23 +93,15 @@ export const CardPlus = styled.div`
   }
 `;
 
-// --- Headers de categoría (look pro + sticky) ---
+// --- Headers de categoría ---
 export const CategoryWrap = styled.section`
   scroll-margin-top: 8px;
+  margin-bottom: 20px;
 `;
 
 export const CategoryHeader = styled.header`
-  position: sticky;
-  top: 0; /* pega bajo el tope del contenedor scrolleable */
-  z-index: 2;
-  padding: 8px 2px 6px;
-  background: linear-gradient(
-    180deg,
-    rgba(247, 248, 251, 0.95),
-    rgba(247, 248, 251, 0.78) 60%,
-    rgba(247, 248, 251, 0)
-  );
-  backdrop-filter: blur(3px);
+  padding: 6px 0 8px;
+  background: transparent;
 `;
 
 export const CategoryTitle = styled.h3`
@@ -89,10 +110,10 @@ export const CategoryTitle = styled.h3`
   align-items: center;
   gap: 10px;
   font-family: 'Inter', sans-serif;
-  font-weight: 700;
+  font-weight: 800;
   letter-spacing: 0.2px;
-  font-size: 1rem;
-  color: #121316;
+  font-size: 1.15rem;
+  color: #4d0012; /* Color bordo */
 `;
 
 export const CategoryIcon = styled.span`
@@ -131,4 +152,44 @@ export const CategoryUnderline = styled.div`
     rgba(17, 17, 17, 0.08) 36%,
     rgba(17, 17, 17, 0.03) 100%
   );
+`;
+
+export const TabContainer = styled.div`
+  display: flex;
+  gap: 8px;
+  padding: 0 14px 10px 14px;
+  background: transparent;
+`;
+
+export const ChromeTab = styled.button`
+  all: unset;
+  box-sizing: border-box;
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 20px;
+  font-family: 'Inter', sans-serif;
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+  color: ${(p) => (p.$active ? '#4d0012' : '#64748b')};
+  background: ${(p) => (p.$active ? '#ffffff' : '#e2e8f0')};
+  border: 1.5px solid ${(p) => (p.$active ? '#4d0012' : 'transparent')};
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: ${(p) => (p.$active ? '0 2px 8px rgba(77, 0, 18, 0.12)' : 'none')};
+  text-align: center;
+  user-select: none;
+
+  &:hover {
+    background: ${(p) => (p.$active ? '#ffffff' : '#cbd5e1')};
+    color: ${(p) => (p.$active ? '#4d0012' : '#1e293b')};
+  }
+
+  &:active {
+    transform: scale(0.98);
+  }
 `;

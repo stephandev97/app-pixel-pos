@@ -1,5 +1,5 @@
 import { CreditCard } from 'lucide-react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { BsCash } from 'react-icons/bs';
 import { FaCheck } from 'react-icons/fa6';
@@ -7,6 +7,7 @@ import { MdOutlineClear, MdOutlineCurrencyExchange } from 'react-icons/md';
 import { useDispatch, useSelector } from 'react-redux';
 import uniqid from 'uniqid';
 
+import { pb } from '../../../lib/pb';
 import mpIconWhite from '../../../assets/mercadopagowhite.png';
 import {
   changePago,
@@ -41,17 +42,27 @@ import {
   SummaryBox,
   TotalFinish,
   Value,
-} from './ContainerFinishStyles';
+} from '../ContainerFinish/ContainerFinishStyles';
 
 function getMixtoFromForm(getValues) {
-  const ef = Number(getValues('pagoEfectivo') || 0);
-  const mp = Number(getValues('pagoMp') || 0);
+  const parseNum = (v) => Math.floor(Number(String(v ?? '').split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
+  const ef = parseNum(getValues('pagoEfectivo'));
+  const mp = parseNum(getValues('pagoMp'));
+  const deb = parseNum(getValues('pagoDebito'));
+
+  const parts = [];
+  if (ef > 0) parts.push(`EF $${ef}`);
+  if (deb > 0) parts.push(`DÉB $${deb}`);
+  if (mp > 0) parts.push(`MP $${mp}`);
+
   return {
     ef,
     mp,
-    detalle: `EF $${ef} + MP $${mp}`,
+    deb,
+    detalle: parts.join(' + '),
     paidMap: {
       ...(ef > 0 ? { efectivo: ef } : {}),
+      ...(deb > 0 ? { debito: deb } : {}),
       ...(mp > 0 ? { transferencia: mp } : {}),
     },
   };
@@ -90,8 +101,11 @@ const ContainerFinish = ({ cartItems, price }) => {
   const dispatch = useDispatch();
 
   const isRetiro = useSelector((state) => state.actions.toggleAddress);
+  const deliveryInfo = useSelector((state) => state.cart?.deliveryInfo);
   const pagoState = useSelector((state) => state.actions.pago);
   const isEfectivo = useSelector((state) => state.actions.toggleEfectivo);
+  const isTestMode = useSelector((state) => state.actions.isTestMode);
+  const orders = useSelector((state) => state.orders?.orders || []);
 
   const {
     register,
@@ -101,19 +115,36 @@ const ContainerFinish = ({ cartItems, price }) => {
     watch,
     setError,
     clearErrors,
-    formState: { errors },
+    trigger,
+    formState: { errors, isValid },
   } = useForm({
+    mode: 'onChange',
     shouldUnregister: false,
     defaultValues: {
       modePago: 'efectivo',
       pago: '',
       pagoEfectivo: '',
       pagoMp: '',
-      envioTarifa: 0,
-      envioOpcion: null,
-      direccion: isRetiro ? 'Retiro' : '',
+      pagoDebito: '',
+      envioTarifa: Number(deliveryInfo?.envioTarifa || 0),
+      envioOpcion: deliveryInfo?.envioOpcion || null,
+      direccion: deliveryInfo?.direccion || (isRetiro ? 'Retiro' : ''),
     },
   });
+
+  useEffect(() => {
+    if (deliveryInfo) {
+      if (deliveryInfo.direccion) {
+        setValue('direccion', deliveryInfo.direccion, { shouldValidate: true });
+      }
+      if (deliveryInfo.envioTarifa !== undefined) {
+        setValue('envioTarifa', Number(deliveryInfo.envioTarifa || 0), { shouldValidate: true });
+      }
+      if (deliveryInfo.envioOpcion) {
+        setValue('envioOpcion', deliveryInfo.envioOpcion, { shouldValidate: true });
+      }
+    }
+  }, [deliveryInfo, setValue]);
 
   // Formateador seguro
   const fmt = (v) => formatPrice(Number(v || 0));
@@ -121,15 +152,87 @@ const ContainerFinish = ({ cartItems, price }) => {
   const CUTOFF_HOUR = 3; // 3 AM
 
   const modePagoWatch = watch('modePago');
-  const efWatch = Number(watch('pagoEfectivo') || 0);
-  const mpWatch = Number(watch('pagoMp') || 0);
-  const shippingWatch = Number(watch('envioTarifa') || 0);
-  const totalNum = Number(price || 0);
+  const parseCleanInt = (v) => Math.floor(Number(String(v ?? '').split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
+  const efWatch = parseCleanInt(watch('pagoEfectivo'));
+  const mpWatch = parseCleanInt(watch('pagoMp'));
+  const debWatch = parseCleanInt(watch('pagoDebito'));
+  const shippingWatch = Math.round(Number(watch('envioTarifa') || 0));
+  const totalNum = Math.round(Number(price || 0));
   const finalTotal = totalNum + shippingWatch;
+
+  const prevFinalTotalRef = useRef(finalTotal);
+
+  // Auto-ajuste de pago cuando cambia la tarifa de envío o el total
+  useEffect(() => {
+    const prevTot = prevFinalTotalRef.current;
+    if (prevTot !== finalTotal) {
+      // 1. Efectivo: si el pago cargado coincidía con el total anterior o quedó menor al nuevo total, actualizar al nuevo total
+      const rawPago = getValues('pago');
+      const numPago = parseCleanInt(rawPago);
+
+      if (numPago > 0 && (numPago === prevTot || numPago < finalTotal)) {
+        setValue('pago', finalTotal, { shouldValidate: true });
+        dispatch(changePago(finalTotal));
+      }
+
+      // 2. Mixto: si ya había montos y cubrían el total anterior, ajustar automáticamente el método secundario
+      const modePago = getValues('modePago');
+      if (modePago === 'mixto') {
+        const ef = parseCleanInt(getValues('pagoEfectivo'));
+        const mp = parseCleanInt(getValues('pagoMp'));
+        const deb = parseCleanInt(getValues('pagoDebito'));
+
+        if (ef + mp + deb === prevTot) {
+          if (ef > 0 && deb > 0) {
+            setValue('pagoDebito', Math.max(0, finalTotal - ef), { shouldValidate: true });
+          } else if (deb > 0 && mp > 0) {
+            setValue('pagoMp', Math.max(0, finalTotal - deb), { shouldValidate: true });
+          } else if (ef > 0 && mp > 0) {
+            setValue('pagoMp', Math.max(0, finalTotal - ef), { shouldValidate: true });
+          } else if (mp === prevTot) {
+            setValue('pagoMp', finalTotal, { shouldValidate: true });
+          } else if (deb === prevTot) {
+            setValue('pagoDebito', finalTotal, { shouldValidate: true });
+          } else if (ef === prevTot) {
+            setValue('pagoEfectivo', finalTotal, { shouldValidate: true });
+          }
+        }
+      }
+
+      prevFinalTotalRef.current = finalTotal;
+    }
+  }, [finalTotal, getValues, setValue, dispatch]);
+
+  // Validación extra Manual para Mixto (ya que useForm register a veces no tiene acceso a todo el scope fácil)
+  const isMixtoValid = useMemo(() => {
+    if (modePagoWatch !== 'mixto') return true;
+    const activeCount = (efWatch > 0 ? 1 : 0) + (mpWatch > 0 ? 1 : 0) + (debWatch > 0 ? 1 : 0);
+    if (activeCount < 2) return false;
+    // Tolerancia de $1 por redondeos
+    const diff = efWatch + mpWatch + debWatch - finalTotal;
+    return diff >= -1;
+  }, [modePagoWatch, efWatch, mpWatch, debWatch, finalTotal]);
+
+  const isDisabled = !isValid || !isMixtoValid;
+
+  const [justEnabled, setJustEnabled] = useState(false);
+
+  useEffect(() => {
+    if (justEnabled) {
+      const timer = setTimeout(() => setJustEnabled(false), 1500);
+      return () => clearTimeout(timer);
+    }
+  }, [justEnabled]);
+
+  useEffect(() => {
+    if (!isDisabled) {
+      setJustEnabled(true);
+    }
+  }, [isDisabled]);
 
   const totalPagado =
     modePagoWatch === 'mixto'
-      ? efWatch + mpWatch
+      ? efWatch + mpWatch + debWatch
       : isEfectivo
         ? Number(pagoState || 0)
         : finalTotal;
@@ -156,30 +259,18 @@ const ContainerFinish = ({ cartItems, price }) => {
     const parseNum = (v) => Number(String(v ?? '').replace(/[^\d]/g, '')) || 0;
     const ef = parseNum(getValues('pagoEfectivo'));
     const mp = parseNum(getValues('pagoMp'));
+    const deb = parseNum(getValues('pagoDebito'));
     const tot = Number(price || 0) + Number(getValues('envioTarifa') || 0);
-    let ok = true;
 
-    if (ef <= 0) {
-      setError('pagoEfectivo', { type: 'manual', message: 'Debe ser mayor a 0' });
-      ok = false;
-    } else {
-      clearErrors('pagoEfectivo');
+    const activeCount = (ef > 0 ? 1 : 0) + (mp > 0 ? 1 : 0) + (deb > 0 ? 1 : 0);
+    if (activeCount < 2) {
+      return false;
+    }
+    if (ef + mp + deb < tot) {
+      return false;
     }
 
-    if (mp <= 0) {
-      setError('pagoMp', { type: 'manual', message: 'Debe ser mayor a 0' });
-      ok = false;
-    } else {
-      clearErrors('pagoMp');
-    }
-
-    if (ef + mp < tot) {
-      setError('pagoEfectivo', { type: 'manual', message: 'La suma debe cubrir el total' });
-      setError('pagoMp', { type: 'manual', message: 'La suma debe cubrir el total' });
-      ok = false;
-    }
-
-    return ok;
+    return true;
   }
 
   const onSubmit = async () => {
@@ -222,12 +313,13 @@ const ContainerFinish = ({ cartItems, price }) => {
       direccion: dir,
       total: finalTotal,
       envio: shippingWatch,
-      ...(getValues('envioOpcion') ? { envioOpcion: getValues('envioOpcion') } : {}),
+      envioOpcion: getValues('envioOpcion'),
       pago: 0,
       cambio: 0,
       check: mode === 'retiro',
       hora: time,
     };
+    console.log('DEBUG ContainerFinish - baseOrder:', baseOrder);
 
     const modePagoSel = getValues('modePago');
     let orderToSave = { ...baseOrder };
@@ -237,26 +329,28 @@ const ContainerFinish = ({ cartItems, price }) => {
     let revenueAmount = orderToSave.total;
 
     if (modePagoSel === 'mixto') {
-      const { ef, mp, detalle, paidMap } = getMixtoFromForm(getValues);
+      const { ef, mp, deb, detalle, paidMap } = getMixtoFromForm(getValues);
       const totMixto = orderToSave.total; // incluye envío
+      const totalIngresado = ef + mp + deb;
+      const activeCount = (ef > 0 ? 1 : 0) + (mp > 0 ? 1 : 0) + (deb > 0 ? 1 : 0);
 
-      if (ef <= 0 || mp <= 0) {
-        alert('En pago Mixto, EF y MP deben ser mayores a 0.');
+      if (activeCount < 2) {
+        alert('En pago Mixto, debes ingresar al menos 2 métodos de pago mayores a 0.');
         return;
       }
-      if (ef + mp < totMixto) {
+      if (totalIngresado < totMixto) {
         alert('En pago Mixto, la suma no puede ser menor al total.');
         return;
       }
 
       orderToSave = {
         ...orderToSave,
-        pago: ef + mp,
+        pago: totalIngresado,
         pagoEfectivo: ef,
         pagoMp: mp,
+        pagoDebito: deb,
         pagoDetalle: detalle,
-        pagoDebito: 0,
-        cambio: Math.max(0, ef + mp - orderToSave.total),
+        cambio: Math.max(0, totalIngresado - orderToSave.total),
       };
 
       methodForOrder = 'mixto';
@@ -277,7 +371,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       paidAmountForDaily = { debito: orderToSave.total };
     } else if (isEfectivo) {
       // EFECTIVO simple
-      const pagoNum = Number(pagoState || 0);
+      const pagoNum = Math.floor(Number(String(pagoState || 0).split(/[.,]/)[0].replace(/[^\d]/g, '')) || 0);
       orderToSave = {
         ...orderToSave,
         pago: pagoNum,
@@ -288,7 +382,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       };
 
       methodForOrder = 'efectivo';
-      paidAmountForDaily = { efectivo: Number(pagoState || 0) };
+      paidAmountForDaily = { efectivo: pagoNum };
     } else {
       // TRANSFERENCIA
       orderToSave = {
@@ -318,8 +412,66 @@ const ContainerFinish = ({ cartItems, price }) => {
         })
       ).unwrap();
 
-      await Promise.allSettled([
-        upsertDailyStatsJsonSmart({
+      // Actualizar stats en background (sin await para no bloquear UI) solo si NO es modo prueba
+      if (!isTestMode) {
+        Promise.allSettled([
+          upsertDailyStatsJsonSmart({
+            day: businessDate,
+            addRevenue: revenueAmount,
+            addOrders: 1,
+            addItems: itemsCountFrom(cartItems),
+            paidAmount: paidAmountForDaily,
+            method: Object.keys(paidAmountForDaily).length ? null : methodForOrder,
+            mode,
+            address,
+            sign: +1,
+            pruneZero: true,
+            deleteIfEmpty: false,
+          }),
+          mode === 'delivery' && address
+            ? upsertCustomerFromOrder({
+                address,
+                phone: getValues('telefono') ?? null,
+                name: getValues('nombre') ?? null,
+                total: revenueAmount,
+                businessDate,
+                sign: +1,
+              })
+            : Promise.resolve(),
+        ]).catch((err) => {
+          console.warn('Stats update failed (non-blocking):', err);
+        });
+      }
+    } catch (err) {
+      if (!isTestMode) {
+        // Si falla y NO es modo prueba, reintentamos en background sin bloquear UI
+        const orderData = {
+          ...orderToSave,
+          method: methodForOrder,
+          paidAmount: paidAmountForDaily,
+          revenueAmount,
+          businessDate,
+          mode,
+          address,
+          clientCreatedAt: Date.now(),
+        };
+
+        // Retry upload order (10 intentos, cada 5s)
+        let attempts = 0;
+        const maxAttempts = 10;
+        const uploadOrderRetry = () => {
+          if (attempts >= maxAttempts) return;
+          attempts++;
+          pb.collection('orders')
+            .create(orderData)
+            .then(() => console.log('Order synced to PB:', orderData.id))
+            .catch(() => setTimeout(uploadOrderRetry, 5000));
+        };
+        uploadOrderRetry();
+
+        // Retry stats
+        attempts = 0;
+        const statsData = {
           day: businessDate,
           addRevenue: revenueAmount,
           addOrders: 1,
@@ -331,47 +483,16 @@ const ContainerFinish = ({ cartItems, price }) => {
           sign: +1,
           pruneZero: true,
           deleteIfEmpty: false,
-        }),
-        mode === 'delivery' && address
-          ? upsertCustomerFromOrder({
-              address,
-              phone: getValues('telefono') ?? null,
-              name: getValues('nombre') ?? null,
-              total: revenueAmount,
-              businessDate,
-              sign: +1,
-            })
-          : Promise.resolve(),
-      ]);
-    } catch (err) {
-      const pb = err?.data || err?.response?.data || err?.originalError?.data || err;
-
-      const msg = pb?.message || err?.message || 'Unknown error';
-      const fields = pb?.data || pb?.error || pb?.errors || null;
-
-      console.group('PB create error');
-      console.log('message:', msg);
-      console.log('fields:', fields);
-      console.log('raw error:', err);
-      try {
-        console.log(
-          'raw error (stringified):',
-          JSON.stringify(err, Object.getOwnPropertyNames(err), 2)
-        );
-      } catch (e) {
-        console.error('error stringify failed', e);
+        };
+        const statsRetry = () => {
+          if (attempts >= maxAttempts) return;
+          attempts++;
+          upsertDailyStatsJsonSmart(statsData)
+            .then(() => console.log('Stats synced to PB'))
+            .catch(() => setTimeout(statsRetry, 5000));
+        };
+        statsRetry();
       }
-      console.log('payload sent:', {
-        ...orderToSave,
-        method: methodForOrder,
-        paidAmount: paidAmountForDaily,
-        revenueAmount,
-        businessDate,
-        mode,
-        address,
-      });
-      console.groupEnd();
-      return;
     } finally {
       dispatch(clearCart());
       dispatch(changePago(''));
@@ -383,27 +504,16 @@ const ContainerFinish = ({ cartItems, price }) => {
       setValue('modePago', 'efectivo');
       setValue('pagoEfectivo', '');
       setValue('pagoMp', '');
+      setValue('pagoDebito', '');
       setValue('envioTarifa', 0);
       setValue('envioOpcion', null);
     }
   };
 
-  useEffect(() => {
-    const formEl = formRef.current;
-    const totalEl = totalRef.current;
-    if (!formEl || !totalEl) return;
-
-    const ro = new ResizeObserver(() => {
-      const h = totalEl.offsetHeight || 0;
-      formEl.style.setProperty('--summary-h', `${Math.ceil(h)}px`);
-    });
-    ro.observe(totalEl);
-    formEl.style.setProperty('--summary-h', `${Math.ceil(totalEl.offsetHeight || 0)}px`);
-    return () => ro.disconnect();
-  }, []);
+  // ResizeObserver removed as TotalFinish is now relative
 
   return (
-    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)} style={{ overflow: 'hidden' }}>
+    <ContentForm ref={formRef} onSubmit={handleSubmit(onSubmit)}>
       <ContentTabs>
         <TabDireccion
           isRetiro={isRetiro}
@@ -421,6 +531,8 @@ const ContainerFinish = ({ cartItems, price }) => {
           errors={errors}
           isRetiro={isRetiro}
           required
+          trigger={trigger}
+          clearErrors={clearErrors}
         />
       </ContentTabs>
 
@@ -459,6 +571,12 @@ const ContainerFinish = ({ cartItems, price }) => {
                         {fmt(watch('pagoEfectivo'))}
                       </Pill>
                     )}
+                    {Number(watch('pagoDebito') || 0) > 0 && (
+                      <Pill style={{ background: '#0f766e', color: 'white', fontSize: 16 }}>
+                        <CreditCard size={17} style={{ display: 'block', marginRight: '0.4em' }} />{' '}
+                        {fmt(watch('pagoDebito'))}
+                      </Pill>
+                    )}
                     {Number(watch('pagoMp') || 0) > 0 && (
                       <Pill kind="mp">
                         <img
@@ -472,6 +590,7 @@ const ContainerFinish = ({ cartItems, price }) => {
                       </Pill>
                     )}
                     {Number(watch('pagoEfectivo') || 0) === 0 &&
+                      Number(watch('pagoDebito') || 0) === 0 &&
                       Number(watch('pagoMp') || 0) === 0 && <Pill>Sin definir</Pill>}
                   </RightChips>
                 </Row>
@@ -556,8 +675,19 @@ const ContainerFinish = ({ cartItems, price }) => {
           )}
         </SummaryBox>
 
-        <ButtonNext type="submit" style={{ width: '90%', height: '55px' }}>
-          Crear Pedido
+        <ButtonNext
+          type="submit"
+          disabled={isDisabled}
+          $justEnabled={justEnabled}
+          style={{
+            width: '100%',
+            maxWidth: '580px',
+            height: '56px',
+            fontSize: '1.3rem',
+            marginBottom: '12px',
+          }}
+        >
+          <span>Crear Pedido</span>
         </ButtonNext>
       </TotalFinish>
     </ContentForm>

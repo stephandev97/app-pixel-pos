@@ -16,15 +16,18 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  overflow: hidden; /* 👈 desactiva scroll de toda la página */
+  overflow: hidden;
+  /* 👈 desactiva scroll de toda la página */
 }
 
 .App {
   text-align: center;
   font-family: 'Inter', sans-serif;
   font-display: swap;
+  font-size: 1rem;
   position: relative;
-  display: flex; /* <-- ahora sí el hijo con flex:1 funciona */
+  display: flex;
+  /* <-- ahora sí el hijo con flex:1 funciona */
   width: 100vw;
   height: 100vh;
   overflow: hidden;
@@ -34,10 +37,13 @@ body {
 
 .App > div[style] {
   flex: 1 1 auto;
-  min-width: 0; /* <-- SIN ESTO SE CORTA */
-  display: flex; /* para que el .screen pueda crecer/encoger */
+  min-width: 0;
+  /* <-- SIN ESTO SE CORTA */
+  display: flex;
+  /* para que el .screen pueda crecer/encoger */
   flex-direction: column;
-  overflow: hidden; /* el scroll va dentro de .screen */
+  overflow: hidden;
+  /* el scroll va dentro de .screen */
 }
 
 /* el motion.div */
@@ -72,20 +78,74 @@ body {
   from {
     transform: rotate(0deg);
   }
+
   to {
     transform: rotate(360deg);
   }
 }
 
-/* si tu página Config usa grid de “tarjetas”, fuerza 1 col en 556px */
+/* si tu página Config usa grid de "tarjetas", fuerza 1 col en 556px */
 @media (max-width: 600px) {
   .config-grid {
     /* poné esta clase en tu ContainerPages */
     grid-template-columns: 1fr !important;
     gap: 12px !important;
   }
+
   .config-container {
     /* si tenés container con padding grande */
     padding: 16px 12px !important;
   }
+}
+
+:root {
+  --sidebar-w: 60px;
+}
+
+@media (max-width: 640px) {
+  :root {
+    --sidebar-w: 48px;
+  }
+
+  .app-main {
+    padding-left: var(--sidebar-w) !important;
+  }
+
+  /* Asegurar que inputs no causen auto-zoom incómodo en móviles */
+  input[type="text"],
+  input[type="number"],
+  input[type="search"],
+  select,
+  textarea {
+    font-size: 15px !important;
+  }
+}
+
+/* Quitar el recuadro azul al hacer tap en dispositivos móviles */
+* {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -khtml-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* Quitar outline azul en botones y elementos clickeables */
+button,
+input,
+textarea,
+select,
+a,
+[role='button'],
+[tabindex] {
+  outline: none;
+  -webkit-focus-ring-color: transparent;
+}
+
+/* Quitar el borde de enfoque en Firefox */
+button::-moz-focus-inner,
+input::-moz-focus-inner {
+  border: 0;
 }

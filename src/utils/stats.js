@@ -249,35 +249,68 @@ export const computeBusinessDate = (d = new Date(), cutoffHour = 3) => {
 export function itemsCountFrom(items = []) {
   const acc = {};
 
-  const pretty = (it) => {
-    // Base: nombre del producto
-    let label = String(it?.name || 'Producto').trim();
+  const cleanLabel = (str = '') =>
+    String(str || '')
+      .replace(/^\d+\s*x\s*/i, '')
+      .trim();
 
-    // Detectamos si el producto es por kg para no agregarle los sabores
-    const shouldAggregate = label.toLowerCase().includes('kg');
+  for (const it of items) {
+    if (!it) continue;
+    const baseName = cleanLabel(it.name || 'Producto');
+    const isKgProduct = baseName.toLowerCase().includes('kg');
+    const qty = Number(it.quantity || it.qty || 1) || 1;
 
-    // Si NO es un producto a agregar y tiene sabores, los añadimos como antes
-    if (!shouldAggregate && Array.isArray(it?.sabores) && it.sabores.length > 0) {
-      const sabores = it.sabores.join(' + ');
-      label = `${label} - ${sabores}`;
+    // 1. Helados por peso (1kg, 1/2kg, 1/4kg): agrupar siempre por nombre base
+    if (isKgProduct) {
+      acc[baseName] = (acc[baseName] || 0) + qty;
+      continue;
     }
-    // Fallback para SKU, también respetando la condición
-    else if (!shouldAggregate && typeof it?.sku === 'string' && it.sku.includes('__')) {
+
+    // 2. Si tiene desglose individual de sabores/variedades con cantidades (saboresBreakdown)
+    const breakdown = it.saboresBreakdown;
+    if (breakdown && typeof breakdown === 'object' && Object.keys(breakdown).length > 0) {
+      for (const [flavor, flavorCount] of Object.entries(breakdown)) {
+        const count = Number(flavorCount) || 0;
+        if (count <= 0) continue;
+        const cleanFlavor = cleanLabel(flavor);
+        const key = cleanFlavor ? `${baseName} - ${cleanFlavor}` : baseName;
+        acc[key] = (acc[key] || 0) + count;
+      }
+      continue;
+    }
+
+    // 3. Si tiene array de sabores pero no breakdown
+    if (Array.isArray(it.sabores) && it.sabores.length > 0) {
+      const cleanSabores = it.sabores
+        .map((s) => cleanLabel(typeof s === 'string' ? s : s?.label || s?.value))
+        .filter(Boolean);
+
+      if (cleanSabores.length === 1) {
+        const key = `${baseName} - ${cleanSabores[0]}`;
+        acc[key] = (acc[key] || 0) + qty;
+      } else if (cleanSabores.length > 1) {
+        const key = `${baseName} - ${cleanSabores.join(' + ')}`;
+        acc[key] = (acc[key] || 0) + qty;
+      } else {
+        acc[baseName] = (acc[baseName] || 0) + qty;
+      }
+      continue;
+    }
+
+    // 4. Fallback para SKU
+    if (typeof it.sku === 'string' && it.sku.includes('__')) {
       const [slug] = it.sku.split('__');
       const nice = slug
         .split('-')
         .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
         .join(' ');
-      label = `${label} - ${nice}`;
+      const key = `${baseName} - ${cleanLabel(nice)}`;
+      acc[key] = (acc[key] || 0) + qty;
+      continue;
     }
 
-    return label;
-  };
-
-  for (const it of items) {
-    const key = pretty(it);
-    const qty = Number(it?.quantity || 1);
-    acc[key] = (acc[key] || 0) + qty;
+    // 5. Producto simple sin sabores
+    acc[baseName] = (acc[baseName] || 0) + qty;
   }
 
   return acc;
@@ -289,7 +322,8 @@ export function getLeastSoldFlavors(itemsCount = {}, limit = 5) {
   // Extraer sabores de los productos con sabores
   for (const [productKey, qty] of Object.entries(itemsCount)) {
     if (productKey.includes(' - ')) {
-      const flavor = productKey.split(' - ')[1];
+      const rawFlavor = productKey.split(' - ')[1];
+      const flavor = rawFlavor ? rawFlavor.replace(/^\d+\s*x\s*/i, '').trim() : '';
       if (flavor) {
         flavors[flavor] = (flavors[flavor] || 0) + qty;
       }

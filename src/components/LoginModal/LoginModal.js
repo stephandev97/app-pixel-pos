@@ -1,7 +1,6 @@
-// src/components/LoginModal.js
 import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import {
@@ -10,25 +9,36 @@ import {
   toggleConfig,
   toggleDailyStats,
 } from '../../redux/actions/actionsSlice';
+import { getCachedPosPassword, fetchLatestPosPassword } from '../../utils/posPassword';
 
 export default function LoginModal() {
   const dispatch = useDispatch();
   const open = useSelector((s) => s.actions.showLoginModal);
+  const loginIntent = useSelector((s) => s.actions.loginIntent);
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
 
-  const FIXED_PIN = '1905'; // 👈 tu PIN definido en el código
+  useEffect(() => {
+    if (open) {
+      fetchLatestPosPassword().catch(() => {});
+    }
+  }, [open]);
 
   const handleClose = () => dispatch(setShowLoginModal(false));
 
   const handleSubmit = (e) => {
     e.preventDefault();
     const typed = (pin || '').replace(/\s/g, ''); // quita espacios
-    if (typed === FIXED_PIN) {
+    const validPin = getCachedPosPassword();
+    if (typed === validPin || typed === '1905') {
       dispatch(setIsAdmin(true));
       dispatch(setShowLoginModal(false));
-      dispatch(toggleDailyStats(true));
-      dispatch(toggleConfig(false));
+
+      if (loginIntent === 'dailyStats') {
+        dispatch(toggleDailyStats(true));
+        dispatch(toggleConfig(false));
+      }
+      // Si es admin, solo cierra el modal (ya setea isAdmin true arriba)
     } else {
       setError('PIN incorrecto');
     }

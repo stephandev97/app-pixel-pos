@@ -115,6 +115,7 @@ const Editor = () => {
             <select {...register('category', { required: true })}>
               <option value="Helado">Pote de helado</option>
               <option value="Paletas">Paletas</option>
+              <option value="Cafetería">Cafetería</option>
               <option value="Extras">Extras</option>
               <option value="Varios">Varios</option>
               <option value="Consumir en el local">Consumir en el local</option>

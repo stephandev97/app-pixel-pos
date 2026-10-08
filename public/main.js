@@ -9,28 +9,51 @@ const { autoUpdater } = require('electron-updater');
 app.commandLine.appendSwitch('disable-site-isolation-trials');
 app.commandLine.appendSwitch('disable-features', 'OutOfBlinkCors');
 
-if (process.platform === 'win32') {
-  app.disableHardwareAcceleration();
+app.setAppUserModelId('com.pixelhelados.pos');
+
+// Optimización de renderizado GPU y fluidez
+if (process.platform === 'linux') {
+  app.commandLine.appendSwitch('disable-gpu-sandbox');
 }
 
 const isDev = !app.isPackaged;
 let win = null;
 
+const gotTheLock = app.requestSingleInstanceLock();
+if (!gotTheLock) {
+  log.warn('Ya hay otra instancia de la app corriendo. Cerrando esta instancia...');
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (win) {
+      if (win.isMinimized()) win.restore();
+      win.focus();
+    }
+  });
+}
+
 // ======================================================
 // Crear ventana principal
 // ======================================================
 function createWindow() {
+  const iconPath = isDev
+    ? path.join(__dirname, '../assets/icon.ico')
+    : path.join(__dirname, 'favicon.ico');
+
   win = new BrowserWindow({
-    width: 556,
+    width: 550,
     height: 800,
     useContentSize: true,
     resizable: false,
     autoHideMenuBar: true,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
       contextIsolation: true,
     },
+    frame: false, // Custom title bar
+    // titleBarStyle hidden/overlay removed to avoid native controls
   });
 
   win.webContents.setVisualZoomLevelLimits(1, 1);
@@ -44,7 +67,58 @@ function createWindow() {
   } else {
     win.loadURL(`file://${path.join(__dirname, '../build/index.html')}?v=${Date.now()}`);
   }
+
+  win.on('closed', () => {
+    win = null;
+    app.quit();
+  });
 }
+// ======================================================
+// Window Controls
+// ======================================================
+ipcMain.handle('minimize-window', () => {
+  if (win) win.minimize();
+});
+
+ipcMain.handle('close-window', () => {
+  if (win) {
+    try {
+      win.destroy();
+    } catch {
+      void 0;
+    }
+    win = null;
+  }
+  app.quit();
+});
+
+// ======================================================
+// Búsqueda Web con IA para Recetas de Cafetería
+// ======================================================
+ipcMain.handle('search-recipe-web', async (_e, query) => {
+  try {
+    const fetchFn = typeof fetch !== 'undefined' ? fetch : require('node-fetch');
+    const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const res = await fetchFn(url, {
+      headers: {
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      },
+    });
+    if (!res.ok) return { snippets: [] };
+    const html = await res.text();
+    const snippets = [];
+    const regex = /<a class="result__snippet[^"]*"[^>]*>([\s\S]*?)<\/a>/g;
+    let match;
+    while ((match = regex.exec(html)) !== null) {
+      snippets.push(match[1].replace(/<[^>]+>/g, '').trim());
+    }
+    return { snippets };
+  } catch (err) {
+    log.warn('Error en search-recipe-web:', err);
+    return { snippets: [] };
+  }
+});
 
 // ======================================================
 // IPC impresión (SILENT + 48mm + estilos)
@@ -99,8 +173,10 @@ ipcMain.handle('print-ticket', async (_e, html) => {
         fontStyle =
           "<style>@font-face{font-family:Inter;src:url('" +
           dataUri +
-          "');font-weight:100 900;font-style:normal;font-display:swap;}html,body,*{font-family:Inter,sans-serif;}</style>";
-      } catch { void 0; }
+          "');font-weight:100 900;font-style:normal;font-display:swap;}html,body{font-family:Inter,sans-serif;}</style>";
+      } catch {
+        void 0;
+      }
 
       const baseHref = isDev
         ? 'http://localhost:3000/'
@@ -137,18 +213,57 @@ autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 let updateReady = false;
+
+const performQuitAndInstall = () => {
+  log.info('🔄 Ejecutando autoUpdater.quitAndInstall()...');
+  // Desactivar autoInstallOnAppQuit para evitar doble invocación
+  autoUpdater.autoInstallOnAppQuit = false;
+  setImmediate(() => {
+    try {
+      autoUpdater.quitAndInstall(false, true);
+    } catch (err) {
+      log.error('Error durante autoUpdater.quitAndInstall:', err);
+      app.quit();
+    }
+  });
+};
+
 autoUpdater.on('download-progress', (p) => {
   try {
-    win?.webContents?.send('update-progress', p?.percent ?? 0);
-  } catch { void 0; }
+    win?.webContents?.send('update-progress', Math.round(p?.percent ?? 0));
+  } catch {
+    void 0;
+  }
 });
-autoUpdater.on('update-downloaded', () => {
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('✅ Actualización descargada:', info);
   updateReady = true;
   try {
     win?.webContents?.send('update-ready');
-    // Instalar inmediatamente como solicitado
-    autoUpdater.quitAndInstall();
-  } catch { void 0; }
+
+    dialog
+      .showMessageBox({
+        type: 'info',
+        title: 'Actualización Disponible',
+        message:
+          'Una nueva versión de la aplicación ha sido descargada. ¿Deseas reiniciar la aplicación para instalarla ahora?',
+        buttons: ['Reiniciar e Instalar', 'Más tarde'],
+        defaultId: 0,
+        cancelId: 1,
+      })
+      .then((result) => {
+        if (result.response === 0) {
+          log.info('Usuario aceptó reiniciar e instalar desde el diálogo.');
+          performQuitAndInstall();
+        }
+      })
+      .catch((err) => {
+        log.error('Error en showMessageBox de actualización:', err);
+      });
+  } catch (err) {
+    log.error('Error in update-downloaded handler:', err);
+  }
 });
 
 ipcMain.handle('check-for-updates', async () => {
@@ -156,8 +271,6 @@ ipcMain.handle('check-for-updates', async () => {
     const result = await autoUpdater.checkForUpdates();
     const info = result?.updateInfo;
     if (info && info.version && info.version !== app.getVersion()) {
-      // autoDownload está activo, así que no es necesario llamar a downloadUpdate explícitamente,
-      // pero lo dejamos por si acaso o para feedback inmediato en chequeo manual
       return { updateAvailable: true, version: info.version };
     }
     return { updateAvailable: false };
@@ -167,24 +280,34 @@ ipcMain.handle('check-for-updates', async () => {
 });
 
 ipcMain.on('quit-and-install', () => {
-  try {
-    if (updateReady) {
-      autoUpdater.quitAndInstall();
-    } else {
-      autoUpdater
-        .downloadUpdate()
-        .then(() => {
-          try {
-            autoUpdater.quitAndInstall();
-          } catch {
-            app.quit();
-          }
-        })
-        .catch(() => app.quit());
-    }
-  } catch {
-    app.quit();
+  log.info('Evento IPC quit-and-install recibido (on)');
+  if (updateReady) {
+    performQuitAndInstall();
+  } else {
+    autoUpdater
+      .downloadUpdate()
+      .then(() => performQuitAndInstall())
+      .catch((err) => {
+        log.error('Error al descargar update antes de instalar:', err);
+        app.quit();
+      });
   }
+});
+
+ipcMain.handle('quit-and-install', () => {
+  log.info('Evento IPC quit-and-install recibido (handle)');
+  if (updateReady) {
+    performQuitAndInstall();
+  } else {
+    autoUpdater
+      .downloadUpdate()
+      .then(() => performQuitAndInstall())
+      .catch((err) => {
+        log.error('Error al descargar update antes de instalar:', err);
+        app.quit();
+      });
+  }
+  return true;
 });
 
 // ======================================================
@@ -215,7 +338,9 @@ app.whenReady().then(() => {
     setTimeout(() => {
       autoUpdater.checkForUpdates().catch(() => {});
     }, 5000); // Esperar 5s para no bloquear inicio
-  } catch { void 0; }
+  } catch {
+    void 0;
+  }
 
   // Atajo DevTools
   globalShortcut.register('CommandOrControl+Shift+D', () => {
@@ -225,6 +350,14 @@ app.whenReady().then(() => {
     } else {
       win.webContents.openDevTools();
     }
+  });
+
+  // Atajos para recargar la ventana en desarrollo
+  globalShortcut.register('CommandOrControl+R', () => {
+    if (win) win.webContents.reloadIgnoringCache();
+  });
+  globalShortcut.register('F5', () => {
+    if (win) win.webContents.reloadIgnoringCache();
   });
 });
 

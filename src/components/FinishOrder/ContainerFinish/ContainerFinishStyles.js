@@ -3,16 +3,31 @@ import styled, { css, keyframes } from 'styled-components';
 
 import { TotalStyled } from '../../Checkout/styles/ProductsCheckoutStyles';
 
+const togglePulse = keyframes`
+  0% { background: #4d0012; }
+  50% { background: #ff6b9d; }
+  100% { background: #4d0012; }
+`;
+
 export const ContentForm = styled.form`
   display: flex;
   flex-direction: column;
-  width: min(560px, calc(100vw - 48px));
-  --summary-h: 240px;
-  height: 100dvh; /* usa visual viewport, no 100vh */
-  max-height: 100dvh;
-  overflow: clip !important; /* recorta cualquier 1-2px fantasma */
-  padding-bottom: var(--summary-h);
+  width: 100%;
+  max-width: 100%;
+  padding-bottom: 20px;
   box-sizing: border-box;
+  font-size: clamp(14px, 1.5vw, 20px);
+  height: 100%;
+  min-height: 0;
+
+  @media (max-width: 1024px) {
+    font-size: clamp(13px, 1.4vw, 18px);
+    padding-bottom: 16px;
+  }
+
+  @media (pointer: coarse) {
+    font-size: clamp(15px, 2vw, 22px);
+  }
 `;
 
 export const ContentTabs = styled.div`
@@ -21,17 +36,11 @@ export const ContentTabs = styled.div`
   flex-direction: column;
   align-items: stretch;
   padding: 0 16px;
+  padding-bottom: 10px;
   box-sizing: border-box;
-  /* que este bloque sea el “sacrificio” si falta alto */
   flex: 1 1 auto;
   min-height: 0;
-  overflow: hidden !important;
-  overscroll-behavior: contain;
-  scrollbar-width: none;
-  &::-webkit-scrollbar {
-    width: 0;
-    height: 0;
-  }
+  overflow-y: auto;
 `;
 
 export const BottomSpacer = styled.div`
@@ -41,34 +50,42 @@ export const BottomSpacer = styled.div`
 
 export const Tab = styled.div`
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 520px;
-  height: 50px;
-  margin: 12px 0;
-  padding: 6px;
+  max-width: 580px;
+  height: 42px;
+  margin: 8px 0;
+  padding: 4px;
   overflow: hidden !important;
-  border-radius: 14px;
-  background: #eef0f6; /* más contraste */
+  border-radius: 10px;
+  background: #eef0f6;
   border: 1px solid #e3e6ee;
-  box-shadow:
-    inset 0 1px 0 #fff,
-    0 2px 10px rgba(16, 24, 40, 0.06);
+  box-shadow: none;
+
+  @media (max-width: 1024px) {
+    height: 38px;
+    margin: 6px 0;
+  }
+
+  @media (pointer: coarse) {
+    height: 50px;
+    font-size: 16px;
+  }
 `;
 
 export const ButtonToggle = styled.button`
   flex: 1;
   min-width: 0;
   overflow: hidden !important;
-  height: 40px;
-  border-radius: 10px;
+  height: 34px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: #111;
+  color: #4d0012;
   font-weight: 700;
-  font-size: 14px;
+  font-size: 13px;
   letter-spacing: 0.2px;
   cursor: pointer;
   font-family: 'Inter', sans-serif;
@@ -81,26 +98,37 @@ export const ButtonToggle = styled.button`
     color 0.12s ease,
     border-color 0.12s ease;
 
+  @media (max-width: 1024px) {
+    height: 30px;
+    font-size: 12px;
+  }
+
+  @media (pointer: coarse) {
+    height: 42px;
+    font-size: 15px;
+  }
+
   &:hover {
     background: #fff;
     border-color: #e6e6ee;
   }
   &:focus-visible {
     outline: 0;
-    box-shadow: 0 0 0 2px #111;
+    box-shadow: 0 0 0 2px #4d0012; /* Color bordo para focus */
     background: #fff;
   }
 
   /* Estado ACTIVO (via data-active="true") */
   &[data-active='true'] {
-    background: #000;
+    background: #4d0012;
     color: #fff;
-    border-color: #111;
+    border-color: #4d0012;
     box-shadow: 0 6px 14px rgba(0, 0, 0, 0.2);
-    transform: translateY(-1px);
+    animation: togglePulse 1s ease-in-out 2;
   }
   &[data-active='true']:hover {
-    filter: brightness(1.05);
+    filter: brightness(1.1);
+    animation: none;
   }
 `;
 
@@ -109,9 +137,19 @@ export const TotalFinish = styled(TotalStyled)`
   bottom: 0;
   left: 0;
   right: 0;
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+  border-radius: 16px 16px 0 0;
   background: #fff;
-  padding: 12px 0 16px;
-  box-shadow: 0 -8px 24px rgba(16, 24, 40, 0.08);
+  padding: 10px 24px 12px;
+  box-sizing: border-box;
+  box-shadow: 0 -4px 12px rgba(16, 24, 40, 0.12);
+  z-index: 10;
+
+  @media (max-width: 1024px) {
+    padding: 8px 20px 10px;
+  }
 `;
 
 export const Pill = styled.span`
@@ -119,7 +157,7 @@ export const Pill = styled.span`
   align-items: center !important;
   padding: 4px 10px;
   border-radius: 999px;
-  font-size: 0.9em;
+  font-size: 1rem;
   font-weight: 700;
   background: #ececf6;
   color: #111;
@@ -132,15 +170,25 @@ export const Pill = styled.span`
 export const SummaryBox = styled.div`
   position: relative;
   z-index: 2;
-  margin-top: 12px;
-  padding: 14px 16px;
+  margin-top: 8px;
+  padding: 12px 16px;
   background: #f7f7ff;
-  border-radius: 14px;
-  width: 90% !important;
-  max-width: 520px;
+  border-radius: 12px;
+  width: 100% !important;
+  max-width: 580px;
   margin-left: auto;
   margin-right: auto;
   display: block !important;
+
+  @media (max-width: 1024px) {
+    padding: 10px 14px;
+    margin-top: 6px;
+  }
+
+  @media (pointer: coarse) {
+    font-size: 1.2rem;
+    padding: 14px 18px;
+  }
 `;
 
 export const Row = styled.div`
@@ -150,7 +198,7 @@ export const Row = styled.div`
   align-items: center;
   column-gap: 12px;
   min-height: 34px;
-  margin-bottom: 0 !important;
+  margin-bottom: 8px;
 `;
 
 export const Label = styled.span`
@@ -159,17 +207,31 @@ export const Label = styled.span`
   display: flex;
   align-items: center;
   line-height: 1;
+
+  @media (pointer: coarse) {
+    font-size: 1.4rem;
+  }
 `;
 
 export const Value = styled.span`
   justify-self: end; /* alinea a la derecha en su columna */
   font-weight: 800;
   font-variant-numeric: tabular-nums;
+  font-size: 1.3rem;
+
+  @media (max-width: 1024px) {
+    font-size: 1.2rem;
+  }
+
+  @media (pointer: coarse) {
+    font-size: 1.5rem;
+  }
 `;
 
 export const StatusPill = styled(Pill)`
   background: ${(p) => (p.kind === 'ok' ? '#39975c' : p.kind === 'warn' ? '#f59e0b' : '#ef4444')};
   color: #fff;
+  font-size: 1rem;
 `;
 
 export const RightChips = styled.div`
@@ -188,7 +250,7 @@ export const InputGroup = styled.div`
   display: flex;
   align-items: center;
   width: 100%;
-  max-width: 520px;
+  max-width: 580px;
   margin: 10px auto;
   overflow: hidden !important;
 `;
@@ -202,27 +264,20 @@ export const Icon = styled.span`
   pointer-events: none;
   color: #6b6b7a;
   font-size: 18px;
+  z-index: 10;
 `;
 
 export const Input = styled.input`
   border: 0;
   font-weight: bold;
-  background: #f7f7ff;
+  background: #f6f7ff;
   width: 100%;
-  height: 40px;
-  font-size: 1.1em;
-  font-family: 'Inter', sans-serif;
-  border-radius: 12px;
-  padding: 0.2em 1em 0.2em 2.5em; /* deja espacio para el icono */
-  width: 100%;
-  height: 46px;
-  border-radius: 12px;
+  height: 44px;
+  border-radius: 10px;
   font-family: 'Inter', sans-serif;
   font-weight: 700;
-  font-size: 1.05rem;
-  padding: 0 0.9em 0 2.75em; /* icono a la izquierda */
-  padding-right: 3em; /* espacio para el botón "=" */
-
+  font-size: 1rem;
+  padding: 0.4em 0.8em 0.4em 2.5em;
   background: #f6f7ff;
   border: 1px solid #e6e6ee;
   box-shadow: inset 0 1px 0 #fff;
@@ -230,6 +285,17 @@ export const Input = styled.input`
     background 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease;
+  transform: translateZ(0);
+
+  @media (max-width: 1024px) {
+    height: 40px;
+    font-size: 0.95rem;
+  }
+
+  @media (pointer: coarse) {
+    height: 52px;
+    font-size: 1.1rem;
+  }
 
   &::placeholder {
     color: #9aa3b2;
@@ -291,7 +357,7 @@ export const ButtonPaste = styled.button`
 /* Grupo vertical para opciones de envío (full-width) */
 export const ShippingGroup = styled.div`
   width: 100%;
-  max-width: 520px;
+  max-width: 580px;
   margin: 10px auto 0;
   display: grid;
   grid-template-columns: 1fr;
@@ -317,6 +383,8 @@ export const ShippingBtn = styled.button`
     box-shadow 0.12s ease,
     border-color 0.12s ease,
     transform 0.12s ease;
+  transform: translateZ(0);
+  will-change: transform;
 
   &:hover {
     border-color: #d7dbea;
@@ -372,7 +440,7 @@ export const ShippingInline = styled.div`
   gap: 10px;
   margin: 10px auto 0;
   width: 100%;
-  max-width: 520px;
+  max-width: 580px;
 `;
 
 // Botón-chip de envío (diferente a los tabs)
@@ -393,6 +461,8 @@ export const ShippingOption = styled.button`
     border-color 0.12s ease,
     box-shadow 0.12s ease,
     background 0.12s ease;
+  transform: translateZ(0);
+  will-change: transform;
 
   /* Halo sutil al hover (no sólido como el tab) */
   &:hover {
@@ -445,8 +515,8 @@ export const Prefix = styled.span`
 
 /* --- Motion helpers --- */
 const fadeSlideIn = keyframes`
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translate3d(0, 15px, 0); } /* Slightly larger distance for clearer "entry" */
+  to   { opacity: 1; transform: translate3d(0, 0, 0); }
 `;
 const popIn = keyframes`
   from { opacity: 0; transform: scale(.98); }
@@ -469,15 +539,20 @@ export const AnimSection = styled.div`
   margin-bottom: 0 !important;
   overflow: hidden;
   ${motionSafe};
+  will-change: transform, opacity;
+  transform: translateZ(0);
+  backface-visibility: hidden;
+  perspective: 1000px;
 `;
 
-/* Lista con “stagger” para sus hijos (cada item un poquito después) */
+/* Lista con "stagger" para sus hijos (cada item un poquito después) */
 export const StaggerList = styled.div`
   & > * {
     opacity: 1;
-    transform: translateY(6px);
+    transform: translate3d(0, 6px, 0);
     animation: ${fadeSlideIn} 0.22s ease-out forwards;
     ${motionSafe}
+    will-change: transform, opacity;
   }
   & > *:nth-child(1) {
     animation-delay: 0s;

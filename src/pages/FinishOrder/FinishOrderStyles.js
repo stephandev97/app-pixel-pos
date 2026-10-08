@@ -10,10 +10,9 @@ export const ContainerGlobal = styled.div`
   display: flex;
   flex-direction: column;
   z-index: 100;
+  font-size: clamp(14px, 2vw, 24px);
 `;
-export const GlobalStyled = styled(Dialog)`
-  transition: all 0.5s ease;
-`;
+export const GlobalStyled = styled(Dialog)``;
 
 export const Background = styled.div`
   display: flex;
@@ -27,6 +26,21 @@ export const Background = styled.div`
 
 export const ContentDialogStyled = styled(DialogContent)`
   font-family: 'Inter', sans-serif;
+  width: 100%;
+  max-width: 100%;
+  padding: 0;
+  margin: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100vh;
+  padding-bottom: 140px;
+  box-sizing: border-box;
+
+  @media (max-width: 1024px) {
+    padding-bottom: 120px;
+  }
 `;
 
 export const ContainerCheckout = styled.div`

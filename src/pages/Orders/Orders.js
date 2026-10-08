@@ -1,2045 +1,177 @@
-import PrintIcon from '@mui/icons-material/Print';
-import QrCodeScannerIcon from '@mui/icons-material/QrCodeScanner';
-import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from '@mui/material';
-import Checkbox from '@mui/material/Checkbox';
-import { ArrowUp, Banknote, CreditCard, Search, TriangleAlert } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import React, { useRef } from 'react';
-import { ChevronDown, ChevronUp, MapPin } from 'react-feather';
-import { BiHomeAlt2 } from 'react-icons/bi';
-import { BsCash } from 'react-icons/bs';
-import { FaXmark } from 'react-icons/fa6';
-import { HiCheck, HiX } from 'react-icons/hi';
-import { MdEdit } from 'react-icons/md';
+import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { useReactToPrint } from 'react-to-print';
+import { ArrowUp, Coffee, FlaskConical, Search, Sparkles, Trash2 } from 'lucide-react';
+import { FaXmark } from 'react-icons/fa6';
+import { MdSort } from 'react-icons/md';
+import PrintIcon from '@mui/icons-material/Print';
+import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
+import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 
 import logoPixel from '../../assets/logoprint.png';
-import mpLogoWhite from '../../assets/mercadopagowhite.png';
 import { pb } from '../../lib/pb';
 import {
+  clearTestOrders,
+  deleteTestOrder,
   fetchMoreOrders,
+  fetchTodayPendingOrders,
   hydrateAllTodayOrders,
-  removeOrderFromBoth,
+  hydrateOrdersFromPocket,
   subscribeOrdersRealtime,
   syncPendingOrders,
-  upsertOrder,
 } from '../../redux/orders/ordersSlice';
-import logo from '../../styles/img/logoprint.png';
-import { formatPrice } from '../../utils/formatPrice';
-import { getOrderCashNet } from '../../utils/payments';
-import { POINTS_RATE, pointsApiClient } from '../../utils/pointsApiClient';
 import { computeBusinessDate } from '../../utils/stats';
-import { relativeTimeFrom } from '../../utils/time';
+import { isBaristaOrder } from '../../utils/cafeStockSync';
+
 import {
-  ButtonCopy,
-  ButtonPrint,
-  ButtonTitle,
-  ContainerCard,
   ContainerOrders,
-  ContentButtonsTitle,
-  DirCard,
-  Direccion,
-  FooterCard,
   GlobalOrders,
-  HaceMin,
-  Hora,
   LoadMoreButton,
-  Print,
-  TitleCard,
-  TotalPrint,
 } from './OrdersStyles';
 
-function normalizeScan(raw) {
-  if (!raw) return '';
-  // Permitir alfanuméricos: eliminamos espacios y caracteres de control
-  // Si el scanner envía basura, aquí se limpia, pero permitimos letras y números.
-  return raw.trim();
-}
-
-function PaymentEditor({ open, onClose, onSave, initial, orderTotal }) {
-  const [phase, setPhase] = useState(open ? 'enter' : 'closed');
-  const [method, setMethod] = useState(initial.method); // "Efectivo" | "Transferencia" | "Mixto"
-  const [cash, setCash] = useState(initial.ef || 0);
-  const [mp, setMp] = useState(initial.mp || 0);
-  const [errors, setErrors] = useState({});
-  useEffect(() => {
-    const errs = {};
-    const tot = Number(orderTotal) || 0;
-    if (method === 'Efectivo') {
-      const c = Number(cash) || 0;
-      if (c < tot) {
-        errs.cash = `El efectivo debe ser ≥ ${tot.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}`;
-      }
-    } else if (method === 'Mixto') {
-      if (!Number.isFinite(cash) || cash <= 0) errs.cash = 'Debe ser mayor a 0';
-      if (!Number.isFinite(mp) || mp <= 0) errs.mp = 'Debe ser mayor a 0';
-      const suma = (Number(cash) || 0) + (Number(mp) || 0);
-      if (suma < tot)
-        errs.sum = `La suma debe ser al menos ${tot.toLocaleString('es-AR', { style: 'currency', currency: 'ARS' })}`;
-    }
-    setErrors(errs);
-  }, [method, cash, mp, orderTotal]);
-
-  const isValid = Object.keys(errors).length === 0;
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => {
-      if (e.key === 'Enter' && isValid) onSave({ method, cash, mp });
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, isValid, method, cash, mp, onSave]);
-
-  useEffect(() => {
-    if (open) {
-      setPhase('enter');
-      const id = requestAnimationFrame(() => setPhase('open'));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setPhase((prev) => (prev === 'closed' ? 'closed' : 'exit'));
-      const t = setTimeout(() => setPhase('closed'), 200);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onClose();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
-  if (phase === 'closed') return null;
-
-  const root = {
-    position: 'absolute',
-    inset: 0,
-    zIndex: 6,
-    borderRadius: 16,
-    background: 'rgba(0,0,0,0.6)',
-    color: '#fff',
-    transform:
-      phase === 'enter'
-        ? 'translateX(100%)'
-        : phase === 'open'
-          ? 'translateX(0)'
-          : 'translateX(100%)',
-    transition: 'transform 200ms ease-out, opacity 200ms ease-out',
-    opacity: phase === 'open' ? 1 : 0.98,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 12,
-    boxSizing: 'border-box',
-  };
-
-  const panel = {
-    position: 'relative',
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 12,
-    padding: 16,
-    width: '100%',
-    maxWidth: 420,
-    boxSizing: 'border-box',
-    background: '#fff',
-    color: '#111',
-    fontFamily: 'Inter, sans-serif',
-    border: '1px solid #e5e7eb',
-    borderRadius: 18,
-    boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
-  };
-
-  const pills = {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: 6,
-    marginTop: 2,
-  };
-
-  const pillBtn = (active) => ({
-    padding: '6px 8px',
-    borderRadius: 10,
-    cursor: 'pointer',
-    border: active ? '2px solid #111' : '1px solid #e5e7eb',
-    background: active ? '#e9edf5' : '#fff',
-    color: '#111',
-    fontWeight: 800,
-    fontSize: '.85rem',
-    transition: 'transform 0.14s ease, box-shadow 0.14s ease, border-color 0.14s ease',
-    width: '100%',
-  });
-
-  const inputGroup = (hasError) => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '8px 10px',
-    borderRadius: 10,
-    border: `1px solid ${hasError ? '#ff4d4d' : '#e5e7eb'}`,
-    background: '#fff',
-    color: '#111',
-    width: '100%',
-    boxShadow: 'inset 0 1px 0 rgba(0,0,0,0.02)',
-    overflow: 'hidden',
-  });
-  const inputInner = {
-    flex: 1,
-    background: 'transparent',
-    border: 'none',
-    outline: 'none',
-    color: '#111',
-    fontSize: '.95rem',
-    textAlign: 'right',
-    minWidth: 0,
-    width: '100%',
-    boxSizing: 'border-box',
-  };
-
-  const actions = {
-    position: 'relative',
-    display: 'flex',
-    gap: 8,
-    justifyContent: 'flex-end',
-    marginTop: 12,
-  };
-  const iconBtn = (primary = false) => ({
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    display: 'grid',
-    placeItems: 'center',
-    border: primary ? '1px solid rgba(76,205,153,0.32)' : '1px solid #e5e7eb',
-    background: primary ? '#4CCD99' : '#fff',
-    color: primary ? '#fff' : '#111',
-    cursor: 'pointer',
-    boxShadow: primary ? '0 8px 22px rgba(76,205,153,0.38)' : 'none',
-    transition: 'transform 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease',
-  });
-
-  return (
-    <div style={root} role="dialog" aria-modal="true">
-      <div style={panel}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ fontWeight: 900, fontSize: '1.05rem', letterSpacing: 0.2 }}>
-            Editar forma de pago
-          </div>
-          <button
-            onClick={onClose}
-            style={{
-              background: '#fff',
-              color: '#111',
-              fontSize: '1.2rem',
-              lineHeight: 1,
-              cursor: 'pointer',
-              width: 36,
-              height: 36,
-              borderRadius: 12,
-              border: '1px solid #e5e7eb',
-            }}
-          >
-            ×
-          </button>
-        </div>
-
-        <div style={pills}>
-          {['Efectivo', 'Transferencia', 'Débito', 'Mixto'].map((m) => (
-            <button key={m} onClick={() => setMethod(m)} style={pillBtn(method === m)}>
-              {m}
-            </button>
-          ))}
-        </div>
-
-        {method === 'Efectivo' && (
-          <div
-            style={{
-              ...inputGroup(!!errors.cash),
-              maxWidth: 180,
-              marginTop: 4,
-            }}
-          >
-            <BsCash size={18} style={{ color: '#4CCD99' }} />
-            <input
-              type="number"
-              min={Number(orderTotal) || 0}
-              step={1}
-              inputMode="numeric"
-              value={cash}
-              onChange={(e) => setCash(Math.max(1, Number(e.target.value) || 0))}
-              style={inputInner}
-              placeholder="0"
-            />
-          </div>
-        )}
-        {method === 'Efectivo' && errors.cash && (
-          <div style={{ color: '#ff4d4d', fontSize: '.8rem', marginTop: 4 }}>{errors.cash}</div>
-        )}
-
-        {method === 'Transferencia' && (
-          <div style={{ opacity: 0.85, fontSize: '.95rem', marginTop: 6 }}>
-            Se marcará como pagó por transferencia.
-          </div>
-        )}
-        {method === 'Débito' && (
-          <div style={{ opacity: 0.85, fontSize: '.95rem', marginTop: 6 }}>
-            Se marcará como pagó con tarjeta de débito.
-          </div>
-        )}
-
-        {method === 'Mixto' && (
-          <div
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-              maxWidth: 180,
-              marginTop: 4,
-            }}
-          >
-            <div style={inputGroup(!!errors.cash)}>
-              <BsCash size={18} style={{ color: '#4CCD99' }} />
-              <input
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                value={cash}
-                onChange={(e) => setCash(Math.max(1, Number(e.target.value) || 0))}
-                style={inputInner}
-                placeholder="0"
-              />
-            </div>
-            {!!errors.cash && (
-              <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.cash}</div>
-            )}
-
-            <div style={inputGroup(!!errors.mp)}>
-              <img
-                src={mpLogoWhite}
-                alt="MP"
-                width="18"
-                height="18"
-                style={{ display: 'block', background: '#1e6cff', borderRadius: 4, padding: 2 }}
-              />
-              <input
-                type="number"
-                min={1}
-                step={1}
-                inputMode="numeric"
-                value={mp}
-                onChange={(e) => setMp(Math.max(1, Number(e.target.value) || 0))}
-                style={inputInner}
-                placeholder="0"
-              />
-            </div>
-            {!!errors.mp && <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.mp}</div>}
-            {!!errors.sum && (
-              <div style={{ color: '#ff4d4d', fontSize: '.8rem' }}>{errors.sum}</div>
-            )}
-          </div>
-        )}
-
-        <div style={actions}>
-          <button
-            onClick={() => isValid && onSave({ method, cash, mp })}
-            style={{
-              ...iconBtn(true),
-              opacity: isValid ? 1 : 0.5,
-              pointerEvents: isValid ? 'auto' : 'none',
-            }}
-            title="Guardar"
-          >
-            <HiCheck size={18} />
-          </button>
-          <button onClick={onClose} style={iconBtn(false)} title="Volver">
-            <HiX size={18} />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ConfirmOverlay({ open, onConfirm, onCancel }) {
-  const [phase, setPhase] = useState(open ? 'enter' : 'closed');
-  const [reason, setReason] = useState('');
-
-  useEffect(() => {
-    if (open) {
-      setPhase('enter');
-      const id = requestAnimationFrame(() => setPhase('open'));
-      return () => cancelAnimationFrame(id);
-    } else {
-      setPhase((prev) => (prev === 'closed' ? 'closed' : 'exit'));
-      const t = setTimeout(() => setPhase('closed'), 180);
-      return () => clearTimeout(t);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e) => e.key === 'Escape' && onCancel();
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onCancel]);
-
-  const hidden = phase === 'closed';
-
-  const style = {
-    position: 'absolute',
-    inset: 0,
-    background: '#c41717ff',
-    color: '#fff',
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 12,
-    padding: 16,
-    zIndex: 5,
-    textAlign: 'center',
-    transform:
-      phase === 'enter'
-        ? 'translateX(100%)'
-        : phase === 'open'
-          ? 'translateX(0)'
-          : phase === 'exit'
-            ? 'translateX(100%)'
-            : 'translateX(100%)',
-    opacity: phase === 'open' ? 1 : 0.9,
-    transition: 'transform 180ms ease-out, opacity 180ms ease-out',
-    visibility: hidden ? 'hidden' : 'visible',
-    pointerEvents: hidden ? 'none' : 'auto',
-    borderRadius: 16,
-  };
-
-  return (
-    <div style={style} role="dialog" aria-modal="true" aria-hidden={hidden}>
-      <div style={{ fontWeight: 800, fontSize: '1.1rem', lineHeight: 1.2 }}>
-        ¿Seguro que querés borrarlo?
-      </div>
-      <div style={{ opacity: 0.9, fontSize: '0.9rem', maxWidth: 360 }}>
-        Esta acción eliminará el pedido de la lista.
-      </div>
-      <div style={{ width: '100%', maxWidth: 360 }}>
-        <input
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          placeholder="Escribí el motivo"
-          style={{
-            width: '100%',
-            padding: '10px 12px',
-            borderRadius: 10,
-            border: '1px solid rgba(255,255,255,0.65)',
-            background: '#fff',
-            color: '#111',
-            outline: 'none',
-            fontWeight: 600,
-          }}
-        />
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          gap: 10,
-          flexWrap: 'wrap',
-          justifyContent: 'center',
-          marginTop: 6,
-        }}
-      >
-        <button
-          onClick={() => onConfirm(reason)}
-          style={{
-            padding: '10px 16px',
-            borderRadius: 12,
-            border: 'none',
-            fontWeight: 700,
-            cursor: 'pointer',
-            background: '#fff',
-            color: '#d32f2f',
-            minWidth: 120,
-            fontFamily: 'Inter',
-          }}
-          disabled={!String(reason).trim()}
-        >
-          Borrar
-        </button>
-        <button
-          onClick={onCancel}
-          style={{
-            padding: '10px 16px',
-            borderRadius: '12',
-            border: '2px solid #fff',
-            fontWeight: 700,
-            cursor: 'pointer',
-            background: 'transparent',
-            color: '#fff',
-            minWidth: 120,
-            fontFamily: 'Inter',
-          }}
-        >
-          Volver
-        </button>
-      </div>
-      <div style={{ marginTop: 6, fontSize: '0.8rem', opacity: 0.8 }}>
-        Presioná Esc para cancelar
-      </div>
-    </div>
-  );
-}
-
-const CardOrders = ({
-  method,
-  pending,
-  numeracion,
-  direccion,
-  total,
-  pago,
-  id,
-  items,
-  hora,
-  clientCreatedAt,
-  created,
-  pagoEfectivo,
-  pagoMp,
-  pagoDetalle,
-  pointsClaimed,
-  showDevTicketPreview,
-  copied,
-  pagoDebito,
-}) => {
-  const isLinux = navigator.userAgent.toLowerCase().includes('linux');
-
-  const [editPayOpen, setEditPayOpen] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [localPay, setLocalPay] = useState(null);
-  const [viewVersion, setViewVersion] = useState(0);
-  const [linkOpen, setLinkOpen] = useState(false);
-  const [linkId, setLinkId] = useState('');
-  const [linkLoading, setLinkLoading] = useState(false);
-  const [linkMsg, setLinkMsg] = useState('');
-  const [clientPreview, setClientPreview] = useState(null);
-  const [clientPreviewError, setClientPreviewError] = useState('');
-  const lastLookupRef = useRef(0);
-  const viewPago = localPay?.pago ?? pago;
-  const viewEf = localPay?.pagoEfectivo ?? Number(pagoEfectivo || 0);
-  const viewMp = localPay?.pagoMp ?? Number(pagoMp || 0);
-  const viewDb = localPay?.pagoDebito ?? Number(pagoDebito || 0);
-
-  const methodNorm = String(localPay?.method ?? method ?? '').toLowerCase();
-
-  const isRetiro =
-    String(direccion || '')
-      .trim()
-      .toLowerCase() === 'retiro';
-
-  let ef = Number(pagoEfectivo || 0);
-  let mp = Number(pagoMp || 0);
-
-  const ticketPago =
-    methodNorm === 'mixto'
-      ? 'Mixto'
-      : methodNorm === 'transferencia'
-        ? 'Transferencia'
-        : methodNorm === 'debito'
-          ? 'Débito'
-          : viewPago;
-  if (pago === 'Mixto' && ef === 0 && mp === 0 && typeof pagoDetalle === 'string') {
-    const m = pagoDetalle.match(/EF\s*\$?\s*([\d.,]+)\s*\+\s*MP\s*\$?\s*([\d.,]+)/i);
-    if (m) {
-      const toNum = (s) => Number(String(s).replace(/[^\d.-]/g, '')) || 0;
-      ef = toNum(m[1]);
-      mp = toNum(m[2]);
-    }
-  }
-  const toNum = (s) => {
-    if (typeof s === 'number') return Number.isFinite(s) ? s : 0;
-    const str = String(s || '').trim();
-    if (!str) return 0;
-    const normalized = str
-      .replace(/\./g, '')
-      .replace(',', '.')
-      .replace(/[^\d.-]/g, '');
-    const n = Number(normalized);
-    return Number.isFinite(n) ? n : 0;
-  };
-  const viewPagoParsed = toNum(viewPago);
-  const totalPagado =
-    methodNorm === 'mixto'
-      ? viewEf + viewMp
-      : methodNorm === 'transferencia'
-        ? Number(total || 0)
-        : methodNorm === 'debito'
-          ? Number(viewDb) || Number(total || 0)
-          : viewPagoParsed;
-  const dispatch = useDispatch();
-  const [copiado, setCopiado] = useState();
-  const [hidden, setHidden] = useState(() => {
-    const saved = localStorage.getItem(`order-hidden-${id}`);
-    return saved === 'true'; // default: false
-  });
-  const pedidoMap = items.map((item) => item.name);
-  const listaItems = pedidoMap.flat();
-  const repetidos = [];
-
-  const itemsNorm = useMemo(() => {
-    const hasEnvio = items.some((it) => /envio/i.test(String(it?.name || '')));
-    const base = items.map((it) => ({
-      ...it,
-      name: String(it?.name || '').replace(/^\s*envio\s*\d*/i, 'Envío'),
-    }));
-
-    if (direccion !== 'Retiro' && !hasEnvio) {
-      base.push({ name: 'Envío', quantity: 1, category: 'Envio' });
-    }
-    return base;
-  }, [items, direccion]);
-
-  const repetidos2 = [];
-  listaItems.forEach(function (numero) {
-    repetidos[numero] = (repetidos[numero] || 0) + numero;
-  });
-
-  itemsNorm.forEach((item) => {
-    const q = Number(item?.quantity || 0) || 1;
-    repetidos2[item.name] = (repetidos2[item.name] || 0) + q;
-  });
-
-  // scan handler eliminado (no usado)
-
-  // Reset de input/preview al cerrar el modal
-  useEffect(() => {
-    if (!linkOpen) {
-      setLinkId('');
-      setLinkMsg('');
-      setClientPreview(null);
-      setClientPreviewError('');
-    }
-  }, [linkOpen]);
-
-  // Lookup de cliente para previsualizar nombre/dni al escanear/pegar
-  useEffect(() => {
-    if (!linkOpen) {
-      setClientPreview(null);
-      setClientPreviewError('');
-      return;
-    }
-    const trimmed = normalizeScan(linkId);
-    if (!trimmed) {
-      setClientPreview(null);
-      setClientPreviewError('');
-      return;
-    }
-
-    const lookupId = Date.now();
-    lastLookupRef.current = lookupId;
-    const timer = setTimeout(async () => {
-      try {
-        const res = await pointsApiClient.findQRCode(trimmed);
-
-        if (lastLookupRef.current !== lookupId) return;
-
-        if (res.found && res.type === 'client') {
-          setClientPreview({
-            name: res.name || res.data.name || 'Cliente',
-            dni: res.clientDni || res.data.dni || '',
-            email: res.data.email,
-          });
-          setClientPreviewError('');
-        } else {
-          setClientPreview(null);
-          setClientPreviewError('Cliente no encontrado en sistema de puntos');
-        }
-      } catch (err) {
-        if (lastLookupRef.current !== lookupId) return;
-        setClientPreview(null);
-        setClientPreviewError('Error buscando cliente');
-      }
-    }, 250);
-
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [linkId, linkOpen]);
-
-  const removeOrder = (id, reason) => {
-    dispatch(removeOrderFromBoth({ id, reason }));
-  };
-
-  const toggleHidden = () => {
-    setHidden((prev) => {
-      localStorage.setItem(`order-hidden-${id}`, String(!prev));
-      return !prev;
-    });
-  };
-
-  const handleLinkClient = async () => {
-    setClientPreviewError('');
-    if (pointsClaimed) {
-      setLinkMsg('Los puntos ya fueron reclamados para este pedido.');
-      return;
-    }
-    try {
-      if (pending) {
-        alert('No se puede vincular mientras el pedido está offline.');
-        return;
-      }
-      // solo retiro
-      if (
-        String(direccion || '')
-          .trim()
-          .toLowerCase() !== 'retiro'
-      ) {
-        alert('Solo se pueden sumar puntos en pedidos de retiro.');
-        return;
-      }
-      const trimmed = linkId.trim();
-      if (!trimmed) {
-        setLinkMsg('Escaneá/pegá el código QR del cliente.');
-        return;
-      }
-      setLinkLoading(true);
-      setLinkMsg('');
-
-      // 1. Buscar cliente en sistema de puntos
-      const res = await pointsApiClient.findQRCode(trimmed);
-
-      if (!res.found || res.type !== 'client') {
-        setLinkMsg('No se encontró un cliente válido con ese QR.');
-        setLinkLoading(false);
-        return;
-      }
-
-      const clientRec = res.data;
-      const pts = Math.floor(Number(total || 0) / POINTS_RATE);
-
-      if (pts <= 0) {
-        setLinkMsg('El monto es muy bajo para sumar puntos.');
-        setLinkLoading(false);
-        return;
-      }
-
-      // 2. Sumar puntos en sistema externo
-      const addRes = await pointsApiClient.addPointsFromPos(
-        clientRec.id,
-        pts,
-        `Compra #${numeracion}`,
-        'cajero'
-      );
-
-      if (!addRes.success) {
-        setLinkMsg(`Error sumando puntos: ${addRes.message}`);
-        setLinkLoading(false);
-        return;
-      }
-
-      // 3. Actualizar orden local
-      try {
-        await pb.collection('orders').update(id, {
-          client: clientRec.id,
-          points: pts,
-          pointsClaimed: true,
-        });
-      } catch (localErr) {
-        console.warn('No se pudo vincular client ID localmente, pero se sumaron puntos.', localErr);
-        await pb.collection('orders').update(id, {
-          points: pts,
-          pointsClaimed: true,
-        });
-      }
-
-      dispatch(
-        upsertOrder({
-          id,
-          client: clientRec.id,
-          points: pts,
-          pointsClaimed: true,
-        })
-      );
-
-      setLinkMsg(`Cliente vinculado. Se sumaron ${pts} puntos.`);
-      setLinkId('');
-      setLinkOpen(false);
-    } catch (e) {
-      console.error('Error vinculando cliente:', e);
-      const reason = e?.message || e?.data?.message || '';
-      setLinkMsg(`No se pudo vincular. ${reason}`);
-    } finally {
-      setLinkLoading(false);
-    }
-  };
-
-  const savePayment = async ({ method, cash, mp }) => {
-    try {
-      const tot = Number(total) || 0;
-      let payload;
-
-      if (method === 'Transferencia') {
-        payload = {
-          method: 'transferencia',
-          pago: tot,
-          pagoEfectivo: 0,
-          pagoMp: tot,
-          pagoDetalle: 'Transferencia',
-        };
-      } else if (method === 'Débito') {
-        payload = {
-          method: 'debito',
-          pago: tot,
-          pagoEfectivo: 0,
-          pagoMp: 0,
-          pagoDebito: tot,
-          pagoDetalle: 'Débito',
-        };
-      } else if (method === 'Efectivo') {
-        const ef = Number(cash) || 0;
-        if (ef < tot) {
-          alert('En efectivo, el monto debe ser ≥ al total.');
-          return;
-        }
-        payload = {
-          method: 'efectivo',
-          pago: ef,
-          pagoEfectivo: ef,
-          pagoMp: 0,
-          pagoDetalle: `EF $${ef}`,
-        };
-      } else {
-        const ef = Number(cash) || 0;
-        const mpVal = Number(mp) || 0;
-        if (ef <= 0 || mpVal <= 0) {
-          alert('En Mixto, EF y MP deben ser > 0.');
-          return;
-        }
-        if (ef + mpVal < tot) {
-          alert('En Mixto, la suma de EF + MP no puede ser menor al total.');
-          return;
-        }
-        payload = {
-          method: 'mixto',
-          pago: ef + mpVal,
-          pagoEfectivo: ef,
-          pagoMp: mpVal,
-          pagoDetalle: `EF $${ef} + MP $${mpVal}`,
-        };
-      }
-
-      setLocalPay(payload);
-      setViewVersion((v) => v + 1);
-
-      await pb.collection('orders').update(id, payload);
-      dispatch(upsertOrder({ id, ...payload }));
-
-      setEditPayOpen(false);
-    } catch (e) {
-      console.error('Error guardando pago:', e);
-      setLocalPay(null);
-      alert('No se pudo guardar el pago.');
-    }
-  };
-
-  const copyOrder = () => {
-    const lines = [];
-
-    lines.push(`📍 *${direccion}*`);
-
-    const productosGrouped = items
-      .filter(
-        (it) =>
-          !String(it.category || '')
-            .toLowerCase()
-            .includes('extra')
-      )
-      .reduce((acc, it) => {
-        const qty = Number(it.quantity) || 0;
-        acc[it.name] = (acc[it.name] || 0) + qty;
-        return acc;
-      }, {});
-    const productosLines = Object.entries(productosGrouped).map(([name, qty]) => {
-      let baseName = name.trim();
-      if (qty > 1 && /^1\s*kg\b/i.test(baseName)) {
-        baseName = baseName.replace(/^1\s*/i, '');
-      }
-      return qty === 1 ? `• ${baseName}` : `• ${qty} ${baseName}`;
-    });
-    if (productosLines.length) lines.push(...productosLines);
-
-    const extrasGrouped = items
-      .filter(
-        (it) =>
-          String(it.category || '')
-            .toLowerCase()
-            .includes('extra') && /vasito|cucurucho/i.test(it.name)
-      )
-      .reduce((acc, it) => {
-        const m = String(it.name).match(/^(\d+)/);
-        const base = m ? parseInt(m[1], 10) : 1;
-        const units = base * (Number(it.quantity) || 0);
-        const label = String(it.name)
-          .replace(/^\d+\s*/, '')
-          .trim();
-        acc[label] = (acc[label] || 0) + units;
-        return acc;
-      }, {});
-    const extrasLines = Object.entries(extrasGrouped).map(
-      ([label, totalUnits]) => `• ${totalUnits} ${label}`
-    );
-    if (extrasLines.length) lines.push(...extrasLines);
-
-    if (methodNorm === 'transferencia') {
-      lines.push(`💳 Transferencia OK`);
-    } else if (methodNorm === 'mixto') {
-      const cash = Number(viewEf) || 0;
-      const mpAmt = Number(viewMp) || 0;
-      const tot = Number(total) || 0;
-      const restanteTrasMP = Math.max(tot - mpAmt, 0);
-      const cambioDesdeEF = Math.max(cash - restanteTrasMP, 0);
-
-      if (cash > 0) lines.push(`💵 ${formatPrice(cash)}`);
-      if (cambioDesdeEF > 0) lines.push(`🔄 ${formatPrice(cambioDesdeEF)}`);
-    } else if (methodNorm === 'efectivo' && !isNaN(Number(viewPago))) {
-      const cash = Number(viewPago) || 0;
-      const tot = Number(total) || 0;
-      const change = Math.max(cash - tot, 0);
-
-      lines.push(`💵 ${formatPrice(cash)}`);
-      if (change > 0) lines.push(`🔄 ${formatPrice(change)}`);
-    }
-
-    navigator.clipboard.writeText(lines.join('\n'));
-  };
-
-  const clickBtnCopy = async () => {
-    copyOrder();
-    setCopiado(true);
-
-    try {
-      await pb.collection('orders').update(id, { copied: true });
-
-      // actualizar Redux sin depender del realtime
-      dispatch(upsertOrder({ id, copied: true }));
-    } catch (e) {
-      console.error('Error actualizando copied:', e);
-    }
-
-    setTimeout(() => setCopiado(false), 1800);
-  };
-
-  const createdMs = useMemo(() => {
-    if (typeof clientCreatedAt === 'number') return clientCreatedAt;
-    if (created) return new Date(created).getTime();
-    return Date.now();
-  }, [clientCreatedAt, created]);
-
-  const rel = useMemo(() => relativeTimeFrom(createdMs), [createdMs]);
-  const extrasCalc = items
-    .filter((it) => it.category === 'Extras')
-    .map((it) => {
-      const match = it.name.match(/^(\d+)/);
-      const base = match ? parseInt(match[1], 10) : 1;
-      const total = base * it.quantity;
-      const label = it.name.replace(/^\d+\s*/, '');
-      return `${total} ${label}`;
-    });
-
-  const Ticket58 = React.forwardRef(
-    ({ direccion, itemsNorm, total, pago, ef, mp, totalPagado, formatPrice, logo }, ref) => {
-      return (
-        <Print
-          ref={ref}
-          className="ticket58"
-          style={{
-            width: '48mm',
-            maxWidth: '48mm',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-            padding: '0 2mm',
-            boxSizing: 'border-box',
-            lineHeight: 1.25,
-            fontSize: '4mm',
-          }}
-        >
-          <div style={{ textAlign: 'center', marginBottom: '2mm' }}>
-            <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
-
-            <img
-              src={logo}
-              alt="Logo"
-              style={{ width: '30mm', height: 'auto', display: 'block', margin: '0 auto' }}
-            />
-          </div>
-
-          <div style={{ width: '100%', textAlign: 'center', margin: '1.5mm 0 .8mm' }}>
-            <div
-              style={{
-                lineHeight: 1.2,
-                maxWidth: '100%',
-                margin: '0 auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-                fontWeight: 700,
-                fontSize: '4.2mm',
-              }}
-            >
-              {direccion || 'Retiro'}
-            </div>
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
-
-          <div style={{ width: '100%', margin: '1.5mm 0' }}>
-            <div
-              style={{
-                display: 'flex',
-                fontWeight: 'bold',
-                marginBottom: '1mm',
-              }}
-            >
-              <span style={{ width: '6mm' }}>#</span>
-              <span style={{ flex: 1, textAlign: 'left' }}>Producto</span>
-            </div>
-
-            {itemsNorm.map((it, idx) => {
-              const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
-              const nombre = it?.name || it?.title || it?.label || '';
-              const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
-              return (
-                <div key={idx} style={{ marginBottom: '1mm' }}>
-                  <div style={{ display: 'flex', fontSize: '3.8mm' }}>
-                    <span style={{ width: '6mm' }}>{cantidad}</span>
-                    <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
-                  </div>
-                  {!!sabores.length && (
-                    <div
-                      style={{
-                        marginLeft: '6mm',
-                        marginTop: '.6mm',
-                        fontSize: '3.5mm',
-                        fontWeight: 700,
-                        textAlign: 'left',
-                      }}
-                    >
-                      {sabores.map((s, i) => (
-                        <div key={i}>• {s}</div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-
-          <div style={{ borderTop: '1px dashed #000', margin: '12px 0' }} />
-
-          <TotalPrint
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              padding: '2mm 0',
-            }}
-          >
-            <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Total</a>
-            <a style={{ textAlign: 'right', fontWeight: 'bold' }}>{formatPrice(total)}</a>
-          </TotalPrint>
-
-          {pago === 'Mixto' ? (
-            <>
-              <TotalPrint
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '2mm 0',
-                }}
-              >
-                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Efectivo</a>
-                <a style={{ textAlign: 'right' }}>{formatPrice(ef)}</a>
-              </TotalPrint>
-              <TotalPrint
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '2mm 0',
-                }}
-              >
-                <a style={{ textAlign: 'left', fontWeight: 'bold' }}>MercadoPago</a>
-                <a style={{ textAlign: 'right' }}>{formatPrice(mp)}</a>
-              </TotalPrint>
-              {totalPagado > total && (
-                <TotalPrint
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    padding: '2mm 0',
-                  }}
-                >
-                  <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
-                  <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - total)}</a>
-                </TotalPrint>
-              )}
-            </>
-          ) : (
-            <TotalPrint
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '2mm 0',
-              }}
-            >
-              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>
-                {pago === 'Transferencia' ? 'Transferencia' : 'Paga'}
-              </a>
-              <a style={{ textAlign: 'right' }}>
-                {pago === 'Transferencia'
-                  ? ''
-                  : viewPagoParsed === total
-                    ? 'JUSTO'
-                    : formatPrice(viewPagoParsed)}
-              </a>
-            </TotalPrint>
-          )}
-          {pago !== 'Mixto' && pago !== 'Transferencia' && totalPagado > Number(total || 0) && (
-            <TotalPrint
-              style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                padding: '2mm 0',
-              }}
-            >
-              <a style={{ textAlign: 'left', fontWeight: 'bold' }}>Cambio</a>
-              <a style={{ textAlign: 'right' }}>{formatPrice(totalPagado - Number(total || 0))}</a>
-            </TotalPrint>
-          )}
-          <div style={{ borderTop: '1px dashed #000', margin: '24px 0' }} />
-        </Print>
-      );
-    }
-  );
-  Ticket58.displayName = 'Ticket58';
-
-  const contentRef = useRef(null);
-  const [confirmPrintOpen, setConfirmPrintOpen] = useState(false);
-
-  const pageStyle = `
-@page {
-  margin: 0;
-}
-@media print {
-  html, body {
-    width: 48mm;
-    margin: 0 !important;
-    padding: 0 !important;
-    overflow: hidden;
-  }
-  * {
-    box-sizing: border-box;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}
-`;
-
-  const [isPrinting, setIsPrinting] = useState(false);
-
-  const _reactToPrint = useReactToPrint({
-    contentRef: contentRef,
-    pageStyle,
-    removeAfterPrint: false,
-    onBeforePrint: async () => {
-      if (!isLinux) setIsPrinting(true);
-
-      if (document.fonts?.ready) await document.fonts.ready;
-
-      const root = contentRef.current;
-      if (root) {
-        const imgs = Array.from(root.querySelectorAll('img'));
-        await Promise.all(
-          imgs.map((img) =>
-            img.complete
-              ? Promise.resolve()
-              : new Promise((res) => {
-                  img.onload = res;
-                  img.onerror = res;
-                })
-          )
-        );
-      }
-
-      await new Promise((r) => requestAnimationFrame(r));
-    },
-    onAfterPrint: () => {
-      if (!isLinux) setIsPrinting(false);
-    },
-    onPrintError: () => {
-      if (!isLinux) setIsPrinting(false);
-    },
-  });
-
-  // En Linux lo anulamos completamente
-  const reactToPrintFn = isLinux ? () => {} : _reactToPrint;
-
-  const doPrint = async () => {
-    setIsPrinting(true);
-    try {
-      const el = contentRef.current;
-      if (!el) return;
-      const styles = Array.from(document.querySelectorAll('style'))
-        .map((s) => s.outerHTML)
-        .join('\n');
-      const html = `
-<!DOCTYPE html>
-<html>
-  <head>
-    ${styles}
-    <style>
-      @page { margin: 0; }
-      html, body {
-        width: 48mm;
-        margin: 0;
-        padding: 0;
-        background: white;
-      }
-      * {
-        box-sizing: border-box;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-    </style>
-  </head>
-  <body>
-    ${el.outerHTML}
-  </body>
-</html>
-`;
-
-      if (window.electron?.ipcRenderer) {
-        // ⏳ espera REAL hasta que termina de imprimir
-        await window.electron.ipcRenderer.invoke('print-ticket', html);
-        localStorage.setItem(`order-printed-${id}`, 'true');
-      } else {
-        await reactToPrintFn?.();
-        localStorage.setItem(`order-printed-${id}`, 'true');
-      }
-    } catch (err) {
-      console.error('Error al imprimir:', err);
-    } finally {
-      setIsPrinting(false);
-    }
-  };
-
-  const handlePrint = async () => {
-    if (isPrinting) return;
-    const el = contentRef.current;
-    if (!el) return;
-    const printedKey = `order-printed-${id}`;
-    const alreadyPrinted = localStorage.getItem(printedKey) === 'true';
-    if (alreadyPrinted) {
-      setConfirmPrintOpen(true);
-      return;
-    }
-    await doPrint();
-  };
-
-  const groupedItems = useMemo(() => {
-    const map = {};
-
-    itemsNorm.forEach((it) => {
-      const saboresKey = (it.sabores || []).join('|');
-      const key = `${it.name}__${saboresKey}`;
-
-      if (!map[key]) {
-        map[key] = {
-          ...it,
-          quantity: Number(it.quantity || 1),
-        };
-      } else {
-        map[key].quantity += Number(it.quantity || 1);
-      }
-    });
-
-    return Object.values(map);
-  }, [itemsNorm]);
-
-  return (
-    <ContainerCard
-      key={viewVersion}
-      style={pending ? { border: '2px dashed orange' } : {}}
-      $pulse={copiado}
-      $estado={
-        methodNorm === 'mixto'
-          ? totalPagado === total
-            ? 'justo'
-            : totalPagado > total
-              ? 'cambio'
-              : 'incompleto'
-          : methodNorm === 'transferencia'
-            ? 'transferencia'
-            : Number(viewPago) === Number(total)
-              ? 'justo'
-              : Number(viewPago) > Number(total)
-                ? 'cambio'
-                : 'incompleto'
-      }
-    >
-      <TitleCard>
-        <span
-          style={{
-            fontSize: '1.1em',
-            fontWeight: 900,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-          }}
-        >
-          #{numeracion}
-          {copied && (
-            <span
-              style={{
-                padding: '4px 10px',
-                borderRadius: 999,
-                fontSize: '0.75rem',
-                fontWeight: 900,
-                background: '#23a76d',
-                color: '#fff',
-                whiteSpace: 'nowrap',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                marginLeft: 10,
-              }}
-            >
-              ✓ Enviado
-            </span>
-          )}
-        </span>
-        <Hora>{hora}</Hora>
-        <HaceMin title={new Date(createdMs).toLocaleString()}>{rel}</HaceMin>
-
-        {pending && (
-          <span
-            style={{
-              marginLeft: 8,
-              padding: '2px 6px',
-              fontSize: '0.75em',
-              fontWeight: 'bold',
-              color: '#fff',
-              background: 'orange',
-              borderRadius: 4,
-            }}
-          >
-            OFFLINE
-          </span>
-        )}
-
-        <ContentButtonsTitle>
-          {!pointsClaimed &&
-            String(direccion || '')
-              .trim()
-              .toLowerCase() === 'retiro' && (
-              <ButtonTitle onClick={() => setLinkOpen(true)} title="Vincular cliente (QR)">
-                <QrCodeScannerIcon fontSize="small" />
-              </ButtonTitle>
-            )}
-          {/* Botón Copiar (solo si NO es retiro) */}
-          {!isRetiro && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              {copiado ? (
-                <ButtonCopy onClick={clickBtnCopy} style={{ background: '#6528F7', color: '#fff' }}>
-                  Copiado
-                </ButtonCopy>
-              ) : (
-                <ButtonCopy onClick={clickBtnCopy}>Copiar</ButtonCopy>
-              )}
-            </div>
-          )}
-
-          <ButtonPrint variant="contained" disabled={isPrinting} onClick={handlePrint}>
-            <PrintIcon />
-          </ButtonPrint>
-
-          <ButtonTitle onClick={() => setEditPayOpen(true)} title="Editar pago">
-            <MdEdit size={16} />
-          </ButtonTitle>
-
-          <ButtonTitle onClick={() => setConfirmOpen(true)} title="Borrar">
-            <FaXmark size={16} />
-          </ButtonTitle>
-        </ContentButtonsTitle>
-        <Dialog
-          open={confirmPrintOpen}
-          onClose={() => setConfirmPrintOpen(false)}
-          PaperProps={{
-            sx: {
-              fontFamily: 'Inter, sans-serif',
-              borderRadius: '16px',
-              boxShadow: '0 12px 28px rgba(0,0,0,0.18)',
-              minWidth: 360,
-            },
-          }}
-        >
-          <DialogTitle
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 1,
-              fontWeight: 800,
-              fontSize: '1.1rem',
-            }}
-          >
-            <PrintIcon sx={{ fontSize: 22 }} />
-            Reimprimir pedido #{numeracion}
-          </DialogTitle>
-          <DialogContent
-            sx={{
-              fontSize: '0.95rem',
-              color: '#333',
-              fontWeight: 600,
-              paddingTop: 1,
-            }}
-          >
-            Este pedido ya fue impreso. ¿Querés volver a hacerlo?
-          </DialogContent>
-          <DialogActions sx={{ px: 3, pb: 2, pt: 1 }}>
-            <Button
-              onClick={() => setConfirmPrintOpen(false)}
-              variant="outlined"
-              sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 600 }}
-            >
-              Cancelar
-            </Button>
-            <Button
-              onClick={async () => {
-                setConfirmPrintOpen(false);
-                await doPrint();
-              }}
-              variant="contained"
-              sx={{ borderRadius: 20, textTransform: 'none', fontWeight: 600 }}
-              autoFocus
-            >
-              Imprimir otra vez
-            </Button>
-          </DialogActions>
-        </Dialog>
-      </TitleCard>
-      <DirCard>
-        {direccion === 'Retiro' ? <BiHomeAlt2 size={18} /> : <MapPin size={18} />}
-        <Direccion>{direccion}</Direccion>
-        <Checkbox icon={<ChevronDown />} checkedIcon={<ChevronUp />} onClick={toggleHidden} />
-      </DirCard>
-      {extrasCalc.length > 0 && (
-        <div
-          style={{
-            margin: '10px 0',
-            display: 'flex',
-            justifyContent: 'flex-start',
-          }}
-        >
-          <span
-            style={{
-              padding: '6px 10px',
-              background: '#fff3cd',
-              border: '2px solid #ff9800',
-              borderRadius: 10,
-              fontWeight: '900',
-              color: '#333',
-              fontSize: '0.9rem',
-              display: 'flex',
-              whiteSpace: 'nowrap',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <TriangleAlert size={18} /> {extrasCalc.join(', ')}
-          </span>
-        </div>
-      )}
-      {hidden ? null : (
-        <>
-          {/* Productos: integrado tipo footer */}
-          <div style={{ margin: '0px 0 14px 0' }}>
-            <div
-              style={{
-                background: '#fcfcfcff', // similar a footer
-                borderRadius: 16,
-                padding: '12px 14px',
-                border: '1px solid rgba(0, 0, 0, 0.40)',
-                fontFamily: "'JetBrains Mono', monospace",
-                fontVariantNumeric: 'tabular-nums',
-                letterSpacing: '-0.02em',
-              }}
-            >
-              {/* Header mini */}
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  marginBottom: 8,
-                }}
-              ></div>
-
-              {/* Lista */}
-              <div style={{ display: 'grid', gap: 8, fontSize: '0.90rem' }}>
-                <div style={{ display: 'grid', gap: 6, fontSize: '0.92rem' }}>
-                  {/* Header tipo ticket */}
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: '1fr 52px 90px',
-                      gap: 10,
-                      fontWeight: 900,
-                      opacity: 0.65,
-                      fontSize: 12,
-                      paddingBottom: 6,
-                      borderBottom: '1px dashed rgba(0,0,0,0.25)',
-                    }}
-                  >
-                    <div style={{ textAlign: 'left' }}>Producto</div>
-                    <div style={{ textAlign: 'center' }}>Cant</div>
-                    <div style={{ textAlign: 'center' }}>$</div>
-                  </div>
-
-                  {groupedItems.map((it, idx) => {
-                    const cantidad = it.quantity;
-                    const nombre = it.name;
-                    // si en tus items existe price, total, subtotal, etc, lo tomamos
-                    const unitPrice = Number(it?.price ?? it?.unitPrice ?? it?.precio ?? 0) || 0;
-
-                    const lineTotal =
-                      Number(it?.total ?? it?.subtotal ?? 0) ||
-                      (unitPrice ? unitPrice * cantidad : 0);
-
-                    const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
-
-                    return (
-                      <div key={idx} style={{ display: 'grid', gap: 3 }}>
-                        <div
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 60px 90px',
-                            gap: 10,
-                            alignItems: 'baseline',
-                          }}
-                        >
-                          {/* Producto */}
-                          <div style={{ fontWeight: 800, lineHeight: 1.15, textAlign: 'left' }}>
-                            {nombre}
-                          </div>
-
-                          {/* Cantidad */}
-                          <div style={{ textAlign: 'center', fontWeight: 900, opacity: 0.85 }}>
-                            {cantidad}
-                          </div>
-
-                          {/* Precio */}
-                          <div style={{ textAlign: 'center', fontWeight: 900 }}>
-                            {lineTotal ? formatPrice(lineTotal) : '—'}
-                          </div>
-                        </div>
-
-                        {/* Sabores abajo, como subticket */}
-                        {!!sabores.length && (
-                          <div
-                            style={{
-                              marginLeft: 0,
-                              paddingLeft: 10,
-                              borderLeft: '2px solid rgba(0,0,0,0.08)',
-                              opacity: 0.85,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              display: 'grid',
-                              gap: 2,
-                              textAlign: 'left',
-                              margin: '4px 0',
-                            }}
-                          >
-                            {sabores.map((s, i) => (
-                              <div key={i}>• {s}</div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      <FooterCard>
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr auto',
-            rowGap: 12,
-            columnGap: 12,
-            alignItems: 'center',
-            padding: '10px 25px',
-          }}
-        >
-          {/* Fila 1 */}
-          <div style={{ opacity: 0.75, fontWeight: 700, justifySelf: 'start', textAlign: 'left' }}>
-            Total
-          </div>
-          <div style={{ fontWeight: 900, fontSize: '1em', textAlign: 'right' }}>
-            {formatPrice(total)}
-          </div>
-
-          {/* Fila 2 */}
-          <div style={{ opacity: 0.75, fontWeight: 700, justifySelf: 'start', textAlign: 'left' }}>
-            {isRetiro ? 'Pagó' : 'Paga'}
-          </div>
-
-          {(() => {
-            const tot = Number(total) || 0;
-
-            // EFECTIVO
-            if (methodNorm === 'efectivo') {
-              const paid = Number(viewPago) || 0;
-              const change = Math.max(0, paid - tot);
-
-              return (
-                <div
-                  style={{
-                    justifySelf: 'end',
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    textAlign: 'right',
-                  }}
-                >
-                  {/* Badge: total abonado */}
-                  <span
-                    style={{
-                      color: '#2f965cff',
-                      borderRadius: 999,
-                      fontWeight: 900,
-                      whiteSpace: 'nowrap',
-                      textAlign: 'right',
-                    }}
-                  >
-                    {isRetiro ? 'Efectivo' : formatPrice(paid)}
-                  </span>
-                </div>
-              );
-            }
-
-            // DÉBITO
-            if (methodNorm === 'debito') {
-              return (
-                <div style={{ justifySelf: 'end', textAlign: 'right' }}>
-                  <span
-                    style={{
-                      color: '#7322a8ff',
-                      borderRadius: 999,
-                      fontSize: 15,
-                      fontWeight: 900,
-                      whiteSpace: 'nowrap',
-                      textAlign: 'right',
-                    }}
-                  >
-                    Débito
-                  </span>
-                </div>
-              );
-            }
-
-            // TRANSFERENCIA
-            if (methodNorm === 'transferencia') {
-              return (
-                <div style={{ justifySelf: 'end', textAlign: 'right' }}>
-                  <span
-                    style={{
-                      color: '#1e6cff',
-                      borderRadius: 999,
-                      fontSize: 15,
-                      fontWeight: 800,
-                      whiteSpace: 'nowrap',
-                      textAlign: 'right',
-                    }}
-                  >
-                    Transferencia
-                  </span>
-                </div>
-              );
-            }
-
-            // MIXTO (mostrar detalle EF + MP, sin decir "Mixto")
-            const cashNet = getOrderCashNet({
-              method: 'mixto',
-              pago: viewPago,
-              total,
-              pagoEfectivo: Number(viewEf) || 0,
-              pagoMp: Number(viewMp) || 0,
-              pagoDetalle,
-            });
-            const mpAmt = Number(viewMp) || 0;
-
-            return (
-              <div style={{ justifySelf: 'end', textAlign: 'right' }}>
-                <span
-                  style={{
-                    fontWeight: 900,
-                    whiteSpace: 'nowrap',
-                    alignItems: 'center',
-                    display: 'flex',
-                    gap: 8,
-                  }}
-                >
-                  <span
-                    style={{
-                      color: '#2f965cff',
-                      alignItems: 'center',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <Banknote size={20} /> {formatPrice(cashNet)}
-                  </span>
-                  <span style={{ opacity: 0.6 }}> + </span>
-                  <span
-                    style={{
-                      color: '#1e6cff',
-                      alignItems: 'center',
-                      display: 'flex',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                  >
-                    <CreditCard size={18} /> {formatPrice(mpAmt)}
-                  </span>
-                </span>
-              </div>
-            );
-          })()}
-
-          {/* Fila 3: Cambio (solo si corresponde) */}
-          {(() => {
-            const tot = Number(total) || 0;
-
-            if (methodNorm === 'efectivo') {
-              const paid = Number(viewPago) || 0;
-              const change = Math.max(0, paid - tot);
-              if (change <= 0) return null;
-
-              return (
-                <>
-                  <div
-                    style={{
-                      opacity: 0.75,
-                      fontWeight: 700,
-                      justifySelf: 'start',
-                      textAlign: 'left',
-                    }}
-                  >
-                    Cambio
-                  </div>
-                  <div
-                    style={{
-                      fontWeight: 900,
-                      color: '#c0392b',
-                      textAlign: 'right',
-                      justifySelf: 'end',
-                    }}
-                  >
-                    {formatPrice(change)}
-                  </div>
-                </>
-              );
-            }
-
-            if (methodNorm === 'mixto') {
-              const cash = Number(viewEf) || 0;
-              const mpAmt = Number(viewMp) || 0;
-
-              // Cambio real: lo que sobra del efectivo después de cubrir lo que no cubrió MP
-              const restanteTrasMP = Math.max(tot - mpAmt, 0);
-              const change = Math.max(cash - restanteTrasMP, 0);
-
-              if (change <= 0) return null;
-
-              return (
-                <>
-                  <div
-                    style={{
-                      opacity: 0.75,
-                      fontWeight: 700,
-                      justifySelf: 'start',
-                      textAlign: 'left',
-                    }}
-                  >
-                    Cambio
-                  </div>
-                  <div
-                    style={{
-                      fontWeight: 900,
-                      color: '#c0392b',
-                      textAlign: 'right',
-                      justifySelf: 'end',
-                    }}
-                  >
-                    {formatPrice(change)}
-                  </div>
-                </>
-              );
-            }
-
-            return null;
-          })()}
-        </div>
-      </FooterCard>
-
-      <div
-        id="ticket-root"
-        style={{
-          position: 'fixed',
-          top: 0,
-          left: '0',
-          transform: 'translateX(-100%)',
-          zIndex: -1,
-          background: '#fff',
-        }}
-      >
-        <Ticket58
-          ref={contentRef}
-          direccion={direccion}
-          itemsNorm={itemsNorm}
-          total={total}
-          pago={ticketPago}
-          ef={ef}
-          mp={mp}
-          totalPagado={totalPagado}
-          formatPrice={formatPrice}
-          logo={logo}
-        />
-      </div>
-      {showDevTicketPreview && (
-        <div style={{ border: '1px solid #ccc', marginTop: 10, padding: 8, background: '#fff' }}>
-          <h4>Vista previa ticket (58mm)</h4>
-          <Ticket58
-            direccion={direccion}
-            itemsNorm={itemsNorm}
-            total={total}
-            pago={ticketPago}
-            ef={ef}
-            mp={mp}
-            totalPagado={totalPagado}
-            formatPrice={formatPrice}
-            logo={logo}
-          />
-        </div>
-      )}
-      <PaymentEditor
-        open={editPayOpen}
-        onClose={() => setEditPayOpen(false)}
-        onSave={savePayment}
-        initial={{
-          method:
-            methodNorm === 'mixto'
-              ? 'Mixto'
-              : methodNorm === 'transferencia'
-                ? 'Transferencia'
-                : methodNorm === 'debito'
-                  ? 'Débito'
-                  : 'Efectivo',
-          ef: Number(viewEf || 0),
-          mp: Number(viewMp || 0),
-        }}
-        orderTotal={Number(total) || 0}
-      />
-
-      <ConfirmOverlay
-        open={confirmOpen}
-        onConfirm={(r) => {
-          removeOrder(id, r);
-          setConfirmOpen(false);
-        }}
-        onCancel={() => setConfirmOpen(false)}
-      />
-
-      {linkOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setLinkOpen(false);
-          }}
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            background: 'rgba(0,0,0,0.65)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '100%',
-            height: '100%',
-          }}
-        >
-          <div
-            style={{
-              background: '#fff',
-              borderRadius: 16,
-              width: '100%',
-              maxWidth: 420,
-              padding: '20px 22px',
-              height: 'auto',
-              boxShadow: '0 16px 48px rgba(0,0,0,0.35)',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 16,
-              overflow: 'hidden',
-            }}
-          >
-            <div style={{ fontWeight: 800, fontSize: '1.2rem', fontFamily: 'inherit' }}>
-              Pedido #{numeracion} - Vincular QR
-            </div>
-            <div style={{ fontSize: '0.9rem', color: '#444', fontFamily: 'inherit' }}>
-              Escanea el QR (pega el ID) para sumar puntos al cliente.
-            </div>
-            <input
-              autoFocus
-              placeholder="ID del cliente"
-              value={linkId}
-              onChange={(e) => setLinkId(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  const fixed = normalizeScan(linkId);
-
-                  console.log('RAW SCAN:', linkId);
-                  console.log('FIXED SCAN:', fixed);
-
-                  if (fixed.length === 6) {
-                    setLinkId(fixed);
-                    handleLinkClient();
-                  }
-
-                  setLinkId('');
-                }
-              }}
-              style={{
-                width: '100%',
-                padding: '16px 18px',
-                borderRadius: 14,
-                border: '1px solid #ddd',
-                fontSize: '1rem',
-                fontFamily: 'inherit',
-              }}
-            />
-            {clientPreview && (
-              <div
-                style={{
-                  fontSize: '1rem',
-                  color: '#111',
-                  background: '#f6f6f6',
-                  padding: 12,
-                  borderRadius: 12,
-                  border: '1px solid #e5e5e5',
-                }}
-              >
-                {clientPreview.name && (
-                  <div>
-                    Nombre: <strong>{clientPreview.name}</strong>
-                  </div>
-                )}
-                {clientPreview.dni && (
-                  <div>
-                    DNI: <strong>{clientPreview.dni}</strong>
-                  </div>
-                )}
-              </div>
-            )}
-            {!clientPreview && clientPreviewError && (
-              <div
-                style={{
-                  fontSize: '0.95rem',
-                  color: '#d32f2f',
-                  background: '#fde8e8',
-                  padding: 10,
-                  borderRadius: 10,
-                  border: '1px solid #f6cfd0',
-                }}
-              >
-                {clientPreviewError}
-              </div>
-            )}
-            {pointsClaimed && (
-              <div
-                style={{
-                  fontSize: '1rem',
-                  color: '#8a6d3b',
-                  background: '#fff3cd',
-                  padding: 12,
-                  borderRadius: 12,
-                  border: '1px solid #f0d58c',
-                }}
-              >
-                Puntos ya reclamados para este pedido.
-              </div>
-            )}
-            <div
-              style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 'auto' }}
-            >
-              <button
-                onClick={() => setLinkOpen(false)}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  border: '1px solid #ccc',
-                  background: '#f7f7f7',
-                  cursor: 'pointer',
-                  minWidth: 120,
-                  fontSize: '1rem',
-                  fontFamily: 'inherit',
-                }}
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleLinkClient}
-                disabled={linkLoading}
-                style={{
-                  padding: '12px 16px',
-                  borderRadius: 12,
-                  border: 'none',
-                  background: '#111',
-                  color: '#fff',
-                  cursor: 'pointer',
-                  minWidth: 140,
-                  fontSize: '1rem',
-                  opacity: linkLoading ? 0.7 : 1,
-                  fontFamily: 'inherit',
-                }}
-              >
-                {linkLoading ? 'Guardando...' : 'Vincular'}
-              </button>
-            </div>
-            {linkMsg && (
-              <div style={{ fontSize: '1rem', color: '#d32f2f', marginTop: 4 }}>{linkMsg}</div>
-            )}
-          </div>
-        </div>
-      )}
-    </ContainerCard>
-  );
+import CardOrders from '../../components/Orders/CardOrders';
+import BaristaRecipeModal from '../../components/Orders/BaristaRecipeModal';
+import { getBaristaRecipe } from '../../components/Orders/baristaRecipesData';
+import { MOCK_BARISTA_ORDERS } from '../../components/Orders/mockBaristaOrders';
+import { isAndroid } from '../../utils/printBluetooth';
+
+const MOCK_PENDING_DELIVERY_ORDER = {
+  id: 'mock-pending-delivery-dev',
+  numeracion: 99,
+  name: 'Simulación Dev',
+  direccion: 'Av. Corrientes 1234',
+  total: 12500,
+  pago: 'Transferencia',
+  method: 'transferencia',
+  clientCreatedAt: Date.now(),
+  created: new Date().toISOString(),
+  copied: false,
+  pending: false,
+  items: [
+    { name: '1 Kg Helado', quantity: 1, price: 12500, category: 'Helados' },
+  ],
 };
 
-export default function Orders() {
+const SHOW_TOP_PENDING_BANNER = false; // Deshabilitado temporalmente por solicitud del usuario
+
+export default function Orders({ isBarista = false, isTestOrders = false }) {
   const dispatch = useDispatch();
   const unsubRef = useRef(null);
-  const { orders, pagination, status } = useSelector((s) => s.orders);
+  const { orders, testOrders = [], pagination, status } = useSelector((s) => s.orders);
+  const isAdmin = useSelector((s) => s.actions?.isAdmin);
+  const simulatedPendingOrder = useSelector((s) => s.actions?.simulatedPendingOrder);
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
+
+  // Estado para guardar localmente qué pedidos ya preparó el barista
+  const [preparedOrders, setPreparedOrders] = useState(() => {
+    const map = {};
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('barista-prepared-')) {
+        map[key.replace('barista-prepared-', '')] = true;
+      }
+    }
+    return map;
+  });
+
+  const handleMarkPrepared = (orderId) => {
+    localStorage.setItem(`barista-prepared-${orderId}`, 'true');
+    setPreparedOrders((prev) => ({ ...prev, [orderId]: true }));
+  };
+
+  const handleUnmarkPrepared = (orderId) => {
+    localStorage.removeItem(`barista-prepared-${orderId}`);
+    setPreparedOrders((prev) => {
+      const updated = { ...prev };
+      delete updated[orderId];
+      return updated;
+    });
+  };
+
+  const handleDeleteTestOrder = useCallback(
+    (orderId) => {
+      dispatch(deleteTestOrder(orderId));
+      localStorage.removeItem(`barista-prepared-${orderId}`);
+      setPreparedOrders((prev) => {
+        const next = { ...prev };
+        delete next[orderId];
+        return next;
+      });
+    },
+    [dispatch]
+  );
+
+  const [showCompletedBarista, setShowCompletedBarista] = useState(false);
+  const [showMockOrders, setShowMockOrders] = useState(false);
+
+  const [cafeteriaProducts, setCafeteriaProducts] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('pb_cafeteria_products_v1') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const [recipeModalData, setRecipeModalData] = useState(null);
+
+  useEffect(() => {
+    if (!isBarista) return;
+    let cancelled = false;
+    pb.collection('products_cafeteria')
+      .getFullList({ sort: 'name' })
+      .then((list) => {
+        if (!cancelled && Array.isArray(list)) {
+          setCafeteriaProducts(list);
+          try {
+            localStorage.setItem('pb_cafeteria_products_v1', JSON.stringify(list));
+          } catch {}
+        }
+      })
+      .catch((err) => console.log('PB cafeteria products load:', err));
+
+    const coll = pb.collection('products_cafeteria');
+    const handler = () => {
+      pb.collection('products_cafeteria')
+        .getFullList({ sort: 'name' })
+        .then((list) => {
+          if (!cancelled && Array.isArray(list)) {
+            setCafeteriaProducts(list);
+            try {
+              localStorage.setItem('pb_cafeteria_products_v1', JSON.stringify(list));
+            } catch {}
+          }
+        })
+        .catch(console.error);
+    };
+    coll.subscribe('*', handler).catch(() => {});
+
+    return () => {
+      cancelled = true;
+      coll.unsubscribe('*').catch(() => {});
+    };
+  }, [isBarista]);
+
+  const handleOpenRecipe = useCallback((item) => {
+    const recipeData = getBaristaRecipe(item, cafeteriaProducts);
+    setRecipeModalData(recipeData);
+  }, [cafeteriaProducts]);
+
+  const handleToggleMockOrders = () => {
+    setShowMockOrders((prev) => {
+      const next = !prev;
+      if (next) {
+        setPreparedOrders((old) => {
+          const updated = { ...old };
+          MOCK_BARISTA_ORDERS.forEach((m) => {
+            delete updated[m.id];
+            localStorage.removeItem(`barista-prepared-${m.id}`);
+          });
+          return updated;
+        });
+      }
+      return next;
+    });
+  };
 
   const isLoadingMore = status === 'loadingMore';
 
@@ -2120,52 +252,297 @@ export default function Orders() {
   };
 
   useEffect(() => {
-    dispatch(hydrateAllTodayOrders()).finally(() => setIsInitialLoading(false));
-  }, [dispatch]);
+    if (isTestOrders) {
+      setIsInitialLoading(false);
+      return;
+    }
+    if (isBarista) {
+      dispatch(hydrateAllTodayOrders()).finally(() => setIsInitialLoading(false));
+      return;
+    }
+    dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 10 })).finally(() =>
+      setIsInitialLoading(false)
+    );
+    dispatch(fetchTodayPendingOrders());
+  }, [dispatch, isTestOrders, isBarista]);
 
   useEffect(() => {
+    if (isTestOrders) return;
     unsubRef.current = dispatch(subscribeOrdersRealtime());
     return () => {
       if (typeof unsubRef.current === 'function') unsubRef.current();
     };
-  }, [dispatch]);
+  }, [dispatch, isTestOrders]);
 
   useEffect(() => {
+    if (isTestOrders) return;
     const handleOnline = () => {
       dispatch(syncPendingOrders());
       if (navigator.onLine) {
-        dispatch(hydrateAllTodayOrders());
+        dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 10 }));
+        dispatch(fetchTodayPendingOrders());
       }
     };
     window.addEventListener('online', handleOnline);
     if (navigator.onLine) dispatch(syncPendingOrders());
     return () => window.removeEventListener('online', handleOnline);
-  }, [dispatch]);
+  }, [dispatch, isTestOrders]);
+
+  // Refrescar periódicamente los pedidos pendientes del día en segundo plano
+  useEffect(() => {
+    if (isTestOrders) return;
+    const timer = setInterval(() => {
+      if (navigator.onLine && !isBarista) {
+        dispatch(fetchTodayPendingOrders());
+      }
+    }, 30000);
+    return () => clearInterval(timer);
+  }, [dispatch, isBarista, isTestOrders]);
+
+  // Listener para sincronizar testOrders entre pestañas o al reenfocar
+  const [storageTick, setStorageTick] = useState(0);
+  useEffect(() => {
+    const handleStorage = (e) => {
+      if (!e || e.key === 'pixel_pos_test_orders_v1' || !e.key) {
+        setStorageTick((t) => t + 1);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    const handleFocus = () => setStorageTick((t) => t + 1);
+    window.addEventListener('focus', handleFocus);
+    return () => {
+      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('focus', handleFocus);
+    };
+  }, []);
+
+  const effectiveOrders = useMemo(() => {
+    void storageTick;
+    let storedTest = [];
+    try {
+      storedTest = JSON.parse(localStorage.getItem('pixel_pos_test_orders_v1') || '[]');
+    } catch {}
+
+    if (isTestOrders) {
+      const combined = [...(testOrders || [])];
+      storedTest.forEach((st) => {
+        if (st && st.id && !combined.some((x) => x.id === st.id)) {
+          combined.push(st);
+        }
+      });
+      const seen = new Set(combined.map((o) => o.id));
+      (orders || []).forEach((o) => {
+        if ((o?.isTestOrder || (o?.id && String(o.id).startsWith('local-test-'))) && !seen.has(o.id)) {
+          combined.push(o);
+          seen.add(o.id);
+        }
+      });
+      return combined;
+    }
+
+    if (isBarista) {
+      // En la vista Barista se visualizan tanto los pedidos reales como los pedidos de prueba
+      const normalOrders = (orders || []).filter(
+        (o) => !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
+      );
+      const combined = [...normalOrders];
+      const seen = new Set(combined.map((o) => o.id));
+
+      const allTest = [...(testOrders || [])];
+      storedTest.forEach((st) => {
+        if (st && st.id && !allTest.some((x) => x.id === st.id)) {
+          allTest.push(st);
+        }
+      });
+
+      (orders || []).forEach((o) => {
+        if (o?.isTestOrder || (o?.id && String(o.id).startsWith('local-test-'))) {
+          allTest.push(o);
+        }
+      });
+
+      allTest.forEach((to) => {
+        if (to && to.id && !seen.has(to.id)) {
+          combined.push(to);
+          seen.add(to.id);
+        }
+      });
+
+      return combined;
+    }
+
+    return (orders || []).filter(
+      (o) => !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
+    );
+  }, [isTestOrders, isBarista, testOrders, orders, storageTick]);
 
   const todayBusinessDate = computeBusinessDate(new Date(), 3);
   const todayOrders = useMemo(() => {
-    return orders.filter((order) => order.businessDate === todayBusinessDate);
-  }, [orders, todayBusinessDate]);
+    if (isTestOrders) {
+      return effectiveOrders;
+    }
+    return effectiveOrders.filter((order) => {
+      // Pedidos de prueba SIEMPRE se incluyen en la vista sin filtrarse por fecha
+      if (order?.isTestOrder || String(order?.id || '').startsWith('local-test-')) {
+        return true;
+      }
+      const bDate = order.businessDate || order.day;
+      return !bDate || bDate === todayBusinessDate;
+    });
+  }, [effectiveOrders, isTestOrders, todayBusinessDate]);
 
   const sortedTodayOrders = useMemo(() => {
-    return [...todayOrders].sort((a, b) => {
+    const list = [...todayOrders];
+    if (simulatedPendingOrder && !isBarista && !isTestOrders) {
+      list.unshift(MOCK_PENDING_DELIVERY_ORDER);
+    }
+    return list.sort((a, b) => {
       const ta = a.clientCreatedAt ?? new Date(a.created ?? 0).getTime();
       const tb = b.clientCreatedAt ?? new Date(b.created ?? 0).getTime();
       return tb - ta;
     });
-  }, [todayOrders]);
+  }, [todayOrders, simulatedPendingOrder, isBarista, isTestOrders]);
 
   const [addressQuery, setAddressQuery] = useState('');
   const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // 'all' | 'retiro' | 'delivery'
+  const [orderSort, setOrderSort] = useState(() => {
+    return localStorage.getItem('pixel_orders_sort') || 'recent';
+  }); // 'recent' | 'pending'
+  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
 
-  const isDev =
-    typeof window !== 'undefined' && window.location && window.location.protocol === 'http:';
-  const [showDevTicketPreview, setShowDevTicketPreview] = useState(isDev);
+  useEffect(() => {
+    if (!sortDropdownOpen) return;
+    const handler = () => setSortDropdownOpen(false);
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
+  }, [sortDropdownOpen]);
+
+  const isDev = process.env.NODE_ENV === 'development' || Boolean(isAdmin);
+  const isAndroidApp = isAndroid();
+  const [showDevTicketPreview, setShowDevTicketPreview] = useState(false);
+
+  const [allLoaded, setAllLoaded] = useState(false);
+
+  useEffect(() => {
+    if (isTestOrders) return;
+    if (addressQuery.trim() && !allLoaded) {
+      dispatch(hydrateAllTodayOrders()).then(() => setAllLoaded(true));
+    } else if (!addressQuery.trim() && allLoaded) {
+      setAllLoaded(false);
+      dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 10 }));
+    }
+  }, [addressQuery, allLoaded, dispatch, isTestOrders]);
+
+  const allOrdersList = useMemo(() => {
+    if (isBarista && showMockOrders && !isAndroidApp) {
+      return [...MOCK_BARISTA_ORDERS, ...sortedTodayOrders];
+    }
+    return sortedTodayOrders;
+  }, [sortedTodayOrders, isBarista, showMockOrders, isAndroidApp]);
+
+  const [localChangeTick, setLocalChangeTick] = useState(0);
+
+  useEffect(() => {
+    const handler = () => setLocalChangeTick((t) => t + 1);
+    window.addEventListener('order-hidden-changed', handler);
+    window.addEventListener('order-copied-changed', handler);
+    return () => {
+      window.removeEventListener('order-hidden-changed', handler);
+      window.removeEventListener('order-copied-changed', handler);
+    };
+  }, []);
+
+  const copiedIdsSet = useMemo(() => {
+    void localChangeTick;
+    void allOrdersList;
+    const set = new Set();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('order-copied-') && localStorage.getItem(k) === 'true') {
+          set.add(k.replace('order-copied-', ''));
+        }
+      }
+    } catch (e) {}
+    return set;
+  }, [allOrdersList, localChangeTick]);
+
+  const hiddenIdsSet = useMemo(() => {
+    void localChangeTick;
+    void allOrdersList;
+    const set = new Set();
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('order-hidden-') && localStorage.getItem(k) === 'true') {
+          set.add(k.replace('order-hidden-', ''));
+        }
+      }
+    } catch (e) {}
+    return set;
+  }, [allOrdersList, localChangeTick]);
+
+  const pendingDeliveryCount = useMemo(() => {
+    let delCount = 0;
+
+    for (let i = 0; i < sortedTodayOrders.length; i++) {
+      const o = sortedTodayOrders[i];
+      const dirTrim = String(o?.direccion ?? '').trim().toLowerCase();
+      const isRetiro = dirTrim === 'retiro';
+      if (isRetiro) continue; // Los pedidos de retiro no entran ni cuentan para pendientes
+
+      const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
+      const isHidden = hiddenIdsSet.has(o?.id);
+
+      if (o?.pending) {
+        delCount++;
+      } else if (!isCopied && !isHidden) {
+        delCount++;
+      }
+    }
+
+    return delCount;
+  }, [sortedTodayOrders, copiedIdsSet, hiddenIdsSet]);
+
+  const totalPendingCount = pendingDeliveryCount;
+
+  useEffect(() => {
+    if (orderTypeFilter === 'pending' && totalPendingCount === 0) {
+      setOrderTypeFilter('all');
+    }
+  }, [orderTypeFilter, totalPendingCount]);
+
+  const completedCount = useMemo(() => {
+    if (!isBarista) return 0;
+    return allOrdersList.filter((o) => {
+      return isBaristaOrder(o) && Boolean(preparedOrders[o.id]);
+    }).length;
+  }, [isBarista, allOrdersList, preparedOrders]);
+
+  const pendingBaristaCount = useMemo(() => {
+    if (!isBarista) return 0;
+    return allOrdersList.filter((o) => {
+      return isBaristaOrder(o) && !preparedOrders[o.id];
+    }).length;
+  }, [isBarista, allOrdersList, preparedOrders]);
 
   const filteredTodayOrders = useMemo(() => {
     const q = addressQuery.trim().toLowerCase();
 
-    return sortedTodayOrders.filter((o) => {
+    const filtered = allOrdersList.filter((o) => {
+      // Filtros del Barista
+      if (isBarista) {
+        // Solo mostrar si es orden de barista (contiene cafetería o es pedido de prueba)
+        if (!isBaristaOrder(o)) return false;
+
+        const isPrepared = Boolean(preparedOrders[o.id]);
+        if (showCompletedBarista) {
+          if (!isPrepared) return false;
+        } else {
+          if (isPrepared) return false;
+        }
+      }
+
       const dirRaw = String(o?.direccion ?? '');
       const dir = dirRaw.toLowerCase();
 
@@ -2175,18 +552,85 @@ export default function Orders() {
       // filtro por tipo
       if (orderTypeFilter === 'retiro' && !isRetiro) return false;
       if (orderTypeFilter === 'delivery' && !isDelivery) return false;
+      if (orderTypeFilter === 'pending') {
+        if (isRetiro) return false; // Los pedidos de retiro no entran ni cuentan para pendientes
+        const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
+        const isHidden = hiddenIdsSet.has(o?.id);
+        let isPend = false;
+        if (o?.pending) {
+          isPend = true;
+        } else if (isBarista) {
+          isPend = !preparedOrders[o?.id];
+        } else {
+          isPend = !isCopied && !isHidden;
+        }
+        if (!isPend) return false;
+      }
 
-      // filtro por búsqueda
+      // filtro por búsqueda (dirección, #número o nombre)
       if (!q) return true;
-      return dir.includes(q);
+      const cleanQ = q.replace(/^#/, '').trim();
+      const numMatch = cleanQ && String(o?.numeracion ?? o?.number ?? '').toLowerCase().includes(cleanQ);
+      const nameMatch = String(o?.name ?? '').toLowerCase().includes(q);
+      return dir.includes(q) || Boolean(numMatch) || Boolean(nameMatch);
     });
-  }, [sortedTodayOrders, addressQuery, orderTypeFilter]);
+
+    const getTime = (o) => o.clientCreatedAt ?? (o._t || (o._t = new Date(o.created ?? 0).getTime()));
+
+    if (orderSort === 'pending') {
+      const pendingList = [];
+      const completedList = [];
+
+      for (let i = 0; i < filtered.length; i++) {
+        const o = filtered[i];
+        const isRetiro = String(o?.direccion ?? '').trim().toLowerCase() === 'retiro';
+        const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
+        const isHidden = hiddenIdsSet.has(o?.id);
+
+        let isPend = false;
+        if (isRetiro) {
+          isPend = false; // Los pedidos de retiro no entran ni cuentan para pendientes
+        } else if (o?.pending) {
+          isPend = true;
+        } else if (isBarista) {
+          isPend = !preparedOrders[o?.id];
+        } else {
+          isPend = !isCopied && !isHidden;
+        }
+
+        if (isPend) {
+          pendingList.push(o);
+        } else {
+          completedList.push(o);
+        }
+      }
+
+      pendingList.sort((a, b) => getTime(b) - getTime(a));
+      completedList.sort((a, b) => getTime(b) - getTime(a));
+
+      return [...pendingList, ...completedList];
+    }
+
+    return [...filtered].sort((a, b) => getTime(b) - getTime(a));
+  }, [
+    allOrdersList,
+    addressQuery,
+    orderTypeFilter,
+    orderSort,
+    isBarista,
+    preparedOrders,
+    showCompletedBarista,
+    copiedIdsSet,
+    hiddenIdsSet,
+  ]);
 
   const { rankById } = useMemo(() => {
     const pendingCount = sortedTodayOrders.filter((o) => o?.pending).length;
 
     const serverCount =
-      typeof pagination?.totalItems === 'number' && Number.isFinite(pagination.totalItems)
+      !isTestOrders &&
+      typeof pagination?.totalItems === 'number' &&
+      Number.isFinite(pagination.totalItems)
         ? pagination.totalItems
         : sortedTodayOrders.filter((o) => !o?.pending).length;
 
@@ -2198,7 +642,50 @@ export default function Orders() {
     });
 
     return { rankById: map };
-  }, [sortedTodayOrders, pagination?.totalItems]);
+  }, [sortedTodayOrders, pagination?.totalItems, isTestOrders]);
+
+  const canLoadMore = useMemo(() => {
+    // 1. En pedidos de prueba nunca se pagina (todos están en memoria)
+    if (isTestOrders) return false;
+
+    // 2. En barista siempre se cargan todos los pedidos del día y no se pagina la comanda
+    if (isBarista) return false;
+
+    // 3. Mientras carga inicialmente o si no hay pedidos mostrados
+    if (isInitialLoading || filteredTodayOrders.length === 0) return false;
+
+    // 4. Si se cargaron todos los pedidos para búsqueda o filtro
+    if (allLoaded) return false;
+
+    // 5. Si la paginación indica que no hay más
+    if (!pagination?.hasMore) return false;
+
+    // 6. Conteo de pedidos del servidor en la base de datos hoy
+    const totalServerItems =
+      typeof pagination?.totalItems === 'number' && Number.isFinite(pagination.totalItems)
+        ? pagination.totalItems
+        : 0;
+
+    // Cantidad de pedidos del servidor cargados en memoria
+    const loadedServerCount = sortedTodayOrders.filter(
+      (o) => !o?.pending && !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
+    ).length;
+
+    // Si ya cargamos todos los pedidos del servidor en memoria, no hay más para pedir
+    if (totalServerItems <= loadedServerCount) return false;
+
+    // Únicamente si el total disponible es mayor a los mostrados en pantalla
+    return totalServerItems > filteredTodayOrders.length;
+  }, [
+    isTestOrders,
+    isBarista,
+    isInitialLoading,
+    filteredTodayOrders.length,
+    allLoaded,
+    pagination?.hasMore,
+    pagination?.totalItems,
+    sortedTodayOrders,
+  ]);
 
   return (
     <GlobalOrders>
@@ -2243,7 +730,7 @@ export default function Orders() {
               </div>
             </div>
           </>
-        ) : todayOrders.length === 0 ? (
+        ) : !isBarista && todayOrders.length === 0 && !simulatedPendingOrder ? (
           <div
             style={{
               flex: 1,
@@ -2262,169 +749,780 @@ export default function Orders() {
               style={{ width: 120, height: 'auto', marginBottom: 20, opacity: 0.8 }}
             />
             <h2 style={{ fontWeight: 700, fontSize: '1.4rem', marginBottom: 8, color: '#333' }}>
-              No hay pedidos para hoy
+              {isTestOrders ? 'No hay pedidos de prueba' : 'No hay pedidos para hoy'}
             </h2>
             <p style={{ fontSize: '1rem', opacity: 0.8 }}>
-              Cuando lleguen, aparecerán acá automáticamente.
+              {isTestOrders
+                ? 'Los pedidos que realices con el Modo Prueba activo aparecerán acá.'
+                : 'Cuando lleguen, aparecerán acá automáticamente.'}
             </p>
           </div>
         ) : (
           <>
-            <div
-              style={{
-                position: 'sticky',
-                top: -10,
-                zIndex: 20,
-                background: '#f6f6f6',
-                transform: hideTopBar ? 'translateY(-120%)' : 'translateY(0)',
-                transition: 'transform 180ms ease',
-                willChange: 'transform',
-                paddingBottom: 10,
-              }}
-            >
-              {/* Barra de búsqueda */}
-              <div style={{ background: '#f6f6f6', padding: '10px 10px 6px' }}>
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: 8,
-                    alignItems: 'center',
-                    background: '#fff',
-                    border: '1px solid #e5e5e5',
-                    borderRadius: 12,
-                    padding: '10px 12px',
-                    boxShadow: '0 6px 16px rgba(0,0,0,0.06)',
-                  }}
-                >
-                  <span
-                    style={{ fontSize: 16, opacity: 0.75, display: 'flex', alignItems: 'center' }}
-                  >
-                    <Search size={20} />
-                  </span>
-
-                  <input
-                    value={addressQuery}
-                    onChange={(e) => setAddressQuery(e.target.value)}
-                    placeholder="Buscar por dirección"
-                    style={{
-                      flex: 1,
-                      border: 'none',
-                      outline: 'none',
-                      fontSize: '1rem',
-                      background: 'transparent',
-                      fontFamily: "'Inter', sans-serif",
-                      fontWeight: 600,
-                    }}
-                  />
-
-                  {addressQuery.trim() && (
-                    <button
-                      onClick={() => setAddressQuery('')}
+            <style>{`
+              @keyframes baristaCardIn {
+                from {
+                  opacity: 0;
+                  transform: translateY(12px) scale(0.97);
+                }
+                to {
+                  opacity: 1;
+                  transform: translateY(0) scale(1);
+                }
+              }
+              @keyframes baristaSlideOutRight {
+                0% {
+                  opacity: 1;
+                  transform: translateX(0) scale(1);
+                }
+                40% {
+                  opacity: 1;
+                  transform: translateX(0) scale(1.015);
+                }
+                65% {
+                  opacity: 0.95;
+                  transform: translateX(20px) scale(1.01);
+                }
+                100% {
+                  opacity: 0;
+                  transform: translateX(120%) scale(0.9);
+                }
+              }
+              @keyframes baristaCheckPop {
+                0% {
+                  opacity: 0;
+                  transform: scale(0.3) rotate(-15deg);
+                }
+                60% {
+                  opacity: 1;
+                  transform: scale(1.15) rotate(0deg);
+                }
+                100% {
+                  opacity: 1;
+                  transform: scale(1) rotate(0deg);
+                }
+              }
+              @keyframes baristaFadeIn {
+                from {
+                  opacity: 0;
+                }
+                to {
+                  opacity: 1;
+                }
+              }
+              @keyframes baristaBtnIn {
+                from {
+                  opacity: 0;
+                  transform: scale(0.95);
+                }
+                to {
+                  opacity: 1;
+                  transform: scale(1);
+                }
+              }
+              @keyframes pulsePendingAlert {
+                0% {
+                  transform: scale(1);
+                  opacity: 1;
+                }
+                50% {
+                  transform: scale(1.22);
+                  opacity: 0.8;
+                }
+                100% {
+                  transform: scale(1);
+                  opacity: 1;
+                }
+              }
+            `}</style>
+            {!isBarista ? (
+              <div
+                style={{
+                  position: 'sticky',
+                  top: -10,
+                  zIndex: 20,
+                  background: '#f6f6f6',
+                  transform: hideTopBar ? 'translateY(-120%)' : 'translateY(0)',
+                  transition: 'transform 180ms ease',
+                  willChange: 'transform',
+                  paddingBottom: 10,
+                }}
+              >
+                {/* Banner de Pedidos de Prueba */}
+                {isTestOrders && (
+                  <div style={{ padding: '6px 10px 4px' }}>
+                    <div
                       style={{
-                        border: 'none',
-                        background: '#111',
-                        color: '#fff',
-                        borderRadius: 10,
-                        padding: '8px 10px',
-                        cursor: 'pointer',
-                        fontWeight: 700,
-                      }}
-                      title="Limpiar"
-                    >
-                      <FaXmark size={14} />
-                    </button>
-                  )}
-
-                  {isDev && (
-                    <button
-                      onClick={() => setShowDevTicketPreview((v) => !v)}
-                      style={{
-                        border: 'none',
-                        background: showDevTicketPreview ? '#23a76d' : '#eaeaea',
-                        color: showDevTicketPreview ? '#fff' : '#111',
-                        borderRadius: 10,
-                        padding: '8px 10px',
-                        cursor: 'pointer',
-                        fontWeight: 800,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 6,
+                        justifyContent: 'space-between',
+                        gap: 12,
+                        background: '#fffbeb',
+                        border: '1.5px solid #fcd34d',
+                        borderRadius: 14,
+                        padding: '10px 14px',
+                        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)',
                       }}
-                      title="Mostrar/ocultar vista ticket"
                     >
-                      <PrintIcon style={{ fontSize: 18 }} />
-                      {showDevTicketPreview ? 'Ticket' : 'Normal'}
-                    </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <div
+                          style={{
+                            width: 34,
+                            height: 34,
+                            borderRadius: 10,
+                            background: '#f59e0b',
+                            color: '#fff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <FlaskConical size={18} />
+                        </div>
+                        <div>
+                          <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#92400e' }}>
+                            Pedidos de Prueba
+                          </div>
+                          <div style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 600 }}>
+                            {filteredTodayOrders.length === 1
+                              ? '1 pedido registrado localmente'
+                              : `${filteredTodayOrders.length} pedidos registrados localmente`}
+                          </div>
+                        </div>
+                      </div>
+
+                      {todayOrders.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm('¿Deseas vaciar todos los pedidos de prueba?')) {
+                              dispatch(clearTestOrders());
+                            }
+                          }}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 6,
+                            background: '#fff',
+                            border: '1px solid #fde68a',
+                            color: '#b45309',
+                            borderRadius: 8,
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                          }}
+                          title="Eliminar todos los pedidos de prueba"
+                        >
+                          <Trash2 size={14} />
+                          Limpiar pruebas
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Banner de pedidos pendientes (temporalmente deshabilitado) */}
+                {SHOW_TOP_PENDING_BANNER && totalPendingCount > 0 && (
+                  <div style={{ padding: '6px 10px 4px' }}>
+                    <div
+                      onClick={() =>
+                        setOrderTypeFilter((prev) => (prev === 'pending' ? 'all' : 'pending'))
+                      }
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 10,
+                        background: '#fff7ed',
+                        border: '1px solid #fdba74',
+                        borderRadius: 12,
+                        padding: '8px 12px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <TimerOutlinedIcon sx={{ fontSize: 20, color: '#ea580c' }} />
+                        <span style={{ fontWeight: 800, fontSize: '0.88rem', color: '#9a3412' }}>
+                          {totalPendingCount} {totalPendingCount === 1 ? 'pedido pendiente' : 'pedidos pendientes'}
+                        </span>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setOrderTypeFilter((prev) => (prev === 'pending' ? 'all' : 'pending'));
+                        }}
+                        style={{
+                          border: 'none',
+                          background: orderTypeFilter === 'pending' ? '#ea580c' : '#fed7aa',
+                          color: orderTypeFilter === 'pending' ? '#fff' : '#9a3412',
+                          borderRadius: 8,
+                          padding: '5px 12px',
+                          fontWeight: 700,
+                          fontSize: '0.8rem',
+                          cursor: 'pointer',
+                          fontFamily: "'Inter', sans-serif",
+                        }}
+                      >
+                        {orderTypeFilter === 'pending' ? 'Ver todos' : 'Ver'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Barra de búsqueda */}
+                <div style={{ background: '#f6f6f6', padding: '6px 10px 4px' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      gap: 8,
+                      alignItems: 'center',
+                      background: '#fff',
+                      border: '1px solid #e5e5e5',
+                      borderRadius: 12,
+                      padding: '6px 10px',
+                      boxShadow: '0 6px 16px rgba(0,0,0,0.06)',
+                    }}
+                  >
+                    <span
+                      style={{ fontSize: 16, opacity: 0.75, display: 'flex', alignItems: 'center' }}
+                    >
+                      <Search size={18} />
+                    </span>
+
+                    <input
+                      value={addressQuery}
+                      onChange={(e) => setAddressQuery(e.target.value)}
+                      placeholder="Buscar por dirección"
+                      style={{
+                        flex: 1,
+                        border: 'none',
+                        outline: 'none',
+                        fontSize: '0.9rem',
+                        background: 'transparent',
+                        fontFamily: "'Inter', sans-serif",
+                        fontWeight: 600,
+                      }}
+                    />
+
+                    {addressQuery.trim() && (
+                      <button
+                        onClick={() => setAddressQuery('')}
+                        style={{
+                          border: 'none',
+                          background: '#111',
+                          color: '#fff',
+                          borderRadius: 8,
+                          padding: '4px 6px',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                        }}
+                        title="Limpiar"
+                      >
+                        <FaXmark size={12} />
+                      </button>
+                    )}
+
+                    {isDev && !isAndroidApp && (
+                      <button
+                        onClick={() => setShowDevTicketPreview((v) => !v)}
+                        style={{
+                          border: 'none',
+                          background: showDevTicketPreview ? '#23a76d' : '#eaeaea',
+                          color: showDevTicketPreview ? '#fff' : '#111',
+                          borderRadius: 10,
+                          padding: '8px 10px',
+                          cursor: 'pointer',
+                          fontWeight: 800,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 6,
+                        }}
+                        title="Mostrar/ocultar vista ticket"
+                      >
+                        <PrintIcon style={{ fontSize: 18 }} />
+                        {showDevTicketPreview ? 'Ticket' : 'Normal'}
+                      </button>
+                    )}
+                  </div>
+
+                  {!!addressQuery.trim() && (
+                    <div style={{ fontSize: 12, marginTop: 6, opacity: 0.75 }}>
+                      Mostrando {filteredTodayOrders.length} de {sortedTodayOrders.length}
+                    </div>
                   )}
                 </div>
 
-                {!!addressQuery.trim() && (
-                  <div style={{ fontSize: 12, marginTop: 6, opacity: 0.75 }}>
-                    Mostrando {filteredTodayOrders.length} de {sortedTodayOrders.length}
+                {/* Filtros y Ordenamiento (En la misma línea) */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 10px 0',
+                    gap: 8,
+                  }}
+                >
+                  {/* Filtros */}
+                  <div
+                    style={{
+                      background: '#e9edf5',
+                      borderRadius: 999,
+                      padding: 4,
+                      display: 'flex',
+                      gap: 6,
+                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+                      flex: 1,
+                    }}
+                  >
+                    {[
+                      ['all', 'Todo'],
+                      ['retiro', 'Retiro'],
+                      ['delivery', 'Delivery'],
+                      ...(totalPendingCount > 0
+                        ? [['pending', `Pendientes (${totalPendingCount})`]]
+                        : []),
+                    ].map(([key, label]) => {
+                      const active = orderTypeFilter === key;
+                      const isPendingKey = key === 'pending';
+                      return (
+                        <button
+                          key={key}
+                          onClick={() => setOrderTypeFilter(key)}
+                          style={{
+                            flex: 1,
+                            border: active
+                              ? isPendingKey
+                                ? '2px solid #ea580c'
+                                : '2px solid black'
+                              : 'transparent',
+                            cursor: 'pointer',
+                            borderRadius: 999,
+                            padding: totalPendingCount > 0 ? '6px 8px' : '6px 12px',
+                            fontWeight: 800,
+                            fontSize: totalPendingCount > 0 ? 13 : 14,
+                            background: active
+                              ? isPendingKey
+                                ? '#ea580c'
+                                : 'white'
+                              : 'transparent',
+                            color: active
+                              ? isPendingKey
+                                ? '#fff'
+                                : 'black'
+                              : isPendingKey && totalPendingCount > 0
+                                ? '#c2410c'
+                                : '#111',
+                            boxShadow: active ? '0 6px 16px rgba(0,0,0,0.18)' : 'none',
+                            transition: 'all 150ms ease',
+                            fontFamily: "'Inter'",
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
                   </div>
-                )}
-              </div>
 
-              {/* Filtros */}
+                  {/* Ordenamiento */}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'flex-end',
+                    }}
+                  >
+                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSortDropdownOpen(!sortDropdownOpen);
+                        }}
+                        title={orderSort === 'pending' ? 'Ordenando por Pendientes primero' : 'Ordenar pedidos'}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 34,
+                          height: 34,
+                          borderRadius: '50%',
+                          border: orderSort === 'pending' ? '1.5px solid #6528f7' : '1px solid #e1e4e8',
+                          background: orderSort === 'pending' ? '#f0f4ff' : '#fff',
+                          color: orderSort === 'pending' ? '#6528f7' : '#111',
+                          cursor: 'pointer',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+                          transition: 'all 150ms ease',
+                          flexShrink: 0,
+                        }}
+                        onMouseEnter={(e) => (e.currentTarget.style.background = orderSort === 'pending' ? '#e5edff' : '#f3f4f6')}
+                        onMouseLeave={(e) => (e.currentTarget.style.background = orderSort === 'pending' ? '#f0f4ff' : '#fff')}
+                      >
+                        <MdSort size={18} />
+                      </button>
+                      {sortDropdownOpen && (
+                        <div
+                          onClick={(e) => e.stopPropagation()}
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: 4,
+                            background: '#fff',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 10,
+                            boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
+                            overflow: 'hidden',
+                            zIndex: 100,
+                            minWidth: 140,
+                          }}
+                        >
+                          {[
+                            ['recent', 'Más reciente'],
+                            ['pending', 'Pendientes'],
+                          ].map(([key, label]) => (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                setOrderSort(key);
+                                localStorage.setItem('pixel_orders_sort', key);
+                                setSortDropdownOpen(false);
+                              }}
+                              style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                width: '100%',
+                                padding: '8px 12px',
+                                border: 'none',
+                                background: orderSort === key ? '#f0f4ff' : 'transparent',
+                                color: '#111',
+                                fontSize: 12,
+                                fontWeight: orderSort === key ? 700 : 500,
+                                fontFamily: "'Inter', sans-serif",
+                                cursor: 'pointer',
+                                textAlign: 'left',
+                              }}
+                              onMouseEnter={(e) => {
+                                if (orderSort !== key) e.target.style.background = '#f6f8fa';
+                              }}
+                              onMouseLeave={(e) => {
+                                if (orderSort !== key) e.target.style.background = 'transparent';
+                              }}
+                            >
+                              {orderSort === key && (
+                                <CheckCircleOutlineIcon sx={{ fontSize: 14, color: '#6528f7' }} />
+                              )}
+                              {orderSort !== key && <div style={{ width: 14 }} />}
+                              {label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ) : (
               <div
                 style={{
-                  marginTop: 10,
-                  background: '#e9edf5',
-                  borderRadius: 999,
-                  padding: 6,
+                  position: 'sticky',
+                  top: -10,
+                  zIndex: 20,
+                  background: 'rgba(255, 255, 255, 0.96)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
+                  padding: '10px 14px',
                   display: 'flex',
-                  gap: 6,
-                  boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
-                  marginLeft: 10,
-                  marginRight: 10,
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  borderBottom: '1px solid #e4e4e7',
+                  marginBottom: 14,
                 }}
               >
-                {[
-                  ['all', 'Todo'],
-                  ['retiro', 'Retiro'],
-                  ['delivery', 'Delivery'],
-                ].map(([key, label]) => {
-                  const active = orderTypeFilter === key;
-                  return (
+                {/* Branding & Live Status */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 8,
+                      background: '#09090b',
+                      color: '#ffffff',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      boxShadow: '0 2px 5px rgba(0,0,0,0.1)',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <Coffee size={17} strokeWidth={2.2} />
+                  </div>
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      fontSize: '1.05rem',
+                      color: '#09090b',
+                      letterSpacing: '-0.02em',
+                      fontFamily: "'Inter', sans-serif",
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    Barista KDS
+                  </span>
+                </div>
+
+                {/* Segmented Control & Dev Tools */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      background: '#f4f4f5',
+                      padding: 2.5,
+                      borderRadius: 9,
+                      border: '1px solid #e4e4e7',
+                    }}
+                  >
                     <button
-                      key={key}
-                      onClick={() => setOrderTypeFilter(key)}
+                      type="button"
+                      onClick={() => setShowCompletedBarista(false)}
                       style={{
-                        flex: 1,
-                        border: active ? '2px solid black' : 'transparent',
+                        border: 'none',
                         cursor: 'pointer',
-                        borderRadius: 999,
-                        padding: '10px 12px',
-                        fontWeight: 800,
-                        fontSize: 14,
-                        background: active ? 'white' : 'transparent',
-                        color: active ? 'black' : '#111',
-                        boxShadow: active ? '0 6px 16px rgba(0,0,0,0.18)' : 'none',
-                        transition: 'all 150ms ease',
-                        fontFamily: "'Inter'",
+                        padding: '5px 10px',
+                        borderRadius: 7,
+                        fontSize: '0.78rem',
+                        fontWeight: !showCompletedBarista ? 700 : 500,
+                        background: !showCompletedBarista ? '#ffffff' : 'transparent',
+                        color: !showCompletedBarista ? '#09090b' : '#71717a',
+                        boxShadow: !showCompletedBarista ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                        fontFamily: "'Inter', sans-serif",
                       }}
                     >
-                      {label}
+                      <span>Pendientes</span>
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: 5,
+                          background: !showCompletedBarista ? '#09090b' : '#e4e4e7',
+                          color: !showCompletedBarista ? '#ffffff' : '#52525b',
+                        }}
+                      >
+                        {pendingBaristaCount}
+                      </span>
                     </button>
-                  );
-                })}
+
+                    <button
+                      type="button"
+                      onClick={() => setShowCompletedBarista(true)}
+                      style={{
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: '5px 10px',
+                        borderRadius: 7,
+                        fontSize: '0.78rem',
+                        fontWeight: showCompletedBarista ? 700 : 500,
+                        background: showCompletedBarista ? '#ffffff' : 'transparent',
+                        color: showCompletedBarista ? '#09090b' : '#71717a',
+                        boxShadow: showCompletedBarista ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                        fontFamily: "'Inter', sans-serif",
+                      }}
+                    >
+                      <span>Listos</span>
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          padding: '1px 5px',
+                          borderRadius: 5,
+                          background: showCompletedBarista ? '#15803d' : '#e4e4e7',
+                          color: showCompletedBarista ? '#ffffff' : '#52525b',
+                        }}
+                      >
+                        {completedCount}
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Botón Simular pedidos (Modo Dev) */}
+                  {isDev && !isAndroidApp && (
+                    <button
+                      type="button"
+                      onClick={handleToggleMockOrders}
+                      style={{
+                        border: showMockOrders ? '1px solid #fecdd3' : '1px solid #e4e4e7',
+                        background: showMockOrders ? '#fff1f2' : '#ffffff',
+                        color: showMockOrders ? '#e11d48' : '#71717a',
+                        borderRadius: 7,
+                        padding: '5px 8px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.74rem',
+                        fontFamily: "'Inter', sans-serif",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title="Alternar pedidos simulados para prueba en vivo"
+                    >
+                      <Sparkles size={11} />
+                      {showMockOrders ? 'Quitar mocks' : 'Mocks'}
+                    </button>
+                  )}
+                </div>
               </div>
+            )}
+
+            {isBarista && filteredTodayOrders.length === 0 && (
+              <div
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '70px 20px',
+                  textAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    borderRadius: 18,
+                    background: '#e4e4e7',
+                    color: '#71717a',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginBottom: 14,
+                  }}
+                >
+                  <Coffee size={26} strokeWidth={1.8} />
+                </div>
+                <div
+                  style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 700,
+                    color: '#09090b',
+                    letterSpacing: '-0.01em',
+                    marginBottom: 4,
+                  }}
+                >
+                  {showCompletedBarista
+                    ? 'No hay pedidos completados hoy'
+                    : 'Barra al día'}
+                </div>
+                <div style={{ fontSize: '0.84rem', color: '#71717a', maxWidth: 360, lineHeight: 1.45 }}>
+                  {showCompletedBarista
+                    ? 'Los pedidos que marques como listos se archivarán en esta pestaña.'
+                    : 'No hay cafés pendientes por preparar. Los nuevos pedidos aparecerán acá automáticamente.'}
+                </div>
+              </div>
+            )}
+
+            {!isBarista && filteredTodayOrders.length === 0 && (
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  padding: '50px 20px',
+                  textAlign: 'center',
+                  color: '#71717a',
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: '1.05rem',
+                    fontWeight: 700,
+                    color: '#333',
+                    marginBottom: 4,
+                  }}
+                >
+                  {orderTypeFilter === 'pending'
+                    ? 'No hay pedidos pendientes'
+                    : addressQuery.trim()
+                      ? `No se encontraron pedidos con "${addressQuery}"`
+                      : 'No hay pedidos'}
+                </div>
+                {orderTypeFilter !== 'all' && (
+                  <button
+                    onClick={() => setOrderTypeFilter('all')}
+                    style={{
+                      marginTop: 12,
+                      padding: '6px 14px',
+                      background: '#111',
+                      color: '#fff',
+                      borderRadius: 999,
+                      border: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Ver todos
+                  </button>
+                )}
+              </div>
+            )}
+
+            <div
+              style={
+                isBarista
+                  ? {
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
+                      gap: 16,
+                      padding: '4px 14px 30px',
+                      alignItems: 'start',
+                    }
+                  : undefined
+              }
+            >
+              {filteredTodayOrders.map((o) => {
+                const displayNum = isBarista ? (o.numeracion ?? rankById.get(o.id) ?? '') : (rankById.get(o.id) ?? o.numeracion ?? '');
+
+                return (
+                  <CardOrders
+                    key={o.id}
+                    numeracion={displayNum}
+                    {...o}
+                    isBarista={isBarista}
+                    isTestOrder={Boolean(o?.isTestOrder || String(o?.id || '').startsWith('local-test-'))}
+                    isPrepared={Boolean(preparedOrders[o.id])}
+                    onMarkPrepared={handleMarkPrepared}
+                    onUnmarkPrepared={handleUnmarkPrepared}
+                    onOpenRecipe={handleOpenRecipe}
+                    onDeleteTestOrder={handleDeleteTestOrder}
+                    showDevTicketPreview={!isBarista && !isAndroidApp && showDevTicketPreview}
+                  />
+                );
+              })}
             </div>
 
-            {filteredTodayOrders.map((o) => {
-              const displayNum = rankById.get(o.id) ?? o.numeracion ?? '';
-
-              return (
-                <CardOrders
-                  key={o.id}
-                  numeracion={displayNum}
-                  {...o}
-                  showDevTicketPreview={showDevTicketPreview}
-                />
-              );
-            })}
-
-            {pagination.hasMore && (
+            {canLoadMore && (
               <LoadMoreButton onClick={handleLoadMore} disabled={isLoadingMore}>
                 {isLoadingMore ? 'Cargando...' : 'Ver más pedidos'}
               </LoadMoreButton>
@@ -2457,6 +1555,13 @@ export default function Orders() {
           </>
         )}
       </ContainerOrders>
+
+      {/* Modal flotante de receta para el Barista */}
+      <BaristaRecipeModal
+        recipeModalData={recipeModalData}
+        onClose={() => setRecipeModalData(null)}
+        onSelectSize={(size) => setRecipeModalData((prev) => ({ ...prev, activeSize: size }))}
+      />
     </GlobalOrders>
   );
 }

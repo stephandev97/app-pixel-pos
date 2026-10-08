@@ -155,14 +155,23 @@ export const fetchMoreOrders = createAsyncThunk(
 
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
-  async (payload, { rejectWithValue, dispatch }) => {
+  async (payload, { rejectWithValue, dispatch, getState }) => {
     try {
+      const isTestMode = Boolean(getState()?.actions?.isTestMode);
       const withTsBase = {
         clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
         ...payload,
+        isTestOrder: isTestMode,
       };
       const { pagoEfectivo, pagoMp } = normalizePaymentFields(withTsBase);
       const withTs = { ...withTsBase, pagoEfectivo, pagoMp };
+
+      if (isTestMode) {
+        const localId = 'local-test-' + Date.now();
+        dispatch(addLocalOrder({ ...withTs, id: localId, clientId: localId, pending: false }));
+        return null;
+      }
+
       if (!navigator.onLine) {
         const localId = 'local-' + Date.now();
         dispatch(addLocalOrder({ ...withTs, id: localId, clientId: localId }));
@@ -221,13 +230,15 @@ export const removeOrderFromBoth = createAsyncThunk(
 
       const ef = Number(target.pagoEfectivo ?? 0);
       const mp = Number(target.pagoMp ?? 0);
+      const db = Number(target.pagoDebito ?? 0);
       let paidAmount =
         target.paidAmount && typeof target.paidAmount === 'object'
           ? target.paidAmount
-          : ef || mp
+          : ef || mp || db
             ? {
                 ...(ef ? { efectivo: ef } : {}),
                 ...(mp ? { transferencia: mp } : {}),
+                ...(db ? { debito: db } : {}),
               }
             : method
               ? { [method]: revenueAmount }

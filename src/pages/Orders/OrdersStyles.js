@@ -2,7 +2,7 @@ import { css, keyframes, styled } from 'styled-components';
 
 const pulse = keyframes`
   0% { transform: scale(1); }
-  40% { transform: scale(1.015); }
+  40% { transform: scale(1.01); } /* Reduced scale */
   100% { transform: scale(1); }
 `;
 
@@ -10,7 +10,8 @@ export const NAV_HEIGHT = 60;
 
 /* Lienzo de la pantalla Orders (dentro del motion.div que ocupa 100vh) */
 export const GlobalOrders = styled.div`
-  width: 500px;
+  width: 100%;
+  max-width: 500px;
   background: #8b8b8b11;
 `;
 
@@ -29,6 +30,10 @@ export const Navbar = styled.div`
   justify-content: center;
   transition: transform 0.25s ease;
   transform: translateY(${(p) => (p.$hidden ? `-${NAV_HEIGHT}px` : '0')});
+
+  @media (max-width: 600px) {
+    height: 52px;
+  }
 `;
 
 /* Título centrado en el navbar */
@@ -43,6 +48,10 @@ export const NavbarTitle = styled.h1`
     system-ui,
     -apple-system,
     sans-serif;
+
+  @media (max-width: 600px) {
+    font-size: 1.4rem;
+  }
 `;
 
 /* Botón flecha para volver (izquierda del navbar) */
@@ -79,6 +88,10 @@ export const ContainerOrders = styled.div`
   overflow-y: auto;
   padding: 10px;
 
+  @media (max-width: 600px) {
+    padding: 8px 6px;
+  }
+
   /* Scrollbar neutra (opcional) */
   &::-webkit-scrollbar {
     width: 8px;
@@ -99,7 +112,7 @@ export const ContainerCard = styled.div`
   background: #fff;
   padding: 16px 16px;
   margin: 14px 0 18px 0;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08); /* Simplified shadow */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -107,6 +120,7 @@ export const ContainerCard = styled.div`
   /* PERF: aísla layout/pintado de cada card */
   contain: layout paint;
   transform: translateZ(0);
+  will-change: transform;
 
   /* asegurá contenido por encima de la franja */
   & > * {
@@ -128,9 +142,10 @@ export const TitleCard = styled.div`
   width: 100%;
   display: flex;
   align-items: center;
+
   gap: 8px;
   font-weight: 700;
-  color: #111;
+  color: #4d0012; /* Color bordo */
   font-size: 1.1rem;
   border-bottom: 1px solid #f5f6fa;
   padding-bottom: 10px;
@@ -138,12 +153,13 @@ export const TitleCard = styled.div`
 
 /* Acciones visibles al hover (imprimir/copiar/etc.) */
 export const ContentButtonsTitle = styled.div`
-  margin-left: auto;
   display: flex;
+  position: absolute;
+  right: 0;
   align-items: center;
-  gap: 6px;
+  gap: 0; /* Remove gap to use borders/padding */
 
-  /* oculto “de verdad” (evita hover-renders raros) */
+  /* oculto "de verdad" (evita hover-renders raros) */
   opacity: 0;
   visibility: hidden;
   pointer-events: none;
@@ -175,19 +191,38 @@ export const ContentButtonsTitle = styled.div`
 export const ButtonTitle = styled.span`
   min-width: 28px;
   min-height: 28px;
+  padding: 0 8px; /* Add horizontal padding for divider spacing */
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  position: relative; /* For Pseudo-element */
+
+  /* Divider straight line */
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 14px; /* Altura de la línea */
+    background-color: rgba(77, 0, 18, 0.15);
+  }
+
+  &:last-child::after {
+    display: none;
+  }
+
   border-radius: 6px;
-  color: #fff;
-  background: #111;
-  font-size: 0.85rem;
+  color: #4d0012; /* Color bordo */
+  background: transparent;
+  font-size: 0.95rem; /* Slightly larger icon */
   font-weight: 700;
   cursor: pointer;
   user-select: none;
 
   &:hover {
-    background: #b12e2eff;
+    background: rgba(77, 0, 18, 0.08); /* Light bordo background on hover */
   }
 `;
 
@@ -234,14 +269,15 @@ export const EstadoChip = styled.span`
 
 /* Texto auxiliar (hora relativa, etc.) que aparece al hover */
 export const Hora = styled.span`
-  margin-left: 8px;
   color: #9ca3af;
-  opacity: 0;
+  opacity: 1;
+  font-size: 1.2rem;
   will-change: opacity;
-  transition: opacity 0.15s ease;
-
+  flex-shrink: 0;
+  margin-right: 10px;
+  ${TitleCard}:hover &,
   ${ContainerCard}:hover & {
-    opacity: 1;
+    opacity: 0;
   }
 `;
 
@@ -300,31 +336,50 @@ export const TitleCheck = styled.span`
 `;
 
 export const ButtonCheck = styled(ButtonTitle)`
-  background: #41b06e;
+  /* background: #41b06e; removed to be transparent */
 `;
 export const ButtonPrint = styled(ButtonTitle)`
-  background: black;
+  /* background: black; removed to be transparent */
 
   &:hover {
-    background: #279494ff !important;
-    color: white;
+    background: rgba(77, 0, 18, 0.08) !important;
+    color: #4d0012;
   }
 `;
 
 export const ButtonCopy = styled.span`
-  margin-right: 0.5em;
-  padding: 0.4em 0.8em;
-  border-radius: 5px;
+  margin-right: 0; /* Remove margin to stick buttons */
+  padding: 6px 12px; /* Increased padding top/bottom */
+  border-radius: 10px;
+  position: relative;
+  border: 1px solid #4d0012;
+
+  /* Divider */
+  &::after {
+    content: '';
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 1px;
+    height: 14px;
+    background-color: rgba(77, 0, 18, 0.15);
+  }
+  &:last-child::after {
+    display: none;
+  }
   font-size: 0.8em;
-  background: #f7f7ff;
+  background: transparent;
+  color: #4d0012;
   display: flex;
   align-items: center;
+  gap: 6px; /* Space between icon and text */
   cursor: pointer;
   transition: all 0.2s;
 
   &:hover {
-    background: #5931e7ff !important;
-    color: white !important;
+    background: rgba(77, 0, 18, 0.08) !important;
+    color: #4d0012 !important;
   }
 `;
 
@@ -452,6 +507,7 @@ export const LoadMoreButton = styled.button`
   padding: 10px 20px;
   font-size: 1rem;
   font-weight: bold;
+  font-family: 'Inter', sans-serif;
   color: #fff;
   background-color: #007bff;
   border: none;

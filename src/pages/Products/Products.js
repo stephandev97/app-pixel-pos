@@ -1,11 +1,13 @@
-import { QrCode } from 'lucide-react';
+import { Clock, Coffee, Coins, CreditCard, Gift, Lock, QrCode, Ticket, User, Wrench, X } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useDispatch } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 
 import CardProduct from '../../components/Products/CardProduct';
 import { pb } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
+import { setCupSizesStock, setExtrasStock } from '../../redux/actions/actionsSlice';
 import { pointsApiClient } from '../../utils/pointsApiClient';
+import { explodeOptionsFromRecords } from '../../utils/productUtils';
 import {
   CategoryHeader,
   CategoryPill,
@@ -17,6 +19,9 @@ import {
   GlobalProducts,
   GridProducts,
   TitleCategory,
+  TabContainer,
+  ChromeTab,
+  ProductsHeader,
 } from './ProductsStyled';
 
 const ipc = window.electron?.ipcRenderer;
@@ -28,6 +33,7 @@ const CATEGORIES_ORDER = [
   'Delivery',
   'Helado',
   'Paletas',
+  'Cafetería',
   'Varios',
   'Consumir en el local',
   'Extras',
@@ -68,6 +74,11 @@ function SkeletonCard() {
 // ===== SearchBar =====
 function SearchBar({ q, setQ, onQuickAdd }) {
   const dispatch = useDispatch();
+  const isAdmin = useSelector((s) => s.actions?.isAdmin);
+  const showDevQr = useSelector((s) => s.actions?.showDevQr);
+
+  const isDev = process.env.NODE_ENV === 'development' || Boolean(isAdmin);
+
   const [open, setOpen] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
@@ -142,7 +153,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
       setQrLoading(true);
       setQrError('');
       if (qrClaim.type === 'claim') {
-        // Canjear cupón en sistema de puntos
+        // Canjear cupón en sistema de puntos (con precio dinámico si la reward tiene productId)
         console.log('🎫 Canjeando cupón en sistema de puntos...');
         console.log('📋 Claim ID a canjear:', qrClaim.data.id);
         console.log('📋 Claim completo:', qrClaim.data);
@@ -152,7 +163,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           return;
         }
 
-        const result = await pointsApiClient.redeemRewardFromPos(
+        const result = await pointsApiClient.redeemRewardWithDynamicPrice(
           qrClaim.data.id, // claim id
           'pos_operator_001'
         );
@@ -294,30 +305,32 @@ function SearchBar({ q, setQ, onQuickAdd }) {
         </button>
 
         {/* Botón QR con menú desplegable */}
-        <div style={{ position: 'relative' }}>
-          <button
-            onClick={() => setQrOpen(true)}
-            title="QR"
-            aria-label="QR"
-            style={{
-              width: 38,
-              height: 38,
-              minWidth: 38,
-              minHeight: 38,
-              borderRadius: 12,
-              border: 'none',
-              background: '#780000',
-              color: '#fff',
-              display: 'grid',
-              placeItems: 'center',
-              cursor: 'pointer',
-              lineHeight: 1,
-              boxShadow: '0 2px 10px rgba(0,0,0,.06)',
-            }}
-          >
-            <QrCode size={18} strokeWidth={2} />
-          </button>
-        </div>
+        {showDevQr && (
+          <div style={{ position: 'relative' }}>
+            <button
+              onClick={() => setQrOpen(true)}
+              title="QR"
+              aria-label="QR"
+              style={{
+                width: 38,
+                height: 38,
+                minWidth: 38,
+                minHeight: 38,
+                borderRadius: 12,
+                border: 'none',
+                background: '#780000',
+                color: '#fff',
+                display: 'grid',
+                placeItems: 'center',
+                cursor: 'pointer',
+                lineHeight: 1,
+                boxShadow: '0 2px 10px rgba(0,0,0,.06)',
+              }}
+            >
+              <QrCode size={18} strokeWidth={2} />
+            </button>
+          </div>
+        )}
 
         {/* Limpiar */}
         {q && (
@@ -382,11 +395,14 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                     border: 'none',
                     background: 'transparent',
                     cursor: 'pointer',
-                    fontSize: '1.2rem',
-                    lineHeight: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#666',
+                    padding: 4,
                   }}
                 >
-                  ×
+                  <X size={20} />
                 </button>
               </div>
 
@@ -421,12 +437,14 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 >
                   {qrClaim.type === 'reward' && (
                     <>
-                      <div>
-                        🎁 Premio: <strong>{qrClaim.rewardTitle}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Gift size={16} color="#0284c7" />
+                        <span>Premio: <strong>{qrClaim.rewardTitle}</strong></span>
                       </div>
                       {qrClaim.pointsCost && (
-                        <div>
-                          💰 Costo: <strong>{qrClaim.pointsCost} pts</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Coins size={16} color="#0284c7" />
+                          <span>Costo: <strong>{qrClaim.pointsCost} pts</strong></span>
                         </div>
                       )}
                     </>
@@ -434,33 +452,40 @@ function SearchBar({ q, setQ, onQuickAdd }) {
 
                   {qrClaim.type === 'client' && (
                     <>
-                      <div>
-                        👤 Cliente: <strong>{qrClaim.clientName}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <User size={16} color="#0284c7" />
+                        <span>Cliente: <strong>{qrClaim.clientName}</strong></span>
                       </div>
-                      <div>
-                        💳 Puntos: <strong>{qrClaim.pointsBalance}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <CreditCard size={16} color="#0284c7" />
+                        <span>Puntos: <strong>{qrClaim.pointsBalance}</strong></span>
                       </div>
                     </>
                   )}
 
                   {qrClaim.type === 'claim' && (
                     <>
-                      <div>
-                        🎫 Cupón: <strong>{qrClaim.rewardTitle}</strong>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Ticket size={16} color="#0284c7" />
+                        <span>Cupón: <strong>{qrClaim.rewardTitle}</strong></span>
                       </div>
                       {qrClaim.pointsCost && (
-                        <div>
-                          💰 Costo: <strong>{qrClaim.pointsCost} pts</strong>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <Coins size={16} color="#0284c7" />
+                          <span>Costo: <strong>{qrClaim.pointsCost} pts</strong></span>
                         </div>
                       )}
                       {qrClaim.clientName && (
-                        <div>
-                          👤 Cliente: <strong>{qrClaim.clientName}</strong>
-                          {qrClaim.clientDni && (
-                            <span style={{ marginLeft: 8, fontSize: '0.9em', color: '#666' }}>
-                              (DNI: {qrClaim.clientDni})
-                            </span>
-                          )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <User size={16} color="#0284c7" />
+                          <span>
+                            Cliente: <strong>{qrClaim.clientName}</strong>
+                            {qrClaim.clientDni && (
+                              <span style={{ marginLeft: 8, fontSize: '0.9em', color: '#666' }}>
+                                (DNI: {qrClaim.clientDni})
+                              </span>
+                            )}
+                          </span>
                         </div>
                       )}
                       {qrClaim.status && (
@@ -472,14 +497,16 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                   )}
 
                   {qrClaim.type === 'error' && (
-                    <div style={{ fontSize: '0.85rem', color: '#dc3545' }}>
-                      🔧 Error técnico: {qrClaim.error || 'Error desconocido'}
+                    <div style={{ fontSize: '0.85rem', color: '#dc3545', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Wrench size={16} color="#dc3545" />
+                      <span>Error técnico: {qrClaim.error || 'Error desconocido'}</span>
                     </div>
                   )}
 
                   {qrClaim.type === 'auth_error' && (
-                    <div style={{ fontSize: '0.85rem', color: '#dc3545' }}>
-                      🔐 Error de autenticación: {qrClaim.message}
+                    <div style={{ fontSize: '0.85rem', color: '#dc3545', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Lock size={16} color="#dc3545" />
+                      <span>Error de autenticación: {qrClaim.message}</span>
                     </div>
                   )}
 
@@ -490,8 +517,9 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                   )}
 
                   {qrClaim.expiresAt && (
-                    <div style={{ fontSize: '0.95rem', color: '#666' }}>
-                      ⏰ Vence: {new Date(qrClaim.expiresAt).toLocaleString()}
+                    <div style={{ fontSize: '0.95rem', color: '#666', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Clock size={16} color="#666" />
+                      <span>Vence: {new Date(qrClaim.expiresAt).toLocaleString()}</span>
                     </div>
                   )}
 
@@ -701,6 +729,16 @@ function filterProducts(arr, q) {
     return tokens.every((tok) => hay.includes(tok));
   });
 }
+const CACHE_CAFETERIA_KEY = 'pb_cafeteria_products_v1';
+const CAFETERIA_CATEGORIES_ORDER = ['clasico', 'frio', 'frappe', 'pasteleria'];
+const CAFETERIA_DISPLAY_CATEGORIES = {
+  clasico: 'Clásico',
+  frio: 'Frío',
+  frappe: 'Frappé',
+  'frappé': 'Frappé',
+  pasteleria: 'Pastelería',
+};
+
 function readCache() {
   try {
     return JSON.parse(localStorage.getItem(CACHE_KEY) || '[]');
@@ -715,6 +753,20 @@ function writeCache(arr) {
     // manejo futuro
   }
 }
+function readCafeteriaCache() {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_CAFETERIA_KEY) || '[]');
+  } catch {
+    return [];
+  }
+}
+function writeCafeteriaCache(arr) {
+  try {
+    localStorage.setItem(CACHE_CAFETERIA_KEY, JSON.stringify(arr));
+  } catch {
+    // manejo futuro
+  }
+}
 function groupByCategory(products) {
   const map = new Map(CATEGORIES_ORDER.map((c) => [c, []]));
   for (const p of products) {
@@ -722,6 +774,33 @@ function groupByCategory(products) {
     map.get(key).push(p);
   }
   return Array.from(map.entries()).filter(([, items]) => items.length > 0);
+}
+function groupCafeteriaByCategory(products) {
+  const map = new Map(CAFETERIA_CATEGORIES_ORDER.map((c) => [c, []]));
+  for (const p of products) {
+    const rawCat = (p?.category || 'clasico')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+    const key = map.has(rawCat)
+      ? rawCat
+      : map.has(p?.category)
+      ? p.category
+      : 'clasico';
+    if (!map.has(key)) {
+      map.set(key, []);
+    }
+    map.get(key).push(p);
+  }
+  return Array.from(map.entries())
+    .filter(([, items]) => items.length > 0)
+    .map(([cat, items]) => {
+      const label =
+        CAFETERIA_DISPLAY_CATEGORIES[cat] ||
+        cat.charAt(0).toUpperCase() + cat.slice(1);
+      return [label, items];
+    });
 }
 // Aplica cambios en vivo de PocketBase (create/update/delete)
 function applyRealtimeChange(prev, e) {
@@ -741,38 +820,181 @@ function applyRealtimeChange(prev, e) {
 }
 
 export default function Products() {
+  const dispatch = useDispatch();
+  const showTabCafeteria = useSelector((s) => s.actions?.showTabCafeteria ?? false);
+
+
   const [downloadProgress, setDownloadProgress] = useState(null);
   const cached = useMemo(readCache, []);
+  const cachedCafeteria = useMemo(readCafeteriaCache, []);
   const [products, setProducts] = useState(cached);
-  const [loading, setLoading] = useState(cached.length === 0);
+  const [cafeteriaProducts, setCafeteriaProducts] = useState(cachedCafeteria);
+  const [loading, setLoading] = useState(cached.length === 0 || cachedCafeteria.length === 0);
   const [error, setError] = useState(null);
   const [offline, setOffline] = useState(!navigator.onLine);
   const [q, setQ] = useState('');
   const [, setPointsConnectionStatus] = useState('checking');
 
-  // Verificar conexión con sistema de puntos al montar
+  // --- Sabores desde PB + loading ---
+  const [flatOptions, setFlatOptions] = useState([]); // opciones planas (fallback)
+  const [groupOptions, setGroupOptions] = useState([]); // opciones agrupadas por grupo
+  const [loadingSabores, setLoadingSabores] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      let hasCache = false;
+
+      // 1. Cargar del caché si existe
+      try {
+        const cachedSabores = localStorage.getItem('cachedSabores');
+        if (cachedSabores) {
+          const parsed = JSON.parse(cachedSabores);
+          const { flat, grouped } = explodeOptionsFromRecords(parsed);
+          setFlatOptions(flat);
+          setGroupOptions(grouped);
+          hasCache = true;
+        }
+      } catch (e) {
+        console.error('Error loading cache:', e);
+        localStorage.removeItem('cachedSabores'); // Limpiar caché corrupto
+      }
+
+      // 2. Intentar cargar desde la red, solo si no hay caché
+      if (!hasCache) {
+        setLoadingSabores(true);
+      }
+
+      try {
+        const list = await pb.collection('sabores').getFullList({
+          batch: 200,
+          sort: 'label',
+        });
+        if (!alive) return;
+
+        const { flat, grouped } = explodeOptionsFromRecords(list);
+        setFlatOptions(flat);
+        setGroupOptions(grouped);
+        // Guardar en caché
+        try {
+          localStorage.setItem('cachedSabores', JSON.stringify(list));
+        } catch (e) {
+          console.error('Error saving sabores to cache:', e);
+        }
+      } catch (err) {
+        if (!alive) return;
+        console.error('Error cargando sabores:', err);
+      } finally {
+        if (alive) {
+          setLoadingSabores(false);
+        }
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Atajo global Ctrl+K para enfocar búsqueda
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const input = document.getElementById('product-search');
+        if (input) {
+          input.focus();
+          input.select();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  // Verificar conexión con sistema de puntos (optimizado sin spam)
   useEffect(() => {
     const checkPointsConnection = async () => {
+      if (!navigator.onLine) return;
       try {
         const test = await pointsApiClient.testConnection();
-        setPointsConnectionStatus(test.success ? 'connected' : 'error');
-        console.log('🔗 Conexión con app de puntos:', test.message);
+        setPointsConnectionStatus(test?.success ? 'connected' : 'error');
       } catch (error) {
         setPointsConnectionStatus('error');
-        console.error('❌ Error de conexión con app de puntos:', error);
       }
     };
 
     checkPointsConnection();
-    // Verificar cada 30 segundos
-    const interval = setInterval(checkPointsConnection, 30000);
-    return () => clearInterval(interval);
+    const interval = setInterval(checkPointsConnection, 60000);
+    window.addEventListener('online', checkPointsConnection);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('online', checkPointsConnection);
+    };
   }, []);
 
-  const filtered = useMemo(() => filterProducts(products, q), [products, q]);
-  const grouped = useMemo(() => groupByCategory(filtered), [filtered]);
+  const HELADOS_CATEGORIES = useMemo(
+    () => ['Helado', 'Paletas', 'Varios', 'Consumir en el local', 'Extras', 'Otros'],
+    []
+  );
 
-  const dispatch = useDispatch();
+  const [activeTab, setActiveTab] = useState('helados'); // 'helados' | 'cafeteria'
+
+  useEffect(() => {
+    if (!showTabCafeteria && activeTab === 'cafeteria') {
+      setActiveTab('helados');
+    }
+  }, [showTabCafeteria, activeTab]);
+
+  const cafeteriaExtras = useMemo(() => {
+    return cafeteriaProducts.filter((p) => p?.category === 'extra');
+  }, [cafeteriaProducts]);
+
+  const filtered = useMemo(() => filterProducts(products, q), [products, q]);
+  const filteredCafeteria = useMemo(() => {
+    const withoutExtras = cafeteriaProducts.filter((p) => p?.category !== 'extra');
+    return filterProducts(withoutExtras, q);
+  }, [cafeteriaProducts, q]);
+
+  // Contar cantidad de coincidencias por pestaña para mostrar en los badges
+  const counts = useMemo(() => {
+    return {
+      helados: filtered.length,
+      cafeteria: filteredCafeteria.length,
+      total: filtered.length + filteredCafeteria.length,
+    };
+  }, [filtered, filteredCafeteria]);
+
+  // Filtrar las categorías agrupadas (si hay búsqueda activa, unimos ambas pestañas si cafetería está activa)
+  const grouped = useMemo(() => {
+    if (q.trim()) {
+      const heladosGroups = groupByCategory(filtered).map(([cat, items]) => [
+        cat,
+        items.map((it) => ({ ...it, isCafeteria: false })),
+      ]);
+      if (!showTabCafeteria) {
+        return heladosGroups;
+      }
+      const cafeteriaGroups = groupCafeteriaByCategory(filteredCafeteria).map(
+        ([cat, items]) => [
+          cat,
+          items.map((it) => ({ ...it, isCafeteria: true })),
+        ]
+      );
+      return [...heladosGroups, ...cafeteriaGroups];
+    }
+
+    if (activeTab === 'helados' || !showTabCafeteria) {
+      return groupByCategory(filtered).map(([cat, items]) => [
+        cat,
+        items.map((it) => ({ ...it, isCafeteria: false })),
+      ]);
+    } else {
+      return groupCafeteriaByCategory(filteredCafeteria).map(([cat, items]) => [
+        cat,
+        items.map((it) => ({ ...it, isCafeteria: true })),
+      ]);
+    }
+  }, [filtered, filteredCafeteria, activeTab, q, showTabCafeteria]);
 
   function handleQuickAdd({ name, price }) {
     if (!name) return;
@@ -812,14 +1034,30 @@ export default function Products() {
     async function fetchProducts() {
       try {
         setError(null);
-        if (cached.length === 0) setLoading(true);
-        const list = await pb.collection('products').getFullList({ sort: 'name' });
+        if (cached.length === 0 || cachedCafeteria.length === 0) setLoading(true);
+        const [list, listCafeteria, configRes] = await Promise.all([
+          pb.collection('products').getFullList({ sort: 'name' }),
+          pb.collection('products_cafeteria').getFullList({ sort: 'name' }),
+          pb
+            .collection('cafe_config')
+            .getList(1, 1, { filter: 'key="global_costs"' })
+            .catch(() => null),
+        ]);
         if (cancelled) return;
         setProducts(list);
         writeCache(list);
+        setCafeteriaProducts(listCafeteria);
+        writeCafeteriaCache(listCafeteria);
+        if (configRes?.items?.[0]?.data) {
+          const cfgData = configRes.items[0].data;
+          if (cfgData.cupSizesStock) dispatch(setCupSizesStock(cfgData.cupSizesStock));
+          if (cfgData.extrasStock) dispatch(setExtrasStock(cfgData.extrasStock));
+        }
       } catch (e) {
         if (cancelled) return;
-        if (cached.length === 0) setError(e?.data || e?.message || 'Error al cargar productos');
+        if (cached.length === 0 || cachedCafeteria.length === 0) {
+          setError(e?.data || e?.message || 'Error al cargar productos');
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -832,7 +1070,7 @@ export default function Products() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Suscripción en vivo
+  // Suscripción en vivo (Productos ordinarios)
   useEffect(() => {
     const coll = pb.collection('products');
     const handler = (e) => {
@@ -845,6 +1083,37 @@ export default function Products() {
     coll.subscribe('*', handler).catch(console.error);
     return () => coll.unsubscribe('*');
   }, []);
+
+  // Suscripción en vivo (Productos de Cafetería)
+  useEffect(() => {
+    const coll = pb.collection('products_cafeteria');
+    const handler = (e) => {
+      setCafeteriaProducts((prev) => {
+        const next = applyRealtimeChange(prev, e);
+        writeCafeteriaCache(next);
+        return next;
+      });
+    };
+    coll.subscribe('*', handler).catch(console.error);
+    return () => coll.unsubscribe('*');
+  }, []);
+
+  // Suscripción en vivo (Configuración de stock de Cafetería: vasos y extras)
+  useEffect(() => {
+    const coll = pb.collection('cafe_config');
+    const handler = (e) => {
+      if (e.record?.key === 'global_costs' && e.record?.data) {
+        if (e.record.data.cupSizesStock) {
+          dispatch(setCupSizesStock(e.record.data.cupSizesStock));
+        }
+        if (e.record.data.extrasStock) {
+          dispatch(setExtrasStock(e.record.data.extrasStock));
+        }
+      }
+    };
+    coll.subscribe('*', handler).catch(console.error);
+    return () => coll.unsubscribe('*');
+  }, [dispatch]);
 
   // Online/Offline + atajo Ctrl/⌘+K
   useEffect(() => {
@@ -883,6 +1152,7 @@ export default function Products() {
   // ===== Render =====
   return (
     <GlobalProducts>
+      <ProductsHeader>
       {downloadProgress !== null && (
         <div
           style={{
@@ -916,6 +1186,28 @@ export default function Products() {
       {/* Barra de búsqueda SIEMPRE visible */}
       <SearchBar q={q} setQ={setQ} onQuickAdd={handleQuickAdd} />
 
+      {/* Pestañas estilo Chrome */}
+      {showTabCafeteria && (
+        <TabContainer>
+          {q.trim() ? (
+            <ChromeTab $active={true} style={{ cursor: 'default' }}>
+              Todos los productos ({counts.total})
+            </ChromeTab>
+          ) : (
+            <>
+              <ChromeTab $active={activeTab === 'helados'} onClick={() => setActiveTab('helados')}>
+                Helados
+              </ChromeTab>
+              <ChromeTab $active={activeTab === 'cafeteria'} onClick={() => setActiveTab('cafeteria')}>
+                <Coffee size={18} />
+                <span>Cafetería</span>
+              </ChromeTab>
+            </>
+          )}
+        </TabContainer>
+      )}
+      </ProductsHeader>
+
       {loading ? (
         <>
           <SkeletonStyles />
@@ -932,13 +1224,25 @@ export default function Products() {
         </>
       ) : (
         <ContainerProducts>
-          {grouped.length === 0 && q && (
-            <div style={{ padding: '8px 14px', opacity: 0.7 }}>Sin resultados para “{q}”.</div>
+          {grouped.length === 0 && (
+            <div style={{ padding: '24px 14px', textAlign: 'center', opacity: 0.8 }}>
+              {q ? (
+                <div>Sin resultados para “{q}”.</div>
+              ) : (
+                <div style={{ fontStyle: 'italic', opacity: 0.6 }}>
+                  No hay productos en esta categoría.
+                </div>
+              )}
+            </div>
           )}
           {grouped.map(([cat, items]) => {
             if (cat === 'Delivery') return null;
-            // 👉 ordena por precio de menor a mayor
-            const sorted = [...items].sort((a, b) => (a.price || 0) - (b.price || 0));
+            // 👉 ordena por precio de menor a mayor (soportando precios de cafetería)
+            const sorted = [...items].sort((a, b) => {
+              const priceA = a.price || a.price_8oz || a.price_12oz || a.price_16oz || 0;
+              const priceB = b.price || b.price_8oz || b.price_12oz || b.price_16oz || 0;
+              return priceA - priceB;
+            });
 
             return (
               <ContainerCategory as={CategoryWrap} key={cat} id={`cat-${cat}`}>
@@ -952,7 +1256,15 @@ export default function Products() {
 
                 <GridProducts>
                   {sorted.map((item) => (
-                    <CardProduct key={item.id} {...item} />
+                    <CardProduct
+                      key={item.id}
+                      {...item}
+                      isCafeteria={item.isCafeteria ?? (activeTab === 'cafeteria')}
+                      cafeteriaExtras={cafeteriaExtras}
+                      flatOptions={flatOptions}
+                      groupOptions={groupOptions}
+                      loadingSabores={loadingSabores}
+                    />
                   ))}
                 </GridProducts>
               </ContainerCategory>

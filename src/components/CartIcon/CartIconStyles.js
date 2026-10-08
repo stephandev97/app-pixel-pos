@@ -22,6 +22,10 @@ export const ButtonNavCart = styled.a`
     margin: 0 2em;
   }
 
+  & .item-count {
+    color: #4d0012; /* Color bordo para el número de items */
+  }
+
   & div {
     display: flex;
   }

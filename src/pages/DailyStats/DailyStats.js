@@ -129,11 +129,16 @@ export default function DailyStats() {
         orders.forEach((order) => {
           const items = Array.isArray(order.items) ? order.items : [];
           items.forEach((item) => {
-            // Procesamos el array de sabores de cada item
-            if (Array.isArray(item.sabores)) {
+            // Procesamos sabores individuales o breakdown
+            if (item.saboresBreakdown && typeof item.saboresBreakdown === 'object') {
+              Object.entries(item.saboresBreakdown).forEach(([sabor, count]) => {
+                const clean = String(sabor || '').replace(/^\d+\s*x\s*/i, '').trim();
+                if (clean) counts[clean] = (counts[clean] || 0) + (Number(count) || 1);
+              });
+            } else if (Array.isArray(item.sabores)) {
               item.sabores.forEach((sabor) => {
-                // Sumamos por cada vez que aparece el sabor
-                counts[sabor] = (counts[sabor] || 0) + 1;
+                const clean = String(sabor || '').replace(/^\d+\s*x\s*/i, '').trim();
+                if (clean) counts[clean] = (counts[clean] || 0) + (Number(item.quantity) || 1);
               });
             }
           });
@@ -145,16 +150,19 @@ export default function DailyStats() {
           const items = Array.isArray(order.items) ? order.items : [];
           items.forEach((item) => {
             // Solo procesar sabores de potes de helado (1/4, 1/2, 1kg)
-            if (
-              Array.isArray(item.sabores) &&
-              item.name?.toLowerCase().includes('pote') &&
-              (item.name?.toLowerCase().includes('1/4') ||
-                item.name?.toLowerCase().includes('1/2') ||
-                item.name?.toLowerCase().includes('1kg') ||
-                item.name?.toLowerCase().includes('1 kg'))
-            ) {
+            const isPote =
+              item.name?.toLowerCase().includes('pote') ||
+              item.name?.toLowerCase().includes('1/4') ||
+              item.name?.toLowerCase().includes('1/2') ||
+              item.name?.toLowerCase().includes('1kg') ||
+              item.name?.toLowerCase().includes('1 kg');
+
+            if (isPote && Array.isArray(item.sabores)) {
               item.sabores.forEach((sabor) => {
-                countsPotes[sabor] = (countsPotes[sabor] || 0) + 1;
+                const clean = String(sabor || '').replace(/^\d+\s*x\s*/i, '').trim();
+                if (clean) {
+                  countsPotes[clean] = (countsPotes[clean] || 0) + (Number(item.quantity) || 1);
+                }
               });
             }
           });

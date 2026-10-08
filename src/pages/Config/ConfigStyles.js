@@ -1,8 +1,8 @@
 import styled from 'styled-components';
 
-const bg = '#0B0B0F';
-const card = '#11121A';
-const card2 = '#141624';
+const bg = '#2d0009'; /* Color bordo aún más oscuro */
+const card = '#4d0012'; /* Color bordo para botones */
+const card2 = '#6d0022'; /* Color bordo más claro para iconos */
 const text = '#EDEDEE';
 const sub = '#A9AABC';
 const accent = '#4CCD99';
@@ -16,25 +16,36 @@ export const Container = styled.div`
   background: ${bg};
   color: ${text};
   overflow-x: hidden;
-  padding: 12px 16px;
-  @media (min-width: 700px) {
-    padding: 24px clamp(16px, 3vw, 32px);
-  }
+  padding: 24px 16px 48px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 `;
 
-// nuevo: limita el ancho útil y centra
+// limita el ancho útil y centra
 export const PageInner = styled.div`
   width: 100%;
-  max-width: 980px;
+  max-width: 440px;
   margin: 0 auto;
-  min-width: 0; /* ← importante cuando está dentro de flex/grid */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-sizing: border-box;
+  min-width: 0;
 `;
 
 export const TitlePage = styled.div`
-  font-size: clamp(24px, 3.2vw, 36px);
+  font-size: clamp(22px, 3vw, 28px);
   font-weight: 800;
-  letter-spacing: 0.2px;
-  margin: 8px 0 18px;
+  letter-spacing: -0.02em;
+  margin: 8px 0 20px;
+  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+
   & > a {
     color: ${text};
     text-decoration: none;
@@ -43,10 +54,13 @@ export const TitlePage = styled.div`
 
 export const ContainerPages = styled.div`
   display: grid;
-  grid-template-columns: minmax(0, 1fr); /* siempre 1 columna y NUNCA empuja */
-  gap: 12px;
-  width: 400px;
-  min-width: 0; /* clave en grids dentro de contenedores estrechos */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
 `;
 
 export const ButtonPage = styled.button`
@@ -54,39 +68,38 @@ export const ButtonPage = styled.button`
   cursor: pointer;
   background: ${card};
   border: 1px solid ${border};
-  border-radius: 20px;
-  padding: 16px 18px;
+  border-radius: 14px;
+  padding: 10px 14px;
   display: grid;
   grid-template-columns: auto 1fr auto;
   align-items: center;
-  gap: 14px;
-  position: relative;
-  box-shadow:
-    0 10px 30px rgba(0, 0, 0, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.03);
-  transition:
-    transform 0.16s ease,
-    box-shadow 0.16s ease,
-    border-color 0.16s ease,
-    background 0.16s ease;
-  overflow: hidden; /* si hay sombras o textos extensos */
-  min-width: 0; /* clave para grids */
-  max-width: 100%;
+  gap: 11px;
   width: 100%;
+  box-sizing: border-box;
+  position: relative;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease,
+    background 0.12s ease;
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 
   /* efecto hover */
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.25);
     border-color: rgba(255, 255, 255, 0.12);
+    background: #5a0017;
   }
 
   /* titulo */
   & > a {
-    font-size: clamp(16px, 2vw, 18px);
-    font-weight: 700;
-    letter-spacing: 0.2px;
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.1px;
     color: ${text};
     white-space: nowrap;
     overflow: hidden;
@@ -97,12 +110,15 @@ export const ButtonPage = styled.button`
   & > span {
     display: grid;
     place-items: center;
-    opacity: 0.6;
+    opacity: 0.8;
+
+    svg {
+      width: 16px;
+      height: 16px;
+    }
   }
 
   /* variantes por acción usando el primer hijo (IconButton) */
-  &[data-variant='save'] ${'' /* Guardar */} {
-  }
   &[data-variant='delete'] {
     background: linear-gradient(180deg, ${dangerSoft}, ${card});
     border-color: rgba(210, 0, 98, 0.25);
@@ -114,18 +130,42 @@ export const ButtonPage = styled.button`
 `;
 
 export const IconButton = styled.div`
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: grid;
   place-items: center;
   background: ${card2};
   border: 1px solid ${border};
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  flex-shrink: 0;
 
   svg {
-    width: 22px;
-    height: 22px;
+    width: 16px;
+    height: 16px;
+  }
+`;
+
+export const SwitchToggle = styled.div`
+  position: relative;
+  width: 36px;
+  height: 20px;
+  background: ${(p) => (p.$checked ? '#10b981' : 'rgba(255, 255, 255, 0.16)')};
+  border-radius: 999px;
+  transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+
+  .thumb {
+    position: absolute;
+    top: 2px;
+    left: ${(p) => (p.$checked ? '18px' : '2px')};
+    width: 16px;
+    height: 16px;
+    background: #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: left 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   }
 `;
 

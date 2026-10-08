@@ -1,24 +1,38 @@
 // Cliente para conectar al PB de la app de puntos desde el POS
 import PocketBase from 'pocketbase';
 
-// URL de la app de puntos
+// URL de la app de puntos (mismo PB que el POS)
 const POINTS_PB_URL =
-  import.meta.env.VITE_POINTS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+  import.meta.env.VITE_POINTS_PB_URL || 'https://railway-production-857d.up.railway.app';
 
-// Credenciales del usuario POS
+// URL del PB de rewards (app de puntos)
+const REWARDS_PB_URL =
+  import.meta.env.VITE_REWARDS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+
+// URL del PB de clientes (pixel-pwa-backend - para buscar QR de clientes)
+const CLIENTS_PB_URL =
+  import.meta.env.VITE_CLIENTS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+
+// Credenciales del usuario POS (mismo que en pb-config.js)
 const POS_CREDENTIALS = {
   email: import.meta.env.VITE_POS_EMAIL || 'pos@pixelhelados.com',
   password: import.meta.env.VITE_POS_PASSWORD || '12345678',
 };
 
-// Factor de puntos configurable (ARS por punto)
-export const POINTS_RATE = Number(import.meta.env.VITE_POINTS_RATE || 1100) || 1100;
+// Factor de puntos configurable (ARS por punto) - $100 = 1 punto
+export const POINTS_RATE = Number(import.meta.env.VITE_POINTS_RATE || 100) || 100;
 
 export class PointsApiClient {
   constructor() {
     this.pb = new PocketBase(POINTS_PB_URL);
+    this.pbRewards = new PocketBase(REWARDS_PB_URL);
+    this.pbClients = new PocketBase(CLIENTS_PB_URL);
     this.pb.autoCancellation(false);
+    this.pbRewards.autoCancellation(false);
+    this.pbClients.autoCancellation(false);
     this.isAuthenticated = false;
+    this.isRewardsAuthenticated = false;
+    this.isClientsAuthenticated = false;
   }
 
   // Autenticar como usuario POS
@@ -42,12 +56,58 @@ export class PointsApiClient {
     }
   }
 
+  // Autenticar en el PB de rewards
+  async authenticateRewards() {
+    try {
+      console.log('🔐 Autenticando usuario POS en app de rewards...');
+      await this.pbRewards
+        .collection('users')
+        .authWithPassword(POS_CREDENTIALS.email, POS_CREDENTIALS.password);
+      this.isRewardsAuthenticated = true;
+      console.log('✅ Usuario POS autenticado en rewards');
+      return { success: true, message: 'Usuario POS autenticado en rewards' };
+    } catch (error) {
+      console.error('❌ Error autenticando en rewards:', error);
+      this.isRewardsAuthenticated = false;
+      return {
+        success: false,
+        message: `Error de autenticación: ${error.message}`,
+        error: error.message,
+      };
+    }
+  }
+
+  // Autenticar en PB de clientes (pixel-pwa-backend)
+  async authenticateClients() {
+    try {
+      console.log('🔐 Autenticando usuario POS en PB de clientes...', CLIENTS_PB_URL);
+      await this.pbClients
+        .collection('users')
+        .authWithPassword(POS_CREDENTIALS.email, POS_CREDENTIALS.password);
+      this.isClientsAuthenticated = true;
+      console.log('✅ Usuario POS autenticado en PB de clientes');
+      return { success: true, message: 'Usuario POS autenticado en PB de clientes' };
+    } catch (error) {
+      console.error('❌ Error autenticando en PB de clientes:', error);
+      this.isClientsAuthenticated = false;
+      return { success: false, message: `Error: ${error.message}`, error: error.message };
+    }
+  }
+
   // Asegurar autenticación antes de cualquier operación
   async ensureAuthenticated() {
     if (!this.isAuthenticated || !this.pb.authStore.isValid) {
       return await this.authenticate();
     }
     return { success: true, message: 'Ya autenticado' };
+  }
+
+  // Asegurar autenticación en rewards
+  async ensureRewardsAuthenticated() {
+    if (!this.isRewardsAuthenticated || !this.pbRewards.authStore.isValid) {
+      return await this.authenticateRewards();
+    }
+    return { success: true, message: 'Ya autenticado en rewards' };
   }
 
   // Buscar QR en la app de puntos
@@ -79,12 +139,18 @@ export class PointsApiClient {
         console.log('⚠️ No se pueden listar colecciones:', e.message);
       }
 
+      // Asegurar autenticación en rewards
+      const authRewardsResult = await this.ensureRewardsAuthenticated();
+      if (!authRewardsResult.success) {
+        console.log('⚠️ No se pudo autenticar en rewards:', authRewardsResult.message);
+      }
+
       // Buscar en reward_claims (cupones/claims) - esto es lo más común para POS
       console.log('🎫 Buscando en reward_claims (cupones)...');
       let claim = null;
       try {
         // Buscamos principalmente por 'code' (código de cupón) o por 'id'
-        claim = await this.pb
+        claim = await this.pbRewards
           .collection('reward_claims')
           .getFirstListItem(`code = "${qrData}" || id = "${qrData}"`, {
             expand: 'reward,client',
@@ -133,7 +199,7 @@ export class PointsApiClient {
       console.log('🎁 Buscando en rewards (premios directos)...');
       let reward = null;
       try {
-        reward = await this.pb
+        reward = await this.pbRewards
           .collection('rewards')
           .getFirstListItem(`qr_code = "${qrData}" || short_code = "${qrData}"`)
           .catch((err) => {
@@ -157,40 +223,52 @@ export class PointsApiClient {
         };
       }
 
-      // Buscar en clientes (si el QR es de un cliente)
-      console.log('👤 Buscando en clients...');
+      // Buscar en clientes (si el QR es de un cliente) - en PB de clientes (pixel-pwa-backend)
+      console.log('👤 Buscando en clients (PB clientes)...', CLIENTS_PB_URL);
+      
+      // Autenticar primero para ver los clientes
+      console.log('🔐 Autenticando en PB clientes...');
+      await this.authenticateClients();
+      
+      // Ver qué clientes hay
+      try {
+        const clientsList = await this.pbClients.collection('clients').getList(1, 50);
+        console.log('📋 Total clientes:', clientsList.totalItems);
+        console.log('📋 Clientes:', clientsList.items?.map(c => ({ id: c.id, qrCodeValue: c.qrCodeValue, name: c.name })));
+      } catch (e) {
+        console.log('⚠️ Error obteniendo clientes:', e.status, e.message);
+      }
+      
+      // Verificar que el cliente existe
+      console.log('🔍 Buscando cliente con código:', qrData, '| trimmed:', qrData.trim());
+      
       let client = null;
 
-      // Estrategia secuencial para evitar error 400 si un campo no existe
-
       // 1. Intentar búsqueda directa por ID (siempre seguro)
+      const searchCode = qrData.trim();
       try {
-        client = await this.pb.collection('clients').getOne(qrData);
+        console.log('🔍 Intentando por ID:', searchCode);
+        client = await this.pbClients.collection('clients').getOne(searchCode);
+        console.log('✅ Cliente encontrado por ID:', client?.id, client?.name);
       } catch (e) {
-        // Ignorar error si no es un ID válido o no se encuentra
+        console.log('⚠️ No encontrado por ID:', e.status, e.message);
       }
 
       // 2. Si no es ID, intentar buscar por otros campos comunes
       if (!client) {
-        // Lista de campos posibles donde podría estar el código
-        // 'qrCodeValue' es el campo específico de esta app, luego fallbacks comunes
-        const fieldsToTry = ['qrCodeValue', 'code', 'qr_code', 'dni'];
+        const fieldsToTry = ['qrCodeValue', 'id'];
 
         for (const field of fieldsToTry) {
           try {
-            client = await this.pb.collection('clients').getFirstListItem(`${field} = "${qrData}"`);
+            console.log(`🔍 Intentando por campo ${field}:`, searchCode);
+            client = await this.pbClients.collection('clients').getFirstListItem(`${field} = "${searchCode}"`);
 
             if (client) {
-              console.log(`✅ Cliente encontrado por campo: ${field}`);
-              break; // Éxito
+              console.log(`✅ Cliente encontrado por campo: ${field}`, client);
+              break;
             }
           } catch (err) {
-            // Si el error es 400, significa que el campo probablemente no existe en la colección.
-            // Si es 404, es que no encontró coincidencia.
-            // En ambos casos, continuamos al siguiente campo.
-            if (err.status !== 404 && err.status !== 400) {
-              console.log(`⚠️ Error buscando en campo ${field}:`, err.message);
-            }
+            console.log(`⚠️ Campo ${field} error:`, err.status, err.message);
           }
         }
       }
@@ -233,16 +311,19 @@ export class PointsApiClient {
   async getClientInfo(clientId) {
     try {
       await this.ensureAuthenticated();
-      const client = await this.pb.collection('clients').getOne(clientId);
+      await this.ensureRewardsAuthenticated();
+      await this.authenticateClients();
+      
+      const client = await this.pbClients.collection('clients').getOne(clientId);
 
       // Obtener transacciones recientes
-      const transactions = await this.pb.collection('points_transactions').getList(1, 10, {
+      const transactions = await this.pbClients.collection('points_transactions').getList(1, 10, {
         filter: `client = "${clientId}"`,
         sort: '-created',
       });
 
-      // Obtener premios canjeados
-      const claims = await this.pb.collection('reward_claims').getList(1, 10, {
+      // Obtener premios canjeados desde PB de rewards
+      const claims = await this.pbRewards.collection('reward_claims').getList(1, 10, {
         filter: `client = "${clientId}"`,
         expand: 'reward',
         sort: '-created',
@@ -269,6 +350,7 @@ export class PointsApiClient {
   async redeemRewardFromPos(claimId, posOperator) {
     try {
       await this.ensureAuthenticated();
+      await this.ensureRewardsAuthenticated();
 
       // Validar que claimId sea válido
       if (!claimId) {
@@ -278,8 +360,8 @@ export class PointsApiClient {
         };
       }
 
-      // Obtener el claim original
-      const claim = await this.pb.collection('reward_claims').getOne(claimId);
+      // Obtener el claim original desde PB de rewards
+      const claim = await this.pbRewards.collection('reward_claims').getOne(claimId);
 
       if (claim.status !== 'pending') {
         return {
@@ -296,8 +378,9 @@ export class PointsApiClient {
         console.log('💰 Procesando transacción de puntos para cliente:', claim.client);
 
         try {
-          const client = await this.pb.collection('clients').getOne(claim.client);
-          const reward = await this.pb.collection('rewards').getOne(claim.reward);
+          await this.authenticateClients();
+          const client = await this.pbClients.collection('clients').getOne(claim.client);
+          const reward = await this.pbRewards.collection('rewards').getOne(claim.reward);
 
           if (client.pointsBalance < reward.pointsCost) {
             return {
@@ -308,7 +391,7 @@ export class PointsApiClient {
 
           // 1. Crear registro en points_transactions (Historial)
           try {
-            await this.pb.collection('points_transactions').create({
+            await this.pbClients.collection('points_transactions').create({
               client: claim.client,
               points: -reward.pointsCost, // Negativo para indicar gasto
               type: 'redeem', // Valor exacto según esquema
@@ -320,8 +403,8 @@ export class PointsApiClient {
             throw new Error(`Error registrando transacción: ${JSON.stringify(txError.data)}`);
           }
 
-          // 2. Actualizar saldo del cliente (Lógica de descuento)
-          await this.pb.collection('clients').update(claim.client, {
+          // 2. Actualizar saldo del cliente (Lógica de descuento) en PB de clientes
+          await this.pbClients.collection('clients').update(claim.client, {
             pointsBalance: client.pointsBalance - reward.pointsCost,
             last_reward_claimed: claim.reward,
             last_claim_date: new Date().toISOString(),
@@ -338,8 +421,8 @@ export class PointsApiClient {
         }
       }
 
-      // Actualizar el claim a 'redeemed'
-      const updatedClaim = await this.pb.collection('reward_claims').update(claimId, {
+      // Actualizar el claim a 'redeemed' en PB de rewards
+      const updatedClaim = await this.pbRewards.collection('reward_claims').update(claimId, {
         status: 'redeemed',
         claimed_from: 'pos',
         pos_operator: posOperator,
@@ -367,23 +450,24 @@ export class PointsApiClient {
     }
   }
 
-  // Agregar puntos desde POS
+  // Agregar puntos desde POS (al PB de clientes - pixel-pwa-backend)
   async addPointsFromPos(clientId, pointsToAdd, reason, _posOperator) {
     try {
       await this.ensureAuthenticated();
-      const client = await this.pb.collection('clients').getOne(clientId);
+      await this.authenticateClients();
+      
+      const client = await this.pbClients.collection('clients').getOne(clientId);
 
-      // Crear transacción de puntos
-      // Schema: client (relation), points (number), type (earn, redeem), related_claim (relation), description (text)
-      const transaction = await this.pb.collection('points_transactions').create({
+      // Crear transacción de puntos en PB de clientes
+      const transaction = await this.pbClients.collection('points_transactions').create({
         client: clientId,
         points: pointsToAdd,
         type: 'earn',
         description: reason || 'Compra en POS',
       });
 
-      // Actualizar balance del cliente
-      const updatedClient = await this.pb.collection('clients').update(clientId, {
+      // Actualizar balance del cliente en PB de clientes
+      const updatedClient = await this.pbClients.collection('clients').update(clientId, {
         pointsBalance: client.pointsBalance + pointsToAdd,
       });
 
@@ -403,10 +487,139 @@ export class PointsApiClient {
     }
   }
 
-  // Verificar conexión con la app de puntos
+  // Obtener precio de un producto desde el PB del POS
+  async getProductPrice(productId) {
+    try {
+      await this.ensureAuthenticated();
+      const product = await this.pb.collection('products').getOne(productId);
+      return {
+        success: true,
+        productId: product.id,
+        name: product.name,
+        price: Number(product.price || 0),
+      };
+    } catch (error) {
+      console.error('Error obteniendo precio del producto:', error);
+      return {
+        success: false,
+        message: `Error: ${error.message}`,
+      };
+    }
+  }
+
+  // Calcular puntos desde precio del producto
+  calculatePointsFromPrice(price) {
+    return Math.floor(Number(price || 0) / POINTS_RATE);
+  }
+
+  // Canjear reward con precio dinámico (si tiene productId vinculado)
+  async redeemRewardWithDynamicPrice(claimId, posOperator) {
+    try {
+      await this.ensureAuthenticated();
+      await this.ensureRewardsAuthenticated();
+
+      if (!claimId) {
+        return { success: false, message: '❌ ID de cupón inválido' };
+      }
+
+      // Obtener el claim desde PB de rewards
+      const claim = await this.pbRewards.collection('reward_claims').getOne(claimId);
+
+      if (claim.status !== 'pending') {
+        return { success: false, message: `❌ Cupón no está pendiente. Estado: ${claim.status}` };
+      }
+
+      // Obtener la reward para ver si tiene productId vinculado
+      const reward = await this.pbRewards.collection('rewards').getOne(claim.reward);
+
+      let dynamicPointsCost = null;
+      let productPrice = null;
+      let rewardTitle = reward.title;
+
+      // Si la reward tiene un productId, obtener precio dinámico
+      if (reward.productId) {
+        const productResult = await this.getProductPrice(reward.productId);
+        if (productResult.success) {
+          productPrice = productResult.price;
+          dynamicPointsCost = this.calculatePointsFromPrice(productPrice);
+          console.log(`📦 Reward "${rewardTitle}" vinculada a producto: ${productResult.name} - $${productPrice}`);
+          console.log(`💰 Puntos dinámicos calculados: ${dynamicPointsCost} (rate: ${POINTS_RATE})`);
+        } else {
+          console.warn('⚠️ No se pudo obtener precio del producto, usando pointsCost fijo');
+          dynamicPointsCost = reward.pointsCost;
+        }
+      } else {
+        dynamicPointsCost = reward.pointsCost;
+      }
+
+      let clientPoints = null;
+
+      // Descontar puntos del cliente si aplica
+      if (claim.client && dynamicPointsCost > 0) {
+        await this.authenticateClients();
+        const client = await this.pbClients.collection('clients').getOne(claim.client);
+
+        if (client.pointsBalance < dynamicPointsCost) {
+          return {
+            success: false,
+            message: `⚠️ Puntos insuficientes. Tiene ${client.pointsBalance}, necesita ${dynamicPointsCost}`,
+          };
+        }
+
+        // Crear transacción
+        await this.pbClients.collection('points_transactions').create({
+          client: claim.client,
+          points: -dynamicPointsCost,
+          type: 'redeem',
+          related_claim: claim.id,
+          description: rewardTitle,
+        });
+
+        // Actualizar saldo
+        await this.pbClients.collection('clients').update(claim.client, {
+          pointsBalance: client.pointsBalance - dynamicPointsCost,
+          last_reward_claimed: claim.reward,
+          last_claim_date: new Date().toISOString(),
+        });
+
+        clientPoints = client.pointsBalance - dynamicPointsCost;
+      }
+
+      // Actualizar claim con los puntos reales usados y marcar como canjeado
+      const updatedClaim = await this.pbRewards.collection('reward_claims').update(claimId, {
+        status: 'redeemed',
+        claimed_from: 'pos',
+        pos_operator: posOperator,
+        claimed_at: new Date().toISOString(),
+        pos_location: 'main',
+        pointsCost: dynamicPointsCost,
+        productPrice: productPrice,
+      });
+
+      return {
+        success: true,
+        claim: updatedClaim,
+        message: productPrice 
+          ? `✅ Cupón "${rewardTitle}" canjeado ($${productPrice} → ${dynamicPointsCost} puntos)`
+          : `✅ Cupón "${rewardTitle}" canjeado por ${dynamicPointsCost} puntos`,
+        newBalance: clientPoints,
+        rewardTitle: rewardTitle,
+        dynamicPoints: dynamicPointsCost,
+        productPrice: productPrice,
+      };
+    } catch (error) {
+      console.error('Error canjeando cupón con precio dinámico:', error);
+      return {
+        success: false,
+        message: `❌ Error al canjear: ${error.message}`,
+      };
+    }
+  }
+
+  // Verificar conexión con la app de puntos y rewards
   async testConnection() {
     try {
-      // Primero intentar autenticar
+      // Autenticar en PB principal
       const authResult = await this.authenticate();
       if (!authResult.success) {
         return {
@@ -417,19 +630,34 @@ export class PointsApiClient {
         };
       }
 
-      // Intentar obtener algo simple para probar conexión
-      await this.pb.collection('rewards').getList(1, 1);
+      // Autenticar en PB de rewards
+      const authRewardsResult = await this.authenticateRewards();
+      if (!authRewardsResult.success) {
+        return {
+          success: false,
+          message: `PB principal OK, pero error en rewards: ${authRewardsResult.message}`,
+          url: POINTS_PB_URL,
+          rewardsUrl: REWARDS_PB_URL,
+          error: authRewardsResult.error,
+        };
+      }
+
+      // Probar conexión a rewards
+      await this.pbRewards.collection('rewards').getList(1, 1);
+      
       return {
         success: true,
-        message: '✅ Conectado y autenticado en app de puntos',
+        message: '✅ Conectado a ambos: PB principal y Rewards',
         url: POINTS_PB_URL,
+        rewardsUrl: REWARDS_PB_URL,
       };
     } catch (error) {
-      console.log('❌ Error de conexión con app de puntos:', error);
+      console.log('❌ Error de conexión:', error);
       return {
         success: false,
-        message: `❌ Error de conexión con app de puntos: ${error.message}`,
+        message: `❌ Error de conexión: ${error.message}`,
         url: POINTS_PB_URL,
+        rewardsUrl: REWARDS_PB_URL,
         error: error.message,
       };
     }

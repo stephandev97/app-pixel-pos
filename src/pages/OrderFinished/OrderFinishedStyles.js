@@ -37,7 +37,8 @@ export const IconCircle = styled.div`
 `;
 
 export const ButtonFinished = styled.button`
-  width: 400px;
+  width: 100%;
+  max-width: 400px;
   height: 60px;
   border-radius: 15px;
   font-size: 1.2em;

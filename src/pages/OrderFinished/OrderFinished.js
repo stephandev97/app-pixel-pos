@@ -9,7 +9,12 @@ import { forwardRef, useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 // ✅ mismo print que en Orders, con logo + pageStyle + tipografía
-import { toggleFinishOrder } from '../../redux/actions/actionsSlice';
+import {
+  toggleFinishOrder,
+  toggleHome,
+  toggleOrders,
+  toggleTestOrders,
+} from '../../redux/actions/actionsSlice';
 import { ButtonFinished, Container } from './OrderFinishedStyles';
 
 const Transition = forwardRef(function Transition(props, ref) {
@@ -24,41 +29,30 @@ const OrderFinished = () => {
 
   const isSaving = status === 'loading';
 
-  // mismo criterio que ya tenías
-  const shouldPrint = useMemo(() => {
-    return (
-      showFinished &&
-      status === 'succeeded' &&
-      lastOrder?.mode === 'delivery' &&
-      !lastOrder?.pending
-    );
-  }, [showFinished, status, lastOrder]);
-
-  const [printed, setPrinted] = useState(false);
   const [printStatus, setPrintStatus] = useState('idle');
   // 'idle' | 'printing' | 'success' | 'failed' | 'skipped'
 
   // Reset cuando cambia el modal / pedido
   useEffect(() => {
     if (!showFinished) {
-      setPrinted(false);
       setPrintStatus('idle');
       return;
     }
 
-    // si no corresponde imprimir, habilitamos igual
-    // 🔕 impresión desactivada temporalmente
-    if (showFinished && status === 'succeeded') {
-      setPrinted(true);
+    // si no corresponde imprimir o terminó de guardar, habilitamos
+    if (showFinished && !isSaving) {
       setPrintStatus('skipped');
     }
-  }, [showFinished, shouldPrint, status]);
+  }, [showFinished, isSaving]);
 
-  const canConfirm = !isSaving && printed;
+  const canConfirm = !isSaving;
 
   const handleClose = () => {
     if (!canConfirm) return;
     dispatch(toggleFinishOrder(false));
+    dispatch(toggleHome(true));
+    dispatch(toggleOrders(false));
+    dispatch(toggleTestOrders(false));
   };
 
   const message = isSaving

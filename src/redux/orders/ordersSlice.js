@@ -83,6 +83,24 @@ function detectPayment(pago, fallbackRevenue) {
   return { method: 'otro', paidAmount: rev, revenueAmount: rev };
 }
 
+const TEST_ORDERS_KEY = 'pixel_pos_test_orders_v1';
+
+const loadTestOrdersFromStorage = () => {
+  try {
+    return JSON.parse(localStorage.getItem(TEST_ORDERS_KEY) || '[]');
+  } catch {
+    return [];
+  }
+};
+
+const saveTestOrdersToStorage = (testOrders) => {
+  try {
+    localStorage.setItem(TEST_ORDERS_KEY, JSON.stringify(testOrders));
+  } catch {
+    // ignore
+  }
+};
+
 const loadPendingFromStorage = () => {
   try {
     return JSON.parse(localStorage.getItem(PENDING_KEY) || '[]');
@@ -93,7 +111,9 @@ const loadPendingFromStorage = () => {
 
 const savePendingToStorage = (orders) => {
   try {
-    const onlyPending = orders.filter((o) => o.pending === true);
+    const onlyPending = orders.filter(
+      (o) => o.pending === true && !o.isTestOrder && !(typeof o.id === 'string' && o.id.startsWith('local-test-'))
+    );
     localStorage.setItem(PENDING_KEY, JSON.stringify(onlyPending));
   } catch {
     // manejo futuro
@@ -138,7 +158,7 @@ const pbToOrder = (rec) => ({
 
 export const hydrateOrdersFromPocket = createAsyncThunk(
   'orders/hydrate',
-  async ({ page = 1, perPage = 20 }, { rejectWithValue }) => {
+  async ({ page = 1, perPage = 10 }, { rejectWithValue }) => {
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
@@ -184,7 +204,7 @@ export const fetchMoreOrders = createAsyncThunk(
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
 
-      const list = await pb.collection('orders').getList(nextPage, pagination.perPage, {
+      const list = await pb.collection('orders').getList(nextPage, 10, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
@@ -237,14 +257,44 @@ export const hydrateAllTodayOrders = createAsyncThunk(
   }
 );
 
+export const fetchTodayPendingOrders = createAsyncThunk(
+  'orders/fetchTodayPendingOrders',
+  async (_, { rejectWithValue }) => {
+    try {
+      const startOfBusinessDay = computeBusinessDate(new Date(), 3);
+      const filter = `businessDate = "${startOfBusinessDay}" && direccion != "Retiro" && copied != true`;
+
+      const res = await pb.collection('orders').getList(1, 50, {
+        filter,
+        sort: '-clientCreatedAt,-created',
+      });
+
+      return {
+        totalItems: res.totalItems,
+        items: res.items.map(pbToOrder),
+      };
+    } catch (err) {
+      return rejectWithValue(err?.message || 'Error al obtener pedidos pendientes del día');
+    }
+  }
+);
+
 export const addOrderOnBoth = createAsyncThunk(
   'orders/addOrderOnBoth',
-  async (payload, { dispatch }) => {
-    const localId = 'local-' + Date.now();
+  async (payload, { dispatch, getState }) => {
+    const isTestMode = Boolean(getState()?.actions?.isTestMode);
+    const localId = (isTestMode ? 'local-test-' : 'local-') + Date.now();
     const orderData = {
       ...payload,
+      isTestOrder: isTestMode,
       clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
     };
+
+    // Si estamos en Modo Prueba, retornamos la orden de prueba local sin tocar PocketBase
+    if (isTestMode) {
+      const localOrder = { ...orderData, id: localId, clientId: localId, pending: false, isTestOrder: true };
+      return localOrder;
+    }
 
     // Si estamos offline, guardamos localmente y retornamos la orden local.
     if (!navigator.onLine) {
@@ -267,7 +317,6 @@ export const addOrderOnBoth = createAsyncThunk(
       // Si falla, guardamos localmente y retornamos la orden local.
       console.error('Error creando orden en servidor, guardando localmente:', err);
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
-      dispatch(ordersSlice.actions.addLocalOrder(localOrder));
       return localOrder;
     }
   }
@@ -278,7 +327,14 @@ export const removeOrderFromBoth = createAsyncThunk(
   async ({ id, number, reason }, { getState, rejectWithValue }) => {
     try {
       const orders = getState()?.orders?.orders ?? [];
-      let target = orders.find((o) => (id && o.id === id) || (number && o.number === number));
+      const testOrders = getState()?.orders?.testOrders ?? [];
+      let target =
+        orders.find((o) => (id && o.id === id) || (number && o.number === number)) ||
+        testOrders.find((o) => (id && o.id === id) || (number && o.number === number));
+
+      if (!target && id && id.startsWith('local-test-')) {
+        return { id };
+      }
 
       if (!target) {
         if (id) {
@@ -288,6 +344,11 @@ export const removeOrderFromBoth = createAsyncThunk(
         }
       }
       if (!target) return rejectWithValue('Orden no encontrada');
+
+      // Si es una orden de prueba o local (pending), solo la borramos del estado y retornamos.
+      if (target.isTestOrder || (typeof target.id === 'string' && target.id.startsWith('local-test-')) || target.pending) {
+        return { id: target.id };
+      }
 
       await pb.collection('orders').delete(target.id);
 
@@ -367,13 +428,15 @@ export const removeOrderFromBoth = createAsyncThunk(
 
       const ef = Number(target.pagoEfectivo ?? 0);
       const mp = Number(target.pagoMp ?? 0);
+      const db = Number(target.pagoDebito ?? 0);
       let paidAmount =
         target.paidAmount && typeof target.paidAmount === 'object'
           ? target.paidAmount
-          : ef || mp
+          : ef || mp || db
             ? {
                 ...(ef ? { efectivo: ef } : {}),
                 ...(mp ? { transferencia: mp } : {}),
+                ...(db ? { debito: db } : {}),
               }
             : method
               ? { [method]: revenueAmount }
@@ -440,7 +503,7 @@ export const syncPendingOrders = createAsyncThunk(
   async (_, { getState, dispatch }) => {
     if (!navigator.onLine) return;
     const state = getState();
-    const pendings = state?.orders?.orders?.filter((o) => o.pending) || [];
+    const pendings = state?.orders?.orders?.filter((o) => o.pending && !o.isTestOrder) || [];
 
     for (const p of pendings) {
       try {
@@ -462,32 +525,25 @@ export const syncPendingOrders = createAsyncThunk(
         }
 
         const { pagoEfectivo, pagoMp, pagoDebito } = normalizePaymentFields(p);
-        const created = await pb.collection('orders').create({
-          number: p.number,
-          direccion: p.direccion,
-          total: p.total,
-          pago: p.pago,
-          cambio: p.cambio,
-          check: p.check,
-          items: p.items,
-          hora: p.hora,
-          clientCreatedAt: p.clientCreatedAt ?? Date.now(),
+
+        // Excluimos id y pending para que PB genere su ID
+        const { id, pending, ...restOfOrder } = p;
+
+        const payload = {
+          ...restOfOrder,
           pagoEfectivo,
           pagoMp,
           pagoDebito,
-          pagoDetalle: p.pagoDetalle ?? null,
-          method: p.method ?? null,
-          paidAmount: p.paidAmount ?? null,
-          revenueAmount: p.revenueAmount ?? null,
-          businessDate: p.businessDate ?? null,
-          mode: p.mode ?? null,
-          address: p.address ?? null,
-          phone: p.phone ?? null,
-          name: p.name ?? null,
-        });
+          // Aseguramos que clientCreatedAt exista
+          clientCreatedAt: p.clientCreatedAt ?? Date.now(),
+        };
 
+        const created = await pb.collection('orders').create(payload);
         dispatch(
-          ordersSlice.actions.markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) })
+          ordersSlice.actions.markOrderSynced({
+            localId: p.id,
+            serverOrder: pbToOrder(created),
+          })
         );
       } catch (e) {
         console.error('Failed to sync pending order:', e);
@@ -496,18 +552,121 @@ export const syncPendingOrders = createAsyncThunk(
   }
 );
 
+export const updateOrderPayment = createAsyncThunk(
+  'orders/updatePayment',
+  async ({ id, payload }, { getState, rejectWithValue }) => {
+    try {
+      const state = getState();
+      const orders = state?.orders?.orders ?? [];
+      const target = orders.find((o) => o.id === id);
+      if (!target) return rejectWithValue('Orden no encontrada en el estado local');
+
+      // 1) Obtener datos viejos para restar de stats
+      const createdMs =
+        typeof target.clientCreatedAt === 'number'
+          ? target.clientCreatedAt
+          : target.created
+            ? new Date(target.created).getTime()
+            : Date.now();
+      const createdDate = new Date(createdMs);
+      const day = target.businessDate || computeBusinessDate(createdDate, 3);
+
+      const { method: oldMethod, revenueAmount: oldRevenue } = detectPayment(
+        target.pago,
+        target.total
+      );
+      const methodBefore = target.method ?? oldMethod ?? null;
+      const revenueBefore = Number(target.revenueAmount ?? oldRevenue ?? 0);
+      const efBefore = Number(target.pagoEfectivo ?? 0);
+      const mpBefore = Number(target.pagoMp ?? 0);
+      const dbBefore = Number(target.pagoDebito ?? 0);
+
+      const paidBefore =
+        target.paidAmount && typeof target.paidAmount === 'object'
+          ? target.paidAmount
+          : efBefore || mpBefore || dbBefore
+            ? {
+                ...(efBefore ? { efectivo: efBefore } : {}),
+                ...(mpBefore ? { transferencia: mpBefore } : {}),
+                ...(dbBefore ? { debito: dbBefore } : {}),
+              }
+            : methodBefore
+              ? { [methodBefore]: revenueBefore }
+              : {};
+      // 2) Actualizar en PocketBase
+      const updatedRecord = await pb.collection('orders').update(id, payload);
+      const updatedOrder = pbToOrder(updatedRecord);
+
+      // 3) Obtener datos nuevos para sumar a stats
+      const methodAfter = updatedOrder.method ?? null;
+      const revenueAfter = Number(updatedOrder.revenueAmount ?? updatedOrder.total ?? 0);
+      const efAfter = Number(updatedOrder.pagoEfectivo ?? 0);
+      const mpAfter = Number(updatedOrder.pagoMp ?? 0);
+      const dbAfter = Number(updatedOrder.pagoDebito ?? 0);
+
+      const paidAfter =
+        updatedOrder.paidAmount && typeof updatedOrder.paidAmount === 'object'
+          ? updatedOrder.paidAmount
+          : efAfter || mpAfter || dbAfter
+            ? {
+                ...(efAfter ? { efectivo: efAfter } : {}),
+                ...(mpAfter ? { transferencia: mpAfter } : {}),
+                ...(dbAfter ? { debito: dbAfter } : {}),
+              }
+            : methodAfter
+              ? { [methodAfter]: revenueAfter }
+              : {};
+
+      // 4) Actualizar stats (restar viejo, sumar nuevo)
+      await upsertDailyStatsJsonSmart({
+        day,
+        addRevenue: revenueBefore,
+        addOrders: 0,
+        addItems: {},
+        paidAmount: paidBefore,
+        method: Object.keys(paidBefore).length ? null : methodBefore,
+        mode: null,
+        address: null,
+        sign: -1,
+        pruneZero: true,
+        deleteIfEmpty: false,
+      });
+
+      await upsertDailyStatsJsonSmart({
+        day,
+        addRevenue: revenueAfter,
+        addOrders: 0,
+        addItems: {},
+        paidAmount: paidAfter,
+        method: Object.keys(paidAfter).length ? null : methodAfter,
+        mode: null,
+        address: null,
+        sign: 1,
+        pruneZero: true,
+        deleteIfEmpty: false,
+      });
+
+      return updatedOrder;
+    } catch (err) {
+      console.error('Error al actualizar pago:', err?.status, err?.data || err);
+      return rejectWithValue(err?.data || String(err));
+    }
+  }
+);
+
 // ---------- Slice ----------
 const initialState = {
   orders: loadPendingFromStorage(), // arrancamos con los pending guardados
+  testOrders: loadTestOrdersFromStorage(),
   status: 'idle',
   error: null,
   totalOrdersCount: 0,
   pagination: {
     page: 0,
-    perPage: 20,
+    perPage: 10,
     totalItems: 0,
     totalPages: 0,
-    hasMore: true,
+    hasMore: false,
   },
   lastCreatedOrder: null,
 };
@@ -516,6 +675,37 @@ const ordersSlice = createSlice({
   name: 'orders',
   initialState,
   reducers: {
+    addTestOrder(state, { payload }) {
+      if (!payload) return;
+      if (!Array.isArray(state.testOrders)) {
+        state.testOrders = loadTestOrdersFromStorage();
+      }
+      const exists = state.testOrders.some((o) => o.id === payload.id);
+      if (!exists) {
+        state.testOrders.unshift(payload);
+      } else {
+        const idx = state.testOrders.findIndex((o) => o.id === payload.id);
+        if (idx >= 0) state.testOrders[idx] = payload;
+      }
+      saveTestOrdersToStorage(state.testOrders);
+    },
+    deleteTestOrder(state, { payload: id }) {
+      if (!Array.isArray(state.testOrders)) {
+        state.testOrders = loadTestOrdersFromStorage();
+      }
+      state.testOrders = state.testOrders.filter((o) => o.id !== id);
+      state.orders = state.orders.filter((o) => o.id !== id);
+      saveTestOrdersToStorage(state.testOrders);
+      savePendingToStorage(state.orders);
+    },
+    clearTestOrders(state) {
+      state.testOrders = [];
+      state.orders = state.orders.filter(
+        (o) => !o.isTestOrder && !(typeof o.id === 'string' && o.id.startsWith('local-test-'))
+      );
+      saveTestOrdersToStorage(state.testOrders);
+      savePendingToStorage(state.orders);
+    },
     upsertOrder(state, { payload: o }) {
       const pendingIdx = state.orders.findIndex((x) => x.pending && x.number === o.number);
 
@@ -559,7 +749,27 @@ const ordersSlice = createSlice({
     markOrderSynced(state, { payload }) {
       const { localId, serverOrder } = payload;
       const idx = state.orders.findIndex((o) => o.id === localId);
-      if (idx >= 0) state.orders[idx] = { ...serverOrder };
+      if (idx >= 0) {
+        state.orders[idx] = { ...serverOrder };
+
+        // Migrar estado de impresión (local -> server)
+        try {
+          const printedKey = `order-printed-${localId}`;
+          if (localStorage.getItem(printedKey) === 'true') {
+            localStorage.setItem(`order-printed-${serverOrder.id}`, 'true');
+            localStorage.removeItem(printedKey);
+          }
+          // Migrar estado oculto
+          const hiddenKey = `order-hidden-${localId}`;
+          const hiddenVal = localStorage.getItem(hiddenKey);
+          if (hiddenVal !== null) {
+            localStorage.setItem(`order-hidden-${serverOrder.id}`, hiddenVal);
+            localStorage.removeItem(hiddenKey);
+          }
+        } catch (e) {
+          console.warn('Error migrando localStorage keys', e);
+        }
+      }
       savePendingToStorage(state.orders);
     },
   },
@@ -571,7 +781,16 @@ const ordersSlice = createSlice({
     b.addCase(hydrateOrdersFromPocket.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
       const pendings = s.orders.filter((o) => o.pending);
-      s.orders = [...pendings, ...payload.items.map(pbToOrder)];
+      // Mantener pedidos pendientes de delivery cargados previamente
+      const pendingDeliveries = s.orders.filter((o) => {
+        const isRet = String(o?.direccion ?? '').trim().toLowerCase() === 'retiro';
+        return !isRet && !o.copied;
+      });
+      const incoming = payload.items.map(pbToOrder);
+      const incomingIds = new Set(incoming.map((o) => o.id));
+      const preservedDeliveries = pendingDeliveries.filter((o) => !incomingIds.has(o.id));
+
+      s.orders = [...pendings, ...incoming, ...preservedDeliveries];
       s.pagination = {
         page: payload.page,
         perPage: payload.perPage,
@@ -584,6 +803,23 @@ const ordersSlice = createSlice({
     b.addCase(hydrateOrdersFromPocket.rejected, (s, { payload }) => {
       s.status = 'failed';
       s.error = payload || 'Fallo al hidratar';
+    });
+
+    b.addCase(fetchTodayPendingOrders.fulfilled, (s, { payload }) => {
+      if (!payload?.items) return;
+      const existingIds = new Set(s.orders.map((o) => o.id));
+      payload.items.forEach((pOrder) => {
+        if (!existingIds.has(pOrder.id)) {
+          s.orders.push(pOrder);
+          existingIds.add(pOrder.id);
+        } else {
+          const idx = s.orders.findIndex((o) => o.id === pOrder.id);
+          if (idx >= 0) {
+            s.orders[idx] = { ...s.orders[idx], ...pOrder };
+          }
+        }
+      });
+      savePendingToStorage(s.orders);
     });
 
     b.addCase(hydrateAllTodayOrders.pending, (s) => {
@@ -599,7 +835,7 @@ const ordersSlice = createSlice({
         perPage: payload.perPage,
         totalItems: payload.totalItems,
         totalPages: payload.totalPages,
-        hasMore: payload.page < payload.totalPages,
+        hasMore: false,
       };
       savePendingToStorage(s.orders);
     });
@@ -614,7 +850,9 @@ const ordersSlice = createSlice({
     b.addCase(fetchMoreOrders.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
       if (!payload) return;
-      s.orders = [...s.orders, ...payload.items.map(pbToOrder)];
+      const existingIds = new Set(s.orders.map((o) => o.id));
+      const newItems = payload.items.map(pbToOrder).filter((o) => !existingIds.has(o.id));
+      s.orders = [...s.orders, ...newItems];
       s.pagination = {
         page: payload.page,
         perPage: payload.perPage,
@@ -638,6 +876,22 @@ const ordersSlice = createSlice({
       s.status = 'succeeded';
       if (!payload) return;
 
+      if (payload.isTestOrder) {
+        if (!Array.isArray(s.testOrders)) {
+          s.testOrders = loadTestOrdersFromStorage();
+        }
+        const exists = s.testOrders.some((o) => o.id === payload.id);
+        if (!exists) {
+          s.testOrders.unshift(payload);
+        } else {
+          const idx = s.testOrders.findIndex((o) => o.id === payload.id);
+          if (idx >= 0) s.testOrders[idx] = payload;
+        }
+        saveTestOrdersToStorage(s.testOrders);
+        s.lastCreatedOrder = payload;
+        return;
+      }
+
       // anti-duplicados (realtime + fulfilled)
       ordersSlice.caseReducers.upsertOrder(s, { payload });
       s.lastCreatedOrder = payload;
@@ -649,10 +903,24 @@ const ordersSlice = createSlice({
 
     b.addCase(removeOrderFromBoth.fulfilled, (s, { payload }) => {
       s.orders = s.orders.filter((o) => o.id !== payload.id);
+      if (!Array.isArray(s.testOrders)) {
+        s.testOrders = loadTestOrdersFromStorage();
+      }
+      s.testOrders = s.testOrders.filter((o) => o.id !== payload.id);
       savePendingToStorage(s.orders);
+      saveTestOrdersToStorage(s.testOrders);
     });
     b.addCase(removeOrderFromBoth.rejected, (s, { payload }) => {
       s.error = payload || 'Fallo al borrar';
+    });
+
+    b.addCase(updateOrderPayment.fulfilled, (s, { payload }) => {
+      s.status = 'succeeded';
+      const idx = s.orders.findIndex((o) => o.id === payload.id);
+      if (idx >= 0) {
+        s.orders[idx] = { ...payload };
+      }
+      savePendingToStorage(s.orders);
     });
 
     b.addCase(syncPendingOrders.fulfilled, () => {
@@ -666,6 +934,9 @@ const ordersSlice = createSlice({
 });
 
 export const {
+  addTestOrder,
+  deleteTestOrder,
+  clearTestOrders,
   upsertOrder,
   removeOrderById,
   clearOrders,
