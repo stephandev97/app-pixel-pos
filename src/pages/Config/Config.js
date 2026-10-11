@@ -6,11 +6,12 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Settings } from 'react-feather';
-import { Calculator, ClipboardList, Coffee, FlaskConical, Heart, Lock, QrCode, ShoppingBag, Tv } from 'lucide-react';
+import { BookOpen, Calculator, ClipboardList, Coffee, EyeOff, FlaskConical, Heart, Lock, QrCode, ShoppingBag, Tv } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import pkg from '../../../package.json';
 import LoginModal from '../../components/LoginModal/LoginModal';
+import HiddenProductsModal from './HiddenProductsModal';
 import { pb } from '../../lib/pb';
 import {
   setIsAdmin,
@@ -18,6 +19,7 @@ import {
   setLoginIntent,
   toggleDevQr,
   toggleSectionBarista,
+  toggleSectionBaristaRecipes,
   toggleSectionNotes,
   toggleSectionTvSabores,
   toggleSectionCafeCosts,
@@ -193,6 +195,7 @@ const Config = () => {
     showSectionProducts = true,
     showSectionOrders = true,
     showSectionBarista = false,
+    showSectionBaristaRecipes = false,
     showSectionNotes = true,
     showSectionTvSabores = true,
     showSectionCafeCosts = false,
@@ -200,8 +203,15 @@ const Config = () => {
     isTestMode = false,
     cupSizesStock = DEFAULT_CUP_SIZES_STOCK,
     extrasStock = DEFAULT_EXTRAS_STOCK,
+    hiddenProducts = {},
   } = useSelector((state) => state.actions);
   const dispatch = useDispatch();
+
+  const hiddenCount = useMemo(() => {
+    return Object.values(hiddenProducts).filter(Boolean).length;
+  }, [hiddenProducts]);
+
+  const [hiddenProductsModalOpen, setHiddenProductsModalOpen] = useState(false);
 
   const handleToggleCupSize = async (sizeKey) => {
     const current = cupSizesStock[sizeKey] !== false;
@@ -850,6 +860,44 @@ const Config = () => {
             </SwitchToggle>
           </ButtonPage>
 
+          <ButtonPage onClick={() => setHiddenProductsModalOpen(true)}>
+            <IconButton>
+              <EyeOff size={16} />
+            </IconButton>
+            <a>Ocultar Productos en Catálogo</a>
+            {hiddenCount > 0 ? (
+              <span
+                style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  background: 'rgba(244, 63, 94, 0.15)',
+                  color: '#f43f5e',
+                  border: '1px solid rgba(244, 63, 94, 0.3)',
+                  padding: '2px 8px',
+                  borderRadius: 999,
+                  marginLeft: 'auto',
+                  marginRight: 6,
+                }}
+              >
+                {hiddenCount} {hiddenCount === 1 ? 'oculto' : 'ocultos'}
+              </span>
+            ) : (
+              <span
+                style={{
+                  fontSize: 11,
+                  color: '#9ca3af',
+                  marginLeft: 'auto',
+                  marginRight: 6,
+                }}
+              >
+                Todos visibles
+              </span>
+            )}
+            <span>
+              <ChevronRight />
+            </span>
+          </ButtonPage>
+
           <ButtonPage onClick={() => dispatch(toggleSectionOrders())}>
             <IconButton>
               <ClipboardList size={16} />
@@ -866,6 +914,16 @@ const Config = () => {
             </IconButton>
             <a>Sección Barista</a>
             <SwitchToggle $checked={showSectionBarista}>
+              <div className="thumb" />
+            </SwitchToggle>
+          </ButtonPage>
+
+          <ButtonPage onClick={() => dispatch(toggleSectionBaristaRecipes())}>
+            <IconButton>
+              <BookOpen size={16} />
+            </IconButton>
+            <a>Sección Recetario Barista</a>
+            <SwitchToggle $checked={showSectionBaristaRecipes}>
               <div className="thumb" />
             </SwitchToggle>
           </ButtonPage>
@@ -1558,6 +1616,11 @@ const Config = () => {
           </div>
         </form>
       </Dialog>
+
+      <HiddenProductsModal
+        open={hiddenProductsModalOpen}
+        onClose={() => setHiddenProductsModalOpen(false)}
+      />
     </Container>
   );
 };

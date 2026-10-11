@@ -21,6 +21,7 @@ import {
   CupSoda,
   Flame,
   FlaskConical,
+  Package,
   RotateCcw,
   Search,
   Snowflake,
@@ -45,6 +46,7 @@ import {
 } from '../../redux/orders/ordersSlice';
 import { logoBase64 as logo } from '../../utils/logoBase64';
 import { isBaristaItem } from '../../utils/cafeStockSync';
+import { getSmoothieFlavor, getCleanItemNote, getFormattedDrinkName, getCleanSizeLabel, getSizeBadgeInfo } from './baristaRecipesData';
 import { formatPrice } from '../../utils/formatPrice';
 import { getOrderCashNet } from '../../utils/payments';
 import { POINTS_RATE, pointsApiClient } from '../../utils/pointsApiClient';
@@ -95,6 +97,7 @@ const CardOrders = React.memo(({
   isBarista = false,
   isTestOrder = false,
   isPrepared = false,
+  baristaDone = false,
   onMarkPrepared,
   onUnmarkPrepared,
   onOpenRecipe,
@@ -280,6 +283,11 @@ const CardOrders = React.memo(({
     const q = Number(item?.quantity || 0) || 1;
     repetidos2[item.name] = (repetidos2[item.name] || 0) + q;
   });
+
+  const hasBaristaItems = useMemo(
+    () => (itemsNorm || []).some(isBaristaItem),
+    [itemsNorm]
+  );
 
   // scan handler eliminado (no usado)
 
@@ -541,7 +549,8 @@ const CardOrders = React.memo(({
       )
       .reduce((acc, it) => {
         const qty = Number(it.quantity) || 0;
-        acc[it.name] = (acc[it.name] || 0) + qty;
+        const formattedName = getFormattedDrinkName(it) || it.name;
+        acc[formattedName] = (acc[formattedName] || 0) + qty;
         return acc;
       }, {});
     const productosLines = Object.entries(productosGrouped).map(([name, qty]) => {
@@ -678,15 +687,19 @@ const CardOrders = React.memo(({
 
             {itemsNorm.map((it, idx) => {
               const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
-              const nombre = it?.name || it?.title || it?.label || '';
+              const rawNombre = it?.name || it?.title || it?.label || '';
+              const nombre = getFormattedDrinkName(it) || rawNombre;
               const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
+              const itNL = (nombre || '').toLowerCase();
+              const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+              const isCk = itNL.includes('cookie') || itNL.includes('galletita') || String(it?.category || '').toLowerCase().includes('cookie');
               return (
                 <div key={idx} style={{ marginBottom: '1mm' }}>
                   <div style={{ display: 'flex', fontSize: '3.8mm' }}>
                     <span style={{ width: '6mm' }}>{cantidad}</span>
                     <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
                   </div>
-                  {!!sabores.length && (
+                  {!isSm && !isCk && !!sabores.length && (
                     <div
                       style={{
                         marginLeft: '6mm',
@@ -703,25 +716,43 @@ const CardOrders = React.memo(({
                   )}
 
                   {/* Detalles (Cafetería, notas, etc.) */}
-                  {(it?.size || (it?.extras && it.extras.length > 0) || it?.vaso || it?.note || it?.listdetalle) && (
-                    <div
-                      style={{
-                        marginLeft: '6mm',
-                        marginTop: '.6mm',
-                        fontSize: '3.3mm',
-                        color: '#333',
-                        fontWeight: 700,
-                        textAlign: 'left',
-                      }}
-                    >
-                      {it.size && <div>• Medida: {it.size}</div>}
-                      {it.extras && it.extras.map((ex, i) => (
-                        <div key={i}>• Adicional: {ex}</div>
-                      ))}
-                      {it.vaso && <div>• Vaso: "{it.vaso}"</div>}
-                      {(it.note || it.listdetalle) && <div>• Nota: "{it.note || it.listdetalle}"</div>}
-                    </div>
-                  )}
+                  {(() => {
+                    const itNL = (it?.name || '').toLowerCase();
+                    const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+                    const sz = isSm ? '12oz' : getCleanSizeLabel(it?.size || it?.medida || '');
+                    const szInfo = sz ? getSizeBadgeInfo(sz) : null;
+                    const exList = Array.isArray(it?.extras) ? [...it.extras] : [];
+                    if ((it?.canela || it?.withCinnamon) && !exList.some((e) => /canela/i.test(e))) exList.push('Canela');
+                    if (it?.leche_almendras && !exList.some((e) => /almendra/i.test(e))) exList.push('Leche Almendras');
+                    if (it?.extra_shot && !exList.some((e) => /shot/i.test(e))) exList.push('Extra Shot');
+
+                    const cleanPrintNote = getCleanItemNote(it);
+                    if (!sz && !exList.length && !it?.vaso && !cleanPrintNote) return null;
+
+                    return (
+                      <div
+                        style={{
+                          marginLeft: '6mm',
+                          marginTop: '.6mm',
+                          fontSize: '3.3mm',
+                          color: '#333',
+                          fontWeight: 700,
+                          textAlign: 'left',
+                        }}
+                      >
+                        {sz && (
+                          <div style={szInfo?.isLarge ? { fontWeight: 900, fontSize: '3.6mm', color: '#000' } : {}}>
+                            • Medida: {szInfo?.label || sz} {szInfo?.isLarge ? '★ GRANDE ★' : ''}
+                          </div>
+                        )}
+                        {exList.map((ex, i) => (
+                          <div key={i}>• Adicional: {String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim()}</div>
+                        ))}
+                        {it?.vaso && <div>• Vaso: "{it.vaso}"</div>}
+                        {cleanPrintNote && <div>• Nota: "{cleanPrintNote}"</div>}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             })}
@@ -952,13 +983,45 @@ const CardOrders = React.memo(({
       : itemsNorm;
 
     itemsToProcess.forEach((it) => {
+      const formattedName = getFormattedDrinkName(it);
       const saboresKey = (it.sabores || []).join('|');
       const extrasKey = (it.extras || []).join('|');
-      const key = `${it.name}__${saboresKey}__${it.size || ''}__${extrasKey}__${it.vaso || ''}`;
+      const key = `${formattedName}__${saboresKey}__${it.size || ''}__${extrasKey}__${it.vaso || ''}`;
 
       if (!map[key]) {
         map[key] = {
           ...it,
+          name: formattedName,
+          quantity: Number(it.quantity || 1),
+        };
+      } else {
+        map[key].quantity += Number(it.quantity || 1);
+      }
+    });
+
+    return Object.values(map);
+  }, [itemsNorm, isBarista]);
+
+  const otherGroupedItems = useMemo(() => {
+    if (!isBarista) return [];
+    const hasBarista = (itemsNorm || []).some(isBaristaItem);
+    // Si la orden no tiene ningún ítem de cafetería/barista, groupedItems ya muestra todos
+    if (!hasBarista) return [];
+
+    const nonBarista = (itemsNorm || []).filter((it) => !isBaristaItem(it));
+    if (nonBarista.length === 0) return [];
+
+    const map = {};
+    nonBarista.forEach((it) => {
+      const formattedName = it.name || it.nombre || 'Producto';
+      const saboresKey = (it.sabores || []).join('|');
+      const extrasKey = (it.extras || []).join('|');
+      const key = `${formattedName}__${saboresKey}__${it.size || ''}__${extrasKey}__${it.notas || it.note || ''}`;
+
+      if (!map[key]) {
+        map[key] = {
+          ...it,
+          name: formattedName,
           quantity: Number(it.quantity || 1),
         };
       } else {
@@ -1005,13 +1068,6 @@ const CardOrders = React.memo(({
         urgencyBorder = '#fef3c7';
       }
     }
-
-    const baristaItems = (itemsNorm || []).filter(isBaristaItem);
-    const otherItemsCount = baristaItems.length > 0
-      ? (itemsNorm || [])
-          .filter((it) => !baristaItems.includes(it))
-          .reduce((sum, it) => sum + Number(it.quantity || 1), 0)
-      : 0;
 
     return (
       <div
@@ -1268,13 +1324,14 @@ const CardOrders = React.memo(({
             const cantidad = it.quantity || 1;
             const nombre = it.name;
             const itNameLower = (nombre || '').toLowerCase();
+            const isCookie = itNameLower.includes('cookie') || itNameLower.includes('galletita');
             const isFoodOrBakery =
               itNameLower.includes('tostado') ||
               itNameLower.includes('medialuna') ||
               itNameLower.includes('croissant') ||
               itNameLower.includes('budin') ||
               itNameLower.includes('budín') ||
-              itNameLower.includes('cookie') ||
+              isCookie ||
               itNameLower.includes('tarta') ||
               itNameLower.includes('alfajor') ||
               itNameLower.includes('sandwich') ||
@@ -1293,7 +1350,57 @@ const CardOrders = React.memo(({
               itNameLower.includes('iced') ||
               (it?.size || '').toLowerCase().includes('frio')
             );
-            const sizeLabel = it.size || '';
+            const isSmoothie = itNameLower.includes('smoothie') || String(it.category || '').toLowerCase().includes('smoothie');
+            const smoothieFlavor = isSmoothie ? getSmoothieFlavor(it) : '';
+            const sizeLabel = isSmoothie ? '12oz' : getCleanSizeLabel(it.size || it.medida || '');
+            const sizeBadge = getSizeBadgeInfo(sizeLabel);
+            const isLargeCup = Boolean(sizeBadge?.isLarge);
+            const sabores = Array.isArray(it.sabores) ? it.sabores.filter(Boolean) : [];
+
+            // Consolidar extras de array y propiedades booleanas
+            const itemExtras = [];
+            if (Array.isArray(it.extras)) {
+              it.extras.forEach((ex) => {
+                if (ex) itemExtras.push(String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim());
+              });
+            }
+            if ((it.canela || it.withCinnamon) && !itemExtras.some((e) => /canela/i.test(e))) {
+              itemExtras.push('Canela');
+            }
+            if ((it.leche_almendras || it.withAlmondMilk) && !itemExtras.some((e) => /almendra/i.test(e))) {
+              itemExtras.push('Leche Almendras');
+            }
+            if (it.extra_shot && !itemExtras.some((e) => /shot/i.test(e))) {
+              itemExtras.push('Extra Shot');
+            }
+            if ((it.sinCafe || it.withoutCoffee || it.isSinCafe) && !itemExtras.some((e) => /sin\s*caf/i.test(e))) {
+              itemExtras.push('Sin café');
+            }
+
+            const cleanNote = getCleanItemNote(it);
+
+            const hasAlmendras = Boolean(
+              it.leche_almendras ||
+              it.withAlmondMilk ||
+              itemExtras.some((e) => /almendra/i.test(e)) ||
+              (typeof it.name === 'string' && /almendra/i.test(it.name))
+            );
+
+            const isSinCafe = Boolean(
+              it.sinCafe ||
+              it.withoutCoffee ||
+              it.isSinCafe ||
+              itemExtras.some((e) => /sin\s*caf/i.test(e)) ||
+              (typeof it.name === 'string' && /sin\s*caf/i.test(it.name))
+            );
+
+            // Filtrar extras visibles para no duplicar los que ya tienen badge en cabecera
+            const visibleExtras = itemExtras.filter((ex) => {
+              const normEx = String(ex).toLowerCase();
+              if (isSinCafe && normEx.includes('sin') && normEx.includes('caf')) return false;
+              if (hasAlmendras && normEx.includes('almendra')) return false;
+              return true;
+            });
 
             return (
               <div
@@ -1304,6 +1411,17 @@ const CardOrders = React.memo(({
                   gap: 6,
                   paddingBottom: idx !== groupedItems.length - 1 ? 12 : 0,
                   borderBottom: idx !== groupedItems.length - 1 ? '1px solid #f4f4f5' : 'none',
+                  ...(isLargeCup
+                    ? {
+                        background: 'linear-gradient(90deg, rgba(243, 232, 255, 0.45) 0%, rgba(255, 255, 255, 0) 100%)',
+                        borderLeft: '3.5px solid #a855f7',
+                        paddingLeft: 8,
+                        borderRadius: 8,
+                        margin: '-2px 0',
+                        paddingTop: 4,
+                        paddingBottom: idx !== groupedItems.length - 1 ? 10 : 4,
+                      }
+                    : {}),
                 }}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -1328,7 +1446,7 @@ const CardOrders = React.memo(({
                       {cantidad > 1 ? `${cantidad}×` : cantidad}
                     </span>
 
-                    {/* Nombre y pills de tamaño/temperatura */}
+                    {/* Nombre y pills de tamaño/temperatura/sabor */}
                     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5, minWidth: 0 }}>
                       <span
                         style={{
@@ -1342,19 +1460,93 @@ const CardOrders = React.memo(({
                         {nombre}
                       </span>
 
-                      {sizeLabel && (
+                      {/* Medida de vaso con Código de Color de Alto Contraste para Barista */}
+                      {sizeBadge && (
                         <span
+                          title={`Medida de vaso: ${sizeBadge.label}`}
                           style={{
-                            fontSize: '0.7rem',
-                            fontWeight: 700,
-                            color: '#475569',
-                            background: '#f1f5f9',
-                            padding: '1.5px 6px',
-                            borderRadius: 4,
-                            border: '1px solid #e2e8f0',
+                            fontSize: sizeBadge.isLarge ? '0.82rem' : '0.76rem',
+                            fontWeight: 900,
+                            color: sizeBadge.color,
+                            background: sizeBadge.bg,
+                            padding: sizeBadge.isLarge ? '3px 9px' : '2px 8px',
+                            borderRadius: 7,
+                            border: sizeBadge.isLarge
+                              ? `2px solid ${sizeBadge.border}`
+                              : `1.5px solid ${sizeBadge.border}`,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            letterSpacing: '-0.01em',
+                            boxShadow: sizeBadge.isLarge
+                              ? '0 2px 7px rgba(168, 85, 247, 0.3)'
+                              : '0 1px 2px rgba(0, 0, 0, 0.05)',
+                            flexShrink: 0,
                           }}
                         >
-                          {sizeLabel}
+                          <CupSoda size={sizeBadge.isLarge ? 13 : 11.5} strokeWidth={2.6} />
+                          <span>{sizeBadge.badgeText}</span>
+                          {sizeBadge.isLarge && (
+                            <span
+                              style={{
+                                background: sizeBadge.color,
+                                color: '#ffffff',
+                                fontSize: '0.62rem',
+                                fontWeight: 900,
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                marginLeft: 2,
+                                letterSpacing: '0.04em',
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              MAXI
+                            </span>
+                          )}
+                        </span>
+                      )}
+
+                      {/* Badge Leche Almendras muy visible para Barista */}
+                      {hasAlmendras && (
+                        <span
+                          title="Preparación con Leche de Almendras (vegetal)"
+                          style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            color: '#92400e',
+                            background: '#fef3c7',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            border: '1.5px solid #fcd34d',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            boxShadow: '0 1px 3px rgba(146, 64, 14, 0.12)',
+                          }}
+                        >
+                          🥛 Leche Almendras
+                        </span>
+                      )}
+
+                      {/* Badge Sin Café muy visible para Barista */}
+                      {isSinCafe && (
+                        <span
+                          title="Preparación Sin Café (No agregar espresso)"
+                          style={{
+                            fontSize: '0.74rem',
+                            fontWeight: 800,
+                            color: '#b91c1c',
+                            background: '#fef2f2',
+                            padding: '2px 8px',
+                            borderRadius: 6,
+                            border: '1.5px solid #fca5a5',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: 3,
+                            boxShadow: '0 1px 3px rgba(185, 28, 28, 0.12)',
+                          }}
+                        >
+                          🚫 Sin café
                         </span>
                       )}
 
@@ -1406,7 +1598,20 @@ const CardOrders = React.memo(({
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (onOpenRecipe) onOpenRecipe(it);
+                        if (onOpenRecipe) {
+                          onOpenRecipe({
+                            ...it,
+                            size: sizeLabel || it.size || it.medida,
+                            extras: itemExtras,
+                            hasAlmendras,
+                            leche_almendras: hasAlmendras,
+                            isSinCafe,
+                            sinCafe: isSinCafe,
+                            smoothieFlavor,
+                            isCold: isColdDrink,
+                            isOrderItem: true,
+                          });
+                        }
                       }}
                       title={`Ver receta técnica de ${nombre}`}
                       style={{
@@ -1442,8 +1647,8 @@ const CardOrders = React.memo(({
                   )}
                 </div>
 
-                {/* Modificadores / Extras / Vaso / Notas */}
-                {((it.extras && it.extras.length > 0) || it.vaso || it.observaciones || it.observacion || it.note || it.listdetalle) && (
+                {/* Modificadores / Extras / Vaso / Sabores / Notas (Sin duplicados con cabecera) */}
+                {(visibleExtras.length > 0 || it.vaso || (!isSmoothie && !isCookie && sabores.length > 0) || cleanNote) && (
                   <div
                     style={{
                       paddingLeft: 33,
@@ -1475,27 +1680,49 @@ const CardOrders = React.memo(({
                       </span>
                     )}
 
-                    {/* Extras */}
-                    {it.extras &&
-                      it.extras.map((ex, i) => (
-                        <span
-                          key={i}
-                          style={{
-                            color: '#b45309',
-                            background: '#fffbeb',
-                            border: '1px solid #fef3c7',
-                            padding: '2px 8px',
-                            borderRadius: 6,
-                            fontWeight: 600,
-                            fontSize: '0.74rem',
-                          }}
-                        >
-                          + {ex.replace(/\s*\(\+?\$?\d+\)/g, '')}
-                        </span>
-                      ))}
+                    {/* Extras especificados con badges claros (excluyendo los que ya están en cabecera) */}
+                    {visibleExtras.map((ex, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          color: '#b45309',
+                          background: '#fffbeb',
+                          border: '1px solid #fef3c7',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontWeight: 700,
+                          fontSize: '0.74rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
+                      >
+                        + {ex}
+                      </span>
+                    ))}
 
-                    {/* Notas / Observaciones especiales */}
-                    {(it.observaciones || it.observacion || it.note || it.listdetalle) && (
+                    {/* Sabores de otros productos (helados, milkshakes, etc., nunca smoothies ni cookies) */}
+                    {!isSmoothie && !isCookie && sabores.length > 0 && (
+                      <span
+                        style={{
+                          color: '#047857',
+                          background: '#ecfdf5',
+                          border: '1px solid #a7f3d0',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          fontWeight: 700,
+                          fontSize: '0.74rem',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
+                      >
+                        🍨 {sabores.join(' + ')}
+                      </span>
+                    )}
+
+                    {/* Notas / Observaciones especiales REALES escritas por el cajero */}
+                    {cleanNote && (
                       <span
                         style={{
                           color: '#4338ca',
@@ -1507,7 +1734,7 @@ const CardOrders = React.memo(({
                           fontSize: '0.74rem',
                         }}
                       >
-                        Nota: {it.observaciones || it.observacion || it.note || it.listdetalle}
+                        Nota: {cleanNote}
                       </span>
                     )}
                   </div>
@@ -1516,24 +1743,180 @@ const CardOrders = React.memo(({
             );
           })}
 
-          {/* Otros productos del pedido */}
-          {otherItemsCount > 0 && (
+          {/* Otros productos del pedido (No cafetería / Mostrador / Heladería) */}
+          {otherGroupedItems.length > 0 && (
             <div
               style={{
-                marginTop: 2,
-                padding: '6px 10px',
-                background: '#fafafa',
-                border: '1px dashed #cbd5e1',
-                borderRadius: 8,
-                fontSize: '0.73rem',
-                color: '#64748b',
-                fontWeight: 600,
+                marginTop: 6,
+                background: '#f8fafc',
+                border: '1.5px solid #e2e8f0',
+                borderRadius: 12,
+                padding: '10px 12px',
                 display: 'flex',
-                alignItems: 'center',
-                gap: 6,
+                flexDirection: 'column',
+                gap: 8,
               }}
             >
-              <span>+ {otherItemsCount} {otherItemsCount === 1 ? 'producto adicional en este ticket' : 'productos adicionales en este ticket'}</span>
+              {/* Encabezado del contenedor */}
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  paddingBottom: 6,
+                  borderBottom: '1px dashed #cbd5e1',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  color: '#64748b',
+                  letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <Package size={13} strokeWidth={2.4} />
+                  <span>Otros productos del pedido</span>
+                </div>
+                <span
+                  style={{
+                    background: '#e2e8f0',
+                    color: '#475569',
+                    padding: '2px 7px',
+                    borderRadius: 5,
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                  }}
+                >
+                  No cafetería
+                </span>
+              </div>
+
+              {/* Lista de productos no cafetería */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {otherGroupedItems.map((otherIt, oIdx) => {
+                  const oQty = otherIt.quantity || 1;
+                  const oName = getFormattedDrinkName(otherIt) || otherIt.name || otherIt.nombre || 'Producto';
+                  const isOtherCookie = String(oName).toLowerCase().includes('cookie') || String(oName).toLowerCase().includes('galletita');
+                  const oSize = otherIt.size || otherIt.medida;
+                  const oSabores = Array.isArray(otherIt.sabores) ? otherIt.sabores.filter(Boolean) : [];
+                  const oExtras = Array.isArray(otherIt.extras) ? otherIt.extras.filter(Boolean) : [];
+                  const oNote = getCleanItemNote(otherIt);
+
+                  return (
+                    <div
+                      key={oIdx}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 3,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span
+                          style={{
+                            fontSize: '0.73rem',
+                            fontWeight: 800,
+                            color: '#475569',
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            minWidth: 22,
+                            height: 22,
+                            padding: '0 4px',
+                            borderRadius: 6,
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {oQty > 1 ? `${oQty}×` : oQty}
+                        </span>
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            fontSize: '0.86rem',
+                            color: '#334155',
+                            lineHeight: 1.25,
+                          }}
+                        >
+                          {oName}
+                        </span>
+                        {oSize && (
+                          <span
+                            style={{
+                              fontSize: '0.69rem',
+                              fontWeight: 700,
+                              color: '#64748b',
+                              background: '#ffffff',
+                              border: '1px solid #e2e8f0',
+                              padding: '1px 6px',
+                              borderRadius: 4,
+                            }}
+                          >
+                            {oSize}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Sabores / Extras / Notas de otros productos */}
+                      {((!isOtherCookie && oSabores.length > 0) || oExtras.length > 0 || oNote) && (
+                        <div
+                          style={{
+                            paddingLeft: 28,
+                            display: 'flex',
+                            flexWrap: 'wrap',
+                            gap: 4,
+                            fontSize: '0.72rem',
+                          }}
+                        >
+                          {!isOtherCookie && oSabores.length > 0 && (
+                            <span
+                              style={{
+                                color: '#047857',
+                                background: '#ecfdf5',
+                                border: '1px solid #a7f3d0',
+                                padding: '1.5px 7px',
+                                borderRadius: 5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              🍨 {oSabores.join(' + ')}
+                            </span>
+                          )}
+                          {oExtras.map((ex, eIdx) => (
+                            <span
+                              key={eIdx}
+                              style={{
+                                color: '#b45309',
+                                background: '#fffbeb',
+                                border: '1px solid #fef3c7',
+                                padding: '1.5px 7px',
+                                borderRadius: 5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              + {String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim()}
+                            </span>
+                          ))}
+                          {oNote && (
+                            <span
+                              style={{
+                                color: '#4338ca',
+                                background: '#eef2ff',
+                                border: '1px solid #e0e7ff',
+                                padding: '1.5px 7px',
+                                borderRadius: 5,
+                                fontWeight: 600,
+                              }}
+                            >
+                              Nota: {oNote}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -1716,6 +2099,32 @@ const CardOrders = React.memo(({
                 <TimerOutlinedIcon sx={{ fontSize: 14 }} /> Pendiente
               </span>
             )
+          )}
+          {hasBaristaItems && !isBarista && (
+            <span
+              style={{
+                padding: '3px 8px',
+                borderRadius: 999,
+                fontSize: '0.72rem',
+                fontWeight: 800,
+                background: baristaDone ? '#dcfce7' : '#fef3c7',
+                color: baristaDone ? '#15803d' : '#b45309',
+                border: `1px solid ${baristaDone ? '#bbf7d0' : '#fde68a'}`,
+                whiteSpace: 'nowrap',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                marginLeft: 6,
+              }}
+              title={
+                baristaDone
+                  ? 'Cafetería / Bebidas listas por el barista'
+                  : 'Cafetería / Bebidas pendientes en el barista'
+              }
+            >
+              <Coffee size={12} strokeWidth={2.4} />
+              {baristaDone ? 'Barista Listo' : 'Barista Pendiente'}
+            </span>
           )}
         </span>
         <span style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', gap: 8 }}>
@@ -2037,52 +2446,137 @@ const CardOrders = React.memo(({
                           </div>
                         </div>
 
-                        {/* Sabores abajo, como subticket */}
-                        {!!sabores.length && (
-                          <div
-                            style={{
-                              marginLeft: 0,
-                              paddingLeft: 10,
-                              borderLeft: '2px solid rgba(0,0,0,0.08)',
-                              opacity: 0.85,
-                              fontSize: 12,
-                              fontWeight: 800,
-                              display: 'grid',
-                              gap: 2,
-                              textAlign: 'left',
-                              margin: '4px 0',
-                            }}
-                          >
-                            {sabores.map((s, i) => (
-                              <div key={i}>• {s}</div>
-                            ))}
-                          </div>
-                        )}
+                        {/* Sabores abajo, como subticket (helados, etc., excepto smoothies y cookies) */}
+                        {(() => {
+                          const itNL = (nombre || '').toLowerCase();
+                          const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+                          const isCk = itNL.includes('cookie') || itNL.includes('galletita') || String(it?.category || '').toLowerCase().includes('cookie');
+                          if (isSm || isCk || !sabores.length) return null;
+                          return (
+                            <div
+                              style={{
+                                marginLeft: 0,
+                                paddingLeft: 10,
+                                borderLeft: '2px solid rgba(0,0,0,0.08)',
+                                opacity: 0.85,
+                                fontSize: 12,
+                                fontWeight: 800,
+                                display: 'grid',
+                                gap: 2,
+                                textAlign: 'left',
+                                margin: '4px 0',
+                              }}
+                            >
+                              {sabores.map((s, i) => (
+                                <div key={i}>• {s}</div>
+                              ))}
+                            </div>
+                          );
+                        })()}
 
-                        {/* Detalles (Cafetería, notas, etc.) */}
-                        {(it.size || (it.extras && it.extras.length > 0) || it.vaso || it.note || it.listdetalle) && (
-                          <div
-                            style={{
-                              marginLeft: 0,
-                              paddingLeft: 10,
-                              borderLeft: '2px solid rgba(77, 0, 18, 0.2)',
-                              opacity: 0.85,
-                              fontSize: 12,
-                              fontWeight: 700,
-                              display: 'grid',
-                              gap: 2,
-                              textAlign: 'left',
-                              margin: '4px 0',
-                            }}
-                          >
-                            {it.size && <div>• Medida: {it.size}</div>}
-                            {it.extras && it.extras.map((ex, i) => (
-                              <div key={i}>• Adicional: {ex}</div>
-                            ))}
-                            {it.vaso && <div>• Vaso: "{it.vaso}"</div>}
-                            {(it.note || it.listdetalle) && <div>• Nota: "{it.note || it.listdetalle}"</div>}
-                          </div>
-                        )}
+                        {/* Detalles (Cafetería, medida, extras, smoothie, notas) */}
+                        {(() => {
+                          const itNL = (nombre || '').toLowerCase();
+                          const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+                          const sz = isSm ? '12oz' : getCleanSizeLabel(it.size || it.medida || '');
+                          const szInfo = sz ? getSizeBadgeInfo(sz) : null;
+                          const exList = [];
+                          if (Array.isArray(it.extras)) {
+                            it.extras.forEach((ex) => {
+                              if (ex) exList.push(String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim());
+                            });
+                          }
+                          if ((it.canela || it.withCinnamon) && !exList.some((e) => /canela/i.test(e))) exList.push('Canela');
+                          if (it.leche_almendras && !exList.some((e) => /almendra/i.test(e))) exList.push('Leche Almendras');
+                          if (it.extra_shot && !exList.some((e) => /shot/i.test(e))) exList.push('Extra Shot');
+
+                          const cleanDetailNote = getCleanItemNote(it);
+
+                          if (!sz && !exList.length && !it.vaso && !cleanDetailNote) return null;
+
+                          return (
+                            <div
+                              style={{
+                                marginLeft: 0,
+                                paddingLeft: 8,
+                                borderLeft: '2px solid rgba(77, 0, 18, 0.25)',
+                                display: 'flex',
+                                flexWrap: 'wrap',
+                                gap: 5,
+                                textAlign: 'left',
+                                margin: '4px 0',
+                                fontSize: '0.75rem',
+                              }}
+                            >
+                              {sz && (
+                                <span
+                                  style={{
+                                    display: 'inline-flex',
+                                    alignItems: 'center',
+                                    gap: 3,
+                                    color: szInfo ? szInfo.color : '#1e293b',
+                                    background: szInfo ? szInfo.bg : '#f1f5f9',
+                                    border: szInfo
+                                      ? (szInfo.isLarge ? `2px solid ${szInfo.border}` : `1.5px solid ${szInfo.border}`)
+                                      : '1px solid #cbd5e1',
+                                    padding: szInfo?.isLarge ? '1.5px 7px' : '1px 6px',
+                                    borderRadius: 5,
+                                    fontWeight: 800,
+                                    fontSize: '0.72rem',
+                                  }}
+                                >
+                                  <CupSoda size={11} strokeWidth={2.4} /> {szInfo ? szInfo.label : sz}
+                                </span>
+                              )}
+
+                              {exList.map((ex, i) => (
+                                <span
+                                  key={i}
+                                  style={{
+                                    color: '#b45309',
+                                    background: '#fffbeb',
+                                    border: '1px solid #fef3c7',
+                                    padding: '1px 7px',
+                                    borderRadius: 4,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  + {ex}
+                                </span>
+                              ))}
+
+                              {it.vaso && (
+                                <span
+                                  style={{
+                                    color: '#7e22ce',
+                                    background: '#faf5ff',
+                                    border: '1px solid #f3e8ff',
+                                    padding: '1px 7px',
+                                    borderRadius: 4,
+                                    fontWeight: 700,
+                                  }}
+                                >
+                                  Vaso: "{it.vaso}"
+                                </span>
+                              )}
+
+                              {cleanDetailNote && (
+                                <span
+                                  style={{
+                                    color: '#4338ca',
+                                    background: '#eef2ff',
+                                    border: '1px solid #e0e7ff',
+                                    padding: '1px 7px',
+                                    borderRadius: 4,
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  Nota: "{cleanDetailNote}"
+                                </span>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </div>
                     );
                   })}

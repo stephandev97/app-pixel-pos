@@ -137,6 +137,9 @@ export async function syncCafeStockToPb(patch = {}) {
         ...(patch.extrasStock
           ? { extrasStock: { ...(prevData.extrasStock || DEFAULT_EXTRAS_STOCK), ...patch.extrasStock } }
           : {}),
+        ...(patch.hiddenProducts !== undefined
+          ? { hiddenProducts: patch.hiddenProducts }
+          : {}),
       };
 
       await pb.collection('cafe_config').update(current.id, {
@@ -147,6 +150,7 @@ export async function syncCafeStockToPb(patch = {}) {
       const initialData = {
         cupSizesStock: patch.cupSizesStock || DEFAULT_CUP_SIZES_STOCK,
         extrasStock: patch.extrasStock || DEFAULT_EXTRAS_STOCK,
+        hiddenProducts: patch.hiddenProducts || {},
       };
       await pb.collection('cafe_config').create({
         key: 'global_costs',
@@ -174,6 +178,7 @@ export async function fetchCafeStockFromPb() {
       return {
         cupSizesStock: data.cupSizesStock || DEFAULT_CUP_SIZES_STOCK,
         extrasStock: data.extrasStock || DEFAULT_EXTRAS_STOCK,
+        hiddenProducts: data.hiddenProducts || {},
       };
     }
   } catch (err) {
@@ -182,6 +187,13 @@ export async function fetchCafeStockFromPb() {
   return {
     cupSizesStock: getStoredCupSizesStock(),
     extrasStock: getStoredExtrasStock(),
+    hiddenProducts: (() => {
+      try {
+        const raw = typeof window !== 'undefined' ? localStorage.getItem('hidden_products') : null;
+        if (raw) return JSON.parse(raw);
+      } catch (_) {}
+      return {};
+    })(),
   };
 }
 
@@ -190,6 +202,22 @@ export async function fetchCafeStockFromPb() {
  */
 export function isBaristaItem(it) {
   if (!it) return false;
+
+  const nameNorm = String(it.name || it.nombre || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+
+  // Las mini tortas y tortas NO son de cafetería/barista (se despachan por mostrador/heladería)
+  if (
+    nameNorm.includes('mini torta') ||
+    nameNorm.includes('minitorta') ||
+    nameNorm.includes('torta')
+  ) {
+    return false;
+  }
+
   if (it.isCafeteria === true) return true;
   const cat = String(it.category || '')
     .toLowerCase()
@@ -205,7 +233,9 @@ export function isBaristaItem(it) {
     cat === 'cold' ||
     cat === 'frappe' ||
     cat === 'smoothie' ||
-    cat === 'pasteleria'
+    cat === 'pasteleria' ||
+    cat.includes('cookie') ||
+    cat.includes('pasteler')
   ) {
     return true;
   }
@@ -228,12 +258,6 @@ export function isBaristaItem(it) {
     return true;
   }
 
-  const nameNorm = String(it.name || '')
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .trim();
-
   if (
     nameNorm.includes('cafe') ||
     nameNorm.includes('cappuccino') ||
@@ -248,7 +272,19 @@ export function isBaristaItem(it) {
     nameNorm.includes('submarino') ||
     nameNorm.includes('chocolate caliente') ||
     nameNorm.includes('smoothie') ||
-    nameNorm.includes('milkshake')
+    nameNorm.includes('milkshake') ||
+    nameNorm.includes('cookie') ||
+    nameNorm.includes('galletita') ||
+    nameNorm.includes('medialuna') ||
+    nameNorm.includes('croissant') ||
+    nameNorm.includes('budin') ||
+    nameNorm.includes('alfajor') ||
+    nameNorm.includes('muffin') ||
+    nameNorm.includes('scon') ||
+    nameNorm.includes('tostado') ||
+    nameNorm.includes('sandwich') ||
+    nameNorm.includes('panini') ||
+    nameNorm.includes('chipa')
   ) {
     return true;
   }

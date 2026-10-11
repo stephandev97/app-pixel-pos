@@ -91,6 +91,7 @@ const pbToOrder = (rec) => ({
   client: rec.client ?? rec.clientId ?? null,
   points: Number(rec.points ?? 0),
   pointsClaimed: !!rec.pointsClaimed,
+  baristaDone: !!rec.baristaDone,
 });
 
 export const hydrateOrdersFromPocket = createAsyncThunk(

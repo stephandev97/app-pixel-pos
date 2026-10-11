@@ -31,6 +31,7 @@ const RewardsList = lazy(() => import('./pages/RewardsList'));
 const TvSaboresPanel = lazy(() => import('./pages/TVSaboresPanel/TVSaboresPanel'));
 const CustomPrint = lazy(() => import('./pages/CustomPrint/CustomPrint'));
 const CafeCosts = lazy(() => import('./pages/CafeCosts/CafeCosts'));
+const BaristaRecipes = lazy(() => import('./pages/BaristaRecipes/BaristaRecipes'));
 
 const GlobalNoDialogScroll = createGlobalStyle`
   .MuiDialogContent-root { overflow-y: clip !important; }
@@ -79,6 +80,7 @@ export default function App() {
 
   const activeTvSabores = useSelector((s) => s.actions.toggleTvSabores);
   const activeBarista = useSelector((s) => s.actions.toggleBarista);
+  const activeBaristaRecipes = useSelector((s) => s.actions.toggleBaristaRecipes);
   const activeCustomPrint = useSelector((s) => s.actions.toggleCustomPrint);
   const activeCafeCosts = useSelector((s) => s.actions.toggleCafeCosts);
   const isTestMode = useSelector((s) => s.actions.isTestMode);
@@ -103,15 +105,17 @@ export default function App() {
           ? 'orders'
           : activeBarista
             ? 'barista'
-            : activeCustomPrint
-              ? 'custom_print'
-              : activeCafeCosts
-                ? 'cafe_costs'
-                : activeConfig
-                  ? 'config'
-                  : activeDaily
-                    ? 'daily'
-                    : 'home';
+            : activeBaristaRecipes
+              ? 'barista_recipes'
+              : activeCustomPrint
+                ? 'custom_print'
+                : activeCafeCosts
+                  ? 'cafe_costs'
+                  : activeConfig
+                    ? 'config'
+                    : activeDaily
+                      ? 'daily'
+                      : 'home';
 
   return (
     <PersistGate loading={null} persistor={persistor}>
@@ -294,6 +298,8 @@ export default function App() {
                   <Orders isTestOrders={true} />
                 ) : screen === 'barista' ? (
                   <Orders isBarista={true} />
+                ) : screen === 'barista_recipes' ? (
+                  <BaristaRecipes />
                 ) : screen === 'custom_print' ? (
                   <CustomPrint />
                 ) : screen === 'cafe_costs' ? (

@@ -1,4 +1,5 @@
 import { pb } from '../lib/pb';
+import { getSmoothieFlavor } from '../components/Orders/baristaRecipesData';
 
 // YYYY-MM-DD local
 export function getLocalDateKey(d = new Date()) {
@@ -266,6 +267,38 @@ export function itemsCountFrom(items = []) {
       continue;
     }
 
+    // Medida de vaso (ej: 8oz, 12oz, 16oz). Smoothie siempre 12oz de momento
+    const isSm =
+      baseName.toLowerCase().includes('smoothie') ||
+      String(it.category || '').toLowerCase().includes('smoothie');
+    const size = isSm ? '12oz' : (it.size || it.medida || '').trim();
+
+    // Extras
+    const extrasList = [];
+    if (Array.isArray(it.extras)) {
+      it.extras.forEach((ex) => {
+        if (ex) {
+          const cleanEx = String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim();
+          if (cleanEx && !extrasList.includes(cleanEx)) extrasList.push(cleanEx);
+        }
+      });
+    }
+    if ((it.canela || it.withCinnamon) && !extrasList.some((e) => /canela/i.test(e))) {
+      extrasList.push('Canela');
+    }
+    if (it.leche_almendras && !extrasList.some((e) => /almendra/i.test(e))) {
+      extrasList.push('Leche Almendras');
+    }
+    if (it.extra_shot && !extrasList.some((e) => /shot/i.test(e))) {
+      extrasList.push('Extra Shot');
+    }
+
+    const sizeSuffix = size ? ` (${size})` : '';
+    const extrasSuffix = extrasList.length > 0 ? ` [+ ${extrasList.join(', ')}]` : '';
+
+    // Sabor de smoothie si aplica
+    const smFlavor = isSm ? getSmoothieFlavor(it) : '';
+
     // 2. Si tiene desglose individual de sabores/variedades con cantidades (saboresBreakdown)
     const breakdown = it.saboresBreakdown;
     if (breakdown && typeof breakdown === 'object' && Object.keys(breakdown).length > 0) {
@@ -273,44 +306,55 @@ export function itemsCountFrom(items = []) {
         const count = Number(flavorCount) || 0;
         if (count <= 0) continue;
         const cleanFlavor = cleanLabel(flavor);
-        const key = cleanFlavor ? `${baseName} - ${cleanFlavor}` : baseName;
+        const key = cleanFlavor
+          ? `${baseName} - ${cleanFlavor}${sizeSuffix}${extrasSuffix}`
+          : `${baseName}${sizeSuffix}${extrasSuffix}`;
         acc[key] = (acc[key] || 0) + count;
       }
       continue;
     }
 
-    // 3. Si tiene array de sabores pero no breakdown
+    // 3. Si es smoothie con sabor detectado
+    if (smFlavor && !baseName.toLowerCase().includes(smFlavor.toLowerCase())) {
+      const key = `${baseName} - ${cleanLabel(smFlavor)}${sizeSuffix}${extrasSuffix}`;
+      acc[key] = (acc[key] || 0) + qty;
+      continue;
+    }
+
+    // 4. Si tiene array de sabores pero no breakdown
     if (Array.isArray(it.sabores) && it.sabores.length > 0) {
       const cleanSabores = it.sabores
         .map((s) => cleanLabel(typeof s === 'string' ? s : s?.label || s?.value))
         .filter(Boolean);
 
       if (cleanSabores.length === 1) {
-        const key = `${baseName} - ${cleanSabores[0]}`;
+        const key = `${baseName} - ${cleanSabores[0]}${sizeSuffix}${extrasSuffix}`;
         acc[key] = (acc[key] || 0) + qty;
       } else if (cleanSabores.length > 1) {
-        const key = `${baseName} - ${cleanSabores.join(' + ')}`;
+        const key = `${baseName} - ${cleanSabores.join(' + ')}${sizeSuffix}${extrasSuffix}`;
         acc[key] = (acc[key] || 0) + qty;
       } else {
-        acc[baseName] = (acc[baseName] || 0) + qty;
+        const key = `${baseName}${sizeSuffix}${extrasSuffix}`;
+        acc[key] = (acc[key] || 0) + qty;
       }
       continue;
     }
 
-    // 4. Fallback para SKU
+    // 5. Fallback para SKU
     if (typeof it.sku === 'string' && it.sku.includes('__')) {
       const [slug] = it.sku.split('__');
       const nice = slug
         .split('-')
         .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
         .join(' ');
-      const key = `${baseName} - ${cleanLabel(nice)}`;
+      const key = `${baseName} - ${cleanLabel(nice)}${sizeSuffix}${extrasSuffix}`;
       acc[key] = (acc[key] || 0) + qty;
       continue;
     }
 
-    // 5. Producto simple sin sabores
-    acc[baseName] = (acc[baseName] || 0) + qty;
+    // 6. Producto simple sin sabores (puede tener size y/o extras)
+    const key = `${baseName}${sizeSuffix}${extrasSuffix}`;
+    acc[key] = (acc[key] || 0) + qty;
   }
 
   return acc;
@@ -323,7 +367,13 @@ export function getLeastSoldFlavors(itemsCount = {}, limit = 5) {
   for (const [productKey, qty] of Object.entries(itemsCount)) {
     if (productKey.includes(' - ')) {
       const rawFlavor = productKey.split(' - ')[1];
-      const flavor = rawFlavor ? rawFlavor.replace(/^\d+\s*x\s*/i, '').trim() : '';
+      const flavor = rawFlavor
+        ? rawFlavor
+            .replace(/\s*\([^)]*\)/g, '')
+            .replace(/\s*\[[^\]]*\]/g, '')
+            .replace(/^\d+\s*x\s*/i, '')
+            .trim()
+        : '';
       if (flavor) {
         flavors[flavor] = (flavors[flavor] || 0) + qty;
       }

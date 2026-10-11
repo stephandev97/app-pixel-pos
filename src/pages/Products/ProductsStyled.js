@@ -8,6 +8,7 @@ export const GlobalProducts = styled.div`
   flex-direction: column;
   overflow: hidden;
   background: #f7f8fa;
+  text-align: left;
 `;
 
 export const ProductsHeader = styled.div`
@@ -55,6 +56,7 @@ export const GridProducts = styled.div`
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
   width: 100%;
+  text-align: left;
 
   @media (max-width: 768px) {
     gap: 12px;

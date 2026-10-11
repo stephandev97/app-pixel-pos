@@ -1,8 +1,44 @@
 // src/components/Orders/BaristaRecipeModal.js
-import React, { useEffect } from 'react';
-import { Coffee, CupSoda, Flame, Snowflake, Sparkles, X, CheckCircle2, Layers } from 'lucide-react';
+import React, { useEffect, useState, useMemo } from 'react';
+import ReactDOM from 'react-dom';
+import { useSelector } from 'react-redux';
+import { Coffee, CupSoda, Flame, Snowflake, Sparkles, X, CheckCircle2, Layers, Info, Edit2, RotateCcw } from 'lucide-react';
+import {
+  getBaristaRecipe,
+  resetCustomBaristaRecipe,
+  resetAllCustomBaristaRecipesForDrink,
+  getCleanItemNote,
+  getCleanSizeLabel,
+  getSizeBadgeInfo,
+} from './baristaRecipesData';
+import BaristaRecipeEditor from './BaristaRecipeEditor';
 
-export default function BaristaRecipeModal({ recipeModalData, onClose }) {
+export default function BaristaRecipeModal({ recipeModalData, onClose, onSelectSize, cafeteriaProducts = [] }) {
+  const [isEditingRecipe, setIsEditingRecipe] = useState(false);
+  const [recipeVersion, setRecipeVersion] = useState(0);
+
+  const isAdmin = useSelector((s) => s.actions?.isAdmin);
+  const isTestMode = useSelector((s) => s.actions?.isTestMode);
+  const isDev = useMemo(() => {
+    if (process.env.NODE_ENV === 'development') return true;
+    if (Boolean(isAdmin) || Boolean(isTestMode)) return true;
+    if (typeof window !== 'undefined') {
+      if (
+        localStorage.getItem('is_dev_mode') === 'true' ||
+        localStorage.getItem('dev_mode') === 'true'
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }, [isAdmin, isTestMode]);
+
+  useEffect(() => {
+    const handler = () => setRecipeVersion((v) => v + 1);
+    window.addEventListener('barista-recipes-updated', handler);
+    return () => window.removeEventListener('barista-recipes-updated', handler);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape') {
@@ -13,40 +49,94 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  if (!recipeModalData) return null;
+  const activeData = useMemo(() => {
+    if (!recipeModalData) return null;
+    const isSinCafe = Boolean(
+      recipeModalData.isSinCafe ||
+      recipeModalData.sinCafe ||
+      recipeModalData.withoutCoffee ||
+      (Array.isArray(recipeModalData.extras) &&
+        recipeModalData.extras.some((e) => /sin\s*caf/i.test(String(e))))
+    );
+    const hasAlmendras = Boolean(
+      recipeModalData.hasAlmendras ||
+      recipeModalData.leche_almendras ||
+      recipeModalData.withAlmondMilk ||
+      (Array.isArray(recipeModalData.extras) &&
+        recipeModalData.extras.some((e) => /almendra/i.test(String(e))))
+    );
+    const orderSize = recipeModalData.isSmoothie
+      ? '12oz'
+      : (recipeModalData.activeSize || recipeModalData.size || recipeModalData.medida || '12oz');
+
+    const dummyItem = {
+      name: recipeModalData.productName || recipeModalData.name,
+      size: orderSize,
+      isCold: recipeModalData.isCold,
+      extras: recipeModalData.extras,
+      vaso: recipeModalData.vaso,
+      note: recipeModalData.note,
+      observaciones: recipeModalData.observaciones,
+      listdetalle: recipeModalData.listdetalle,
+      sabor: recipeModalData.flavor || recipeModalData.sabor,
+      flavor: recipeModalData.flavor || recipeModalData.sabor,
+      smoothieFlavor: recipeModalData.smoothieFlavor || recipeModalData.flavor || recipeModalData.sabor,
+      sinCafe: isSinCafe,
+      isSinCafe: isSinCafe,
+      withoutCoffee: isSinCafe,
+      leche_almendras: hasAlmendras,
+      hasAlmendras: hasAlmendras,
+      withAlmondMilk: hasAlmendras,
+    };
+    return getBaristaRecipe(dummyItem, cafeteriaProducts) || recipeModalData;
+  }, [recipeModalData, cafeteriaProducts, recipeVersion]);
+
+  if (!recipeModalData || !activeData) return null;
 
   const {
     productName = 'Producto',
     activeSize = '12oz',
     sizeLabel = '12oz',
+    availableSizes = ['8oz', '12oz', '16oz'],
     isFrappe = false,
     isCold = false,
-    typeLabel = isFrappe ? '🍧 Frappé' : isCold ? '🧊 Frío' : '☕ Caliente',
+    isSmoothie = false,
+    flavor = '',
+    pumpRule = '',
+    typeLabel = isSmoothie ? '🍓 Smoothie Frozen' : isFrappe ? '🍧 Frappé' : isCold ? '🧊 Frío' : '☕ Caliente',
     glass = 'Vaso según medida',
     ingredients = [],
     steps = [],
     extras = [],
     vaso = '',
     note = '',
-  } = recipeModalData;
+  } = activeData;
+
+  const cleanModalNote = getCleanItemNote(activeData);
+  const cleanModalExtras = (extras || []).filter((ex) => {
+    const s = String(ex).toLowerCase().trim();
+    if (/sin\s*caf/i.test(s)) return false;
+    if (/almendra/i.test(s)) return false;
+    return true;
+  });
 
   // Fallback para recetas clásicas si vinieran sólo en líneas de texto
   const legacyLines =
-    ingredients.length === 0 && recipeModalData.availableRecipes
-      ? (recipeModalData.availableRecipes[activeSize] || '')
+    ingredients.length === 0 && activeData.availableRecipes
+      ? (activeData.availableRecipes[activeSize] || '')
           .split('\n')
           .map((l) => l.trim())
           .filter(Boolean)
       : [];
 
-  return (
+  const modalContent = (
     <div
       onClick={onClose}
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 99999,
-        background: 'rgba(0, 0, 0, 0.55)',
+        zIndex: 999999,
+        background: 'rgba(0, 0, 0, 0.72)',
         backdropFilter: 'blur(6px)',
         WebkitBackdropFilter: 'blur(6px)',
         display: 'flex',
@@ -73,7 +163,14 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
           border: '1px solid #e4e4e7',
         }}
       >
-        {/* Header */}
+        {isEditingRecipe ? (
+          <BaristaRecipeEditor
+            recipeData={activeData}
+            onClose={() => setIsEditingRecipe(false)}
+          />
+        ) : (
+          <>
+            {/* Header */}
         <div
           style={{
             padding: '16px 20px',
@@ -156,37 +253,103 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Cerrar receta"
-            style={{
-              background: '#f4f4f5',
-              border: 'none',
-              color: '#71717a',
-              cursor: 'pointer',
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              transition: 'all 0.15s ease',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#e4e4e7';
-              e.currentTarget.style.color = '#09090b';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = '#f4f4f5';
-              e.currentTarget.style.color = '#71717a';
-            }}
-          >
-            <X size={16} strokeWidth={2.4} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isDev && activeData.isCustom && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (
+                    window.confirm(
+                      `¿Volver a la receta predeterminada de la IA para ${activeData.productName} (${activeData.activeSize})?`
+                    )
+                  ) {
+                    resetCustomBaristaRecipe(
+                      activeData.masterKey,
+                      activeData.activeSize,
+                      activeData.isCold
+                    );
+                  }
+                }}
+                style={{
+                  background: '#fff1f2',
+                  color: '#e11d48',
+                  border: '1px solid #ffe4e6',
+                  borderRadius: 8,
+                  padding: '5px 10px',
+                  fontSize: '0.74rem',
+                  fontWeight: 750,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.12s ease',
+                }}
+                title={`Volver a la receta predeterminada de la IA para ${activeData.activeSize}`}
+              >
+                <RotateCcw size={12} strokeWidth={2.4} />
+                <span>Volver a IA ({activeData.activeSize})</span>
+              </button>
+            )}
+
+            {isDev && (
+              <button
+                type="button"
+                onClick={() => setIsEditingRecipe(true)}
+                style={{
+                  background: activeData.isCustom ? '#fef3c7' : '#f4f4f5',
+                  color: activeData.isCustom ? '#b45309' : '#18181b',
+                  border: activeData.isCustom
+                    ? '1px solid #fde68a'
+                    : '1px solid #e4e4e7',
+                  borderRadius: 8,
+                  padding: '5px 10px',
+                  fontSize: '0.74rem',
+                  fontWeight: 750,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  transition: 'all 0.12s ease',
+                }}
+                title="Editar receta (Dev Mode)"
+              >
+                <Edit2 size={12} strokeWidth={2.4} />
+                <span>{activeData.isCustom ? '✏️ Editada' : 'Editar'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Cerrar receta"
+              style={{
+                background: '#f4f4f5',
+                border: 'none',
+                color: '#71717a',
+                cursor: 'pointer',
+                width: 32,
+                height: 32,
+                borderRadius: 8,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.15s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#e4e4e7';
+                e.currentTarget.style.color = '#09090b';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#f4f4f5';
+                e.currentTarget.style.color = '#71717a';
+              }}
+            >
+              <X size={16} strokeWidth={2.4} />
+            </button>
+          </div>
         </div>
 
-        {/* Medida y Vaso requerido */}
+        {/* Medida y Personalizaciones del Pedido */}
         <div
           style={{
             display: 'flex',
@@ -198,41 +361,172 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
             flexShrink: 0,
             gap: 12,
             fontSize: '0.8rem',
+            flexWrap: 'wrap',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#52525b' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#52525b', flexWrap: 'wrap' }}>
             <span style={{ fontWeight: 600 }}>Medida:</span>
-            <span
-              style={{
-                fontWeight: 800,
-                color: '#09090b',
-                background: '#ffffff',
-                border: '1px solid #e4e4e7',
-                padding: '2px 8px',
-                borderRadius: 6,
-                boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
-              }}
-            >
-              {sizeLabel}
+            {(() => {
+              const effectiveSize = isSmoothie ? '12oz' : (activeSize || '');
+              const sizeBadge = getSizeBadgeInfo(effectiveSize);
+              if (!sizeBadge) {
+                return (
+                  <span
+                    style={{
+                      fontWeight: 800,
+                      color: '#ffffff',
+                      background: '#09090b',
+                      padding: '3px 10px',
+                      borderRadius: 6,
+                      fontSize: '0.78rem',
+                      letterSpacing: '0.02em',
+                    }}
+                  >
+                    {isSmoothie ? '12oz' : getCleanSizeLabel(activeSize) || activeSize}
+                  </span>
+                );
+              }
+              return (
+                <span
+                  style={{
+                    fontWeight: 900,
+                    color: sizeBadge.color,
+                    background: sizeBadge.bg,
+                    border: sizeBadge.isLarge ? `2px solid ${sizeBadge.border}` : `1.5px solid ${sizeBadge.border}`,
+                    padding: sizeBadge.isLarge ? '3px 10px' : '2.5px 9px',
+                    borderRadius: 7,
+                    fontSize: '0.8rem',
+                    letterSpacing: '-0.01em',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    boxShadow: sizeBadge.isLarge ? '0 2px 7px rgba(168, 85, 247, 0.3)' : 'none',
+                  }}
+                >
+                  <CupSoda size={sizeBadge.isLarge ? 14 : 12.5} strokeWidth={2.6} />
+                  <span>{sizeBadge.badgeText}</span>
+                  {sizeBadge.isLarge && (
+                    <span
+                      style={{
+                        background: sizeBadge.color,
+                        color: '#ffffff',
+                        fontSize: '0.62rem',
+                        fontWeight: 900,
+                        padding: '1px 5px',
+                        borderRadius: 4,
+                        letterSpacing: '0.04em',
+                      }}
+                    >
+                      MAXI
+                    </span>
+                  )}
+                </span>
+              );
+            })()}
+
+            {/* Badges de personalizaciones exactas del pedido */}
+            {activeData.hasAlmendras && (
+              <span
+                style={{
+                  fontWeight: 800,
+                  color: '#92400e',
+                  background: '#fef3c7',
+                  border: '1px solid #fde68a',
+                  padding: '3px 9px',
+                  borderRadius: 6,
+                  fontSize: '0.76rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                🥛 Leche de Almendras
+              </span>
+            )}
+
+            {activeData.isSinCafe && (
+              <span
+                style={{
+                  fontWeight: 800,
+                  color: '#b91c1c',
+                  background: '#fef2f2',
+                  border: '1px solid #fecaca',
+                  padding: '3px 9px',
+                  borderRadius: 6,
+                  fontSize: '0.76rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                🚫 Sin café
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Banner Sin Café cuando la receta está en modo sin café */}
+        {activeData.isSinCafe && (
+          <div
+            style={{
+              padding: '8px 18px',
+              background: '#fef2f2',
+              borderBottom: '1px solid #fecaca',
+              color: '#991b1b',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+            }}
+          >
+            <span>🚫 Preparación Sin Café: Se omitió el shot de espresso en ingredientes y pasos de licuado.</span>
+          </div>
+        )}
+
+        {/* Banner Leche de Almendras cuando la receta especifica leche vegetal */}
+        {activeData.hasAlmendras && (
+          <div
+            style={{
+              padding: '8px 18px',
+              background: '#fef3c7',
+              borderBottom: '1px solid #fde68a',
+              color: '#92400e',
+              fontSize: '0.76rem',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+              flexShrink: 0,
+            }}
+          >
+            <span>🥛 Preparación con Leche de Almendras: Sustituir leche tradicional por leche vegetal de almendras en ingredientes y preparación.</span>
+          </div>
+        )}
+
+        {/* Nota de Dosificación y Sabor para Smoothie */}
+        {isSmoothie && (
+          <div
+            style={{
+              padding: '8px 20px',
+              background: '#fffbeb',
+              borderBottom: '1px solid #fef3c7',
+              color: '#92400e',
+              fontSize: '0.76rem',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              flexShrink: 0,
+            }}
+          >
+            <Info size={14} strokeWidth={2.4} style={{ color: '#d97706', flexShrink: 0 }} />
+            <span>
+              <strong>Dosificación de Pulpa:</strong> 5 pumps aprox para 100gr de pulpa (1 disparo de pump ≈ 20g).
             </span>
           </div>
-
-          {glass && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-                color: '#3f3f46',
-                fontWeight: 600,
-                fontSize: '0.78rem',
-              }}
-            >
-              <CupSoda size={13} strokeWidth={2.2} style={{ color: '#09090b' }} />
-              <span>{glass}</span>
-            </div>
-          )}
-        </div>
+        )}
 
         {/* Contenido scrolleable */}
         <div
@@ -446,7 +740,7 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
           </div>
 
           {/* SECCIÓN 3: PERSONALIZACIONES DEL PEDIDO (Vaso, Extras, Notas) */}
-          {((extras && extras.length > 0) || vaso || note) && (
+          {(cleanModalExtras.length > 0 || vaso || cleanModalNote) && (
             <div
               style={{
                 padding: '12px 14px',
@@ -468,23 +762,23 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <CupSoda size={13} strokeWidth={2.4} style={{ color: '#b45309', flexShrink: 0 }} />
                   <span>
-                    <strong>Escribir en el vaso:</strong> \"{vaso}\"
+                    <strong>Escribir en el vaso:</strong> "{vaso}"
                   </span>
                 </div>
               )}
 
-              {extras && extras.length > 0 && (
+              {cleanModalExtras.length > 0 && (
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                   <Sparkles size={13} strokeWidth={2.4} style={{ color: '#b45309', marginTop: 2, flexShrink: 0 }} />
                   <span>
-                    <strong>Adicionales seleccionados:</strong> {extras.join(', ')}
+                    <strong>Adicionales seleccionados:</strong> {cleanModalExtras.join(', ')}
                   </span>
                 </div>
               )}
 
-              {note && (
+              {cleanModalNote && (
                 <div style={{ fontSize: '0.78rem', color: '#b45309', marginTop: 2 }}>
-                  <strong>Nota:</strong> {note}
+                  <strong>Nota:</strong> {cleanModalNote}
                 </div>
               )}
             </div>
@@ -492,19 +786,94 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
         </div>
 
         {/* Footer */}
-        <div style={{ padding: '12px 20px', borderTop: '1px solid #f4f4f5', background: '#fafafa', flexShrink: 0 }}>
+        <div
+          style={{
+            padding: '12px 20px',
+            borderTop: '1px solid #f4f4f5',
+            background: '#fafafa',
+            flexShrink: 0,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+          }}
+        >
+          <div>
+            {isDev && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingRecipe(true)}
+                  style={{
+                    background: '#ffffff',
+                    color: '#18181b',
+                    border: '1px solid #d4d4d8',
+                    borderRadius: 8,
+                    padding: '7px 12px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    transition: 'all 0.12s ease',
+                  }}
+                >
+                  <Edit2 size={13} strokeWidth={2.2} />
+                  <span>Editar receta</span>
+                </button>
+
+                {activeData.isCustom && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(
+                          `¿Volver a la receta predeterminada de la IA para ${activeData.productName} (${activeData.activeSize})?`
+                        )
+                      ) {
+                        resetCustomBaristaRecipe(
+                          activeData.masterKey,
+                          activeData.activeSize,
+                          activeData.isCold
+                        );
+                      }
+                    }}
+                    style={{
+                      background: '#fff1f2',
+                      color: '#e11d48',
+                      border: '1px solid #ffe4e6',
+                      borderRadius: 8,
+                      padding: '7px 11px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      transition: 'all 0.12s ease',
+                    }}
+                    title={`Volver a la receta oficial de la IA para ${activeData.activeSize}`}
+                  >
+                    <RotateCcw size={12} strokeWidth={2.4} />
+                    <span>Volver a IA ({activeData.activeSize})</span>
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+
           <button
             type="button"
             onClick={onClose}
             style={{
-              width: '100%',
-              padding: '10px 0',
-              borderRadius: 10,
+              padding: '8px 18px',
+              borderRadius: 8,
               border: 'none',
               background: '#18181b',
               color: '#ffffff',
               fontWeight: 700,
-              fontSize: '0.86rem',
+              fontSize: '0.84rem',
               cursor: 'pointer',
               fontFamily: "'Inter', sans-serif",
               transition: 'all 0.15s ease',
@@ -515,7 +884,13 @@ export default function BaristaRecipeModal({ recipeModalData, onClose }) {
             Cerrar receta
           </button>
         </div>
-      </div>
-    </div>
+      </>
+    )}
+  </div>
+</div>
   );
+
+  return typeof document !== 'undefined'
+    ? ReactDOM.createPortal(modalContent, document.body)
+    : null;
 }

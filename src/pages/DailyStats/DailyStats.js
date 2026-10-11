@@ -1,11 +1,12 @@
-// src/pages/DailyStats.js
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'react-feather';
+import { CupSoda } from 'lucide-react';
 import { useDispatch } from 'react-redux';
 
 import { pb } from '../../lib/pb';
 import { toggleConfig, toggleDailyStats } from '../../redux/actions/actionsSlice';
 import { formatPrice } from '../../utils/formatPrice';
+import { getSmoothieFlavor } from '../../components/Orders/baristaRecipesData';
 import {
   aggregateDailyDocs,
   fetchDailyStatsInRange,
@@ -49,6 +50,8 @@ export default function DailyStats() {
   const [cursor, setCursor] = useState(new Date()); // fecha base para navegar semana/mes
   const [flavorsList, setFlavorsList] = useState([]); // <-- NUEVO ESTADO
   const [loadingFlavors, setLoadingFlavors] = useState(false); // <-- NUEVO ESTADO
+  const [dailyOrders, setDailyOrders] = useState([]); // <-- órdenes cargadas del período
+  const [showOrdersList, setShowOrdersList] = useState(false); // toggle para expandir lista de pedidos
 
   const flavorsMap = {};
 
@@ -105,6 +108,8 @@ export default function DailyStats() {
   useEffect(() => {
     if (!detail) {
       setFlavorsList({ top: [], bottom: [] });
+      setDailyOrders([]);
+      setShowOrdersList(false);
       return;
     }
 
@@ -123,7 +128,8 @@ export default function DailyStats() {
           filter = `businessDate = "${detail.day}"`;
         }
 
-        const orders = await pb.collection('orders').getFullList({ filter });
+        const orders = await pb.collection('orders').getFullList({ filter, sort: '-created' });
+        setDailyOrders(orders);
 
         const counts = {};
         orders.forEach((order) => {
@@ -184,6 +190,85 @@ export default function DailyStats() {
       }
     })();
   }, [detail, weekly?.range, monthly?.range]); // Dependencias para que refresque al cambiar de periodo
+
+  // Desglose enriquecido con medida de vaso y extras a partir de las órdenes cargadas
+  const richItemsList = useMemo(() => {
+    if (!detail) return [];
+
+    if (dailyOrders && dailyOrders.length > 0) {
+      const map = {};
+      dailyOrders.forEach((order) => {
+        const items = Array.isArray(order.items) ? order.items : [];
+        items.forEach((it) => {
+          const baseName = (it.name || 'Producto').trim();
+          const itLower = baseName.toLowerCase();
+          const isSm =
+            itLower.includes('smoothie') || String(it.category || '').toLowerCase().includes('smoothie');
+          const smFl = isSm ? getSmoothieFlavor(it) : '';
+          const sz = isSm ? '12oz' : (it.size || it.medida || '');
+          const exList = [];
+          if (Array.isArray(it.extras)) {
+            it.extras.forEach((ex) => {
+              if (ex) exList.push(String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim());
+            });
+          }
+          if ((it.canela || it.withCinnamon) && !exList.some((e) => /canela/i.test(e))) exList.push('Canela');
+          if (it.leche_almendras && !exList.some((e) => /almendra/i.test(e))) exList.push('Leche Almendras');
+          if (it.extra_shot && !exList.some((e) => /shot/i.test(e))) exList.push('Extra Shot');
+
+          const key = `${baseName}__${sz}__${smFl}__${exList.sort().join('|')}`;
+          if (!map[key]) {
+            map[key] = {
+              name: baseName,
+              size: sz,
+              smoothieFlavor: smFl,
+              extras: exList,
+              qty: 0,
+            };
+          }
+          map[key].qty += Number(it.quantity || it.qty || 1) || 1;
+        });
+      });
+
+      return Object.values(map).sort((a, b) => b.qty - a.qty);
+    }
+
+    const itemsMap = detail?.itemsCount || {};
+    return Object.entries(itemsMap)
+      .map(([rawKey, qty]) => {
+        let name = rawKey;
+        let size = '';
+        let extras = [];
+        let smoothieFlavor = '';
+
+        const extrasMatch = name.match(/\[\+\s*([^\]]+)\]/);
+        if (extrasMatch) {
+          extras = extrasMatch[1]
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          name = name.replace(/\[\+\s*([^\]]+)\]/, '').trim();
+        }
+
+        const sizeMatch = name.match(/\((\d+oz|mini|plus|ultra)\)/i);
+        if (sizeMatch) {
+          size = sizeMatch[1];
+          name = name.replace(/\((\d+oz|mini|plus|ultra)\)/i, '').trim();
+        }
+
+        if (name.toLowerCase().includes('smoothie')) {
+          if (!size) size = '12oz';
+          const smParts = name.split(' - ');
+          if (smParts.length > 1) {
+            smoothieFlavor = smParts[1].trim();
+            name = smParts[0].trim();
+          }
+        }
+
+        return { name, qty: nz(qty), size, extras, smoothieFlavor };
+      })
+      .sort((a, b) => b.qty - a.qty);
+  }, [detail, dailyOrders]);
 
   // --------- RENDER ---------
   if (loading) {
@@ -492,10 +577,6 @@ export default function DailyStats() {
   // ---- DETALLE (día / semana / mes) ----
   const fecha = detail.day;
   const pedidos = nz(detail.ordersCount);
-  const itemsMap = detail.itemsCount || {};
-  const itemsList = Object.entries(itemsMap)
-    .map(([name, qty]) => ({ name, qty: nz(qty) }))
-    .sort((a, b) => b.qty - a.qty);
 
   const revByMethod = detail.revenueByMethod || detail.paidByMethod || {};
   const totalDia = nz(detail.revenue || sumObj(revByMethod));
@@ -530,16 +611,52 @@ export default function DailyStats() {
               <strong style={rowValue}>{pedidos}</strong>
             </div>
 
-            {/* Items vendidos (label con total) + filas con font-weight menor */}
+            {/* Items vendidos con especificación de medida, sabor y extras */}
             <div style={{ display: 'grid', gap: 6, width: '100%' }}>
               <div style={rowLine}>
                 <span style={rowLabel}>Items vendidos</span>
-                <strong style={rowValue}>{itemsList.reduce((a, b) => a + b.qty, 0)}</strong>
+                <strong style={rowValue}>{richItemsList.reduce((a, b) => a + b.qty, 0)}</strong>
               </div>
-              {itemsList.map((it) => (
-                <div key={it.name} style={{ ...rowLine, paddingLeft: 12 }}>
-                  <span style={{ fontWeight: 400, opacity: 0.85 }}>{it.name}</span>
-                  <span style={{ fontWeight: 500 }}>x{it.qty}</span>
+              {richItemsList.map((it, idx) => (
+                <div key={idx} style={{ ...rowLine, paddingLeft: 12, alignItems: 'flex-start' }}>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
+                    <span style={{ fontWeight: 500, color: '#111' }}>{it.name}</span>
+                    {it.size && (
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#334155',
+                          background: '#f1f5f9',
+                          border: '1px solid #cbd5e1',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 3,
+                        }}
+                      >
+                        <CupSoda size={10} strokeWidth={2.4} /> {it.size}
+                      </span>
+                    )}
+                    {it.extras && it.extras.map((ex, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#b45309',
+                          background: '#fffbeb',
+                          border: '1px solid #fef3c7',
+                          padding: '1px 6px',
+                          borderRadius: 4,
+                        }}
+                      >
+                        + {ex}
+                      </span>
+                    ))}
+                  </div>
+                  <span style={{ fontWeight: 700, flexShrink: 0 }}>x{it.qty}</span>
                 </div>
               ))}
             </div>
@@ -634,6 +751,191 @@ export default function DailyStats() {
               <span style={rowLabel}>Total {detail.__summary ? 'del período' : 'del día'}</span>
               <strong style={{ ...rowValue, fontSize: 20 }}>{formatPrice(totalDia)}</strong>
             </div>
+
+            {/* --- SECCIÓN NUEVA: PEDIDOS DEL DÍA CON MEDIDA DE VASO Y EXTRAS --- */}
+            {dailyOrders && dailyOrders.length > 0 && (
+              <div
+                style={{
+                  display: 'grid',
+                  gap: 8,
+                  width: '100%',
+                  marginTop: 12,
+                  borderTop: '1px solid #eee',
+                  paddingTop: 12,
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    width: '100%',
+                    cursor: 'pointer',
+                  }}
+                  onClick={() => setShowOrdersList((prev) => !prev)}
+                >
+                  <span style={{ ...rowLabel, color: '#111', fontWeight: 'bold' }}>
+                    📋 Pedidos del período ({dailyOrders.length})
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      color: '#4f46e5',
+                      fontWeight: 700,
+                      background: '#eef2ff',
+                      padding: '3px 8px',
+                      borderRadius: 6,
+                    }}
+                  >
+                    {showOrdersList ? 'Ocultar pedidos ▲' : 'Ver pedidos ▼'}
+                  </span>
+                </div>
+
+                {showOrdersList && (
+                  <div style={{ display: 'grid', gap: 10, marginTop: 4 }}>
+                    {dailyOrders.map((ord, idx) => {
+                      const ordNum = ord.numeracion ?? ord.id?.slice(0, 5) ?? idx + 1;
+                      const ordItems = Array.isArray(ord.items) ? ord.items : [];
+                      const dir = String(ord.direccion || 'Retiro').trim();
+
+                      return (
+                        <div
+                          key={ord.id || idx}
+                          style={{
+                            background: '#fafafa',
+                            border: '1px solid #e4e4e7',
+                            borderRadius: 12,
+                            padding: '10px 12px',
+                            display: 'grid',
+                            gap: 6,
+                            textAlign: 'left',
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #eee', paddingBottom: 6 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 900, fontSize: '0.88rem', color: '#111' }}>
+                                #{ordNum}
+                              </span>
+                              <span style={{ fontSize: '0.78rem', fontWeight: 600, color: '#555' }}>
+                                {ord.name || dir}
+                              </span>
+                              {ord.hora && (
+                                <span style={{ fontSize: '0.72rem', color: '#888' }}>
+                                  ({ord.hora})
+                                </span>
+                              )}
+                            </div>
+                            <span style={{ fontWeight: 800, fontSize: '0.85rem', color: '#111' }}>
+                              {formatPrice(ord.total || 0)}
+                            </span>
+                          </div>
+
+                          {/* Lista de productos de la orden */}
+                          <div style={{ display: 'grid', gap: 4, paddingLeft: 4 }}>
+                            {ordItems.map((item, itemIdx) => {
+                              const itName = item.name || 'Producto';
+                              const itNL = itName.toLowerCase();
+                              const isSm = itNL.includes('smoothie') || String(item.category || '').toLowerCase().includes('smoothie');
+                              const sz = isSm ? '12oz' : (item.size || item.medida || '');
+                              const exList = [];
+                              if (Array.isArray(item.extras)) {
+                                item.extras.forEach((ex) => {
+                                  if (ex) exList.push(String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim());
+                                });
+                              }
+                              if ((item.canela || item.withCinnamon) && !exList.some((e) => /canela/i.test(e))) exList.push('Canela');
+                              if (item.leche_almendras && !exList.some((e) => /almendra/i.test(e))) exList.push('Leche Almendras');
+                              if (item.extra_shot && !exList.some((e) => /shot/i.test(e))) exList.push('Extra Shot');
+                              const sab = Array.isArray(item.sabores) ? item.sabores.filter(Boolean) : [];
+
+                              return (
+                                <div key={itemIdx} style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 5, fontSize: '0.78rem' }}>
+                                  <span style={{ fontWeight: 700, color: '#111' }}>
+                                    {Number(item.quantity || 1)}× {itName}
+                                  </span>
+
+                                  {/* Medida de vaso */}
+                                  {sz && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 800,
+                                        color: '#334155',
+                                        background: '#f1f5f9',
+                                        border: '1px solid #cbd5e1',
+                                        padding: '1px 5px',
+                                        borderRadius: 4,
+                                        display: 'inline-flex',
+                                        alignItems: 'center',
+                                        gap: 2,
+                                      }}
+                                    >
+                                      <CupSoda size={10} strokeWidth={2.4} /> {sz}
+                                    </span>
+                                  )}
+
+                                  {/* Extras */}
+                                  {exList.map((ex, i) => (
+                                    <span
+                                      key={i}
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                        color: '#b45309',
+                                        background: '#fffbeb',
+                                        border: '1px solid #fef3c7',
+                                        padding: '1px 5px',
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      + {ex}
+                                    </span>
+                                  ))}
+
+                                  {/* Vaso */}
+                                  {item.vaso && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                        color: '#7e22ce',
+                                        background: '#faf5ff',
+                                        border: '1px solid #f3e8ff',
+                                        padding: '1px 5px',
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      Vaso: "{item.vaso}"
+                                    </span>
+                                  )}
+
+                                  {/* Sabores de helado */}
+                                  {!isSm && sab.length > 0 && (
+                                    <span
+                                      style={{
+                                        fontSize: '0.7rem',
+                                        fontWeight: 700,
+                                        color: '#047857',
+                                        background: '#ecfdf5',
+                                        border: '1px solid #a7f3d0',
+                                        padding: '1px 5px',
+                                        borderRadius: 4,
+                                      }}
+                                    >
+                                      🍨 {sab.join(' + ')}
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </ButtonPage>
       </ContainerPages>

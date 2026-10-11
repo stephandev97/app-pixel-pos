@@ -5,6 +5,7 @@ import { useReactToPrint } from 'react-to-print';
 import { Print, TotalPrint } from '../../pages/Orders/OrdersStyles'; // ajustá este path según tu proyecto :contentReference[oaicite:2]{index=2}
 import { logoBase64 as logo } from '../../utils/logoBase64';
 import { formatPrice } from '../../utils/formatPrice';
+import { getCleanItemNote, getSmoothieFlavor, getFormattedDrinkName, getCleanSizeLabel, getSizeBadgeInfo } from '../Orders/baristaRecipesData';
 
 /**
  * Props:
@@ -226,7 +227,8 @@ export default function PrintTicket58({
 
           {itemsNorm.map((it, idx) => {
             const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
-            const nombre = it?.name || it?.title || it?.label || '';
+            const rawNombre = it?.name || it?.title || it?.label || '';
+            const nombre = getFormattedDrinkName(it) || rawNombre;
             const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
             return (
               <div key={idx} style={{ marginBottom: '1mm' }}>
@@ -234,42 +236,75 @@ export default function PrintTicket58({
                   <span style={{ width: '6mm' }}>{cantidad}</span>
                   <span style={{ flex: 1, textAlign: 'left' }}>{nombre}</span>
                 </div>
-                {!!sabores.length && (
-                  <div
-                    style={{
-                      marginLeft: '6mm',
-                      marginTop: '.6mm',
-                      fontSize: '3.3mm',
-                      fontWeight: 700,
-                      textAlign: 'left',
-                    }}
-                  >
-                    {sabores.map((s, i) => (
-                      <div key={i}>• {s}</div>
-                    ))}
-                  </div>
-                )}
+                {/* Sabores de otros productos (helados, etc., excepto smoothies y cookies) */}
+                {(() => {
+                  const itNL = (nombre || '').toLowerCase();
+                  const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+                  const isCk = itNL.includes('cookie') || itNL.includes('galletita') || String(it?.category || '').toLowerCase().includes('cookie');
+                  if (isSm || isCk || !sabores.length) return null;
+                  return (
+                    <div
+                      style={{
+                        marginLeft: '6mm',
+                        marginTop: '.6mm',
+                        fontSize: '3.3mm',
+                        fontWeight: 700,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {sabores.map((s, i) => (
+                        <div key={i}>• {s}</div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
-                {/* Detalles (Cafetería, notas, etc.) */}
-                {(it?.size || (it?.extras && it.extras.length > 0) || it?.vaso || it?.note || it?.listdetalle) && (
-                  <div
-                    style={{
-                      marginLeft: '6mm',
-                      marginTop: '.6mm',
-                      fontSize: '3.1mm',
-                      color: '#333',
-                      fontWeight: 700,
-                      textAlign: 'left',
-                    }}
-                  >
-                    {it.size && <div>• Medida: {it.size}</div>}
-                    {it.extras && it.extras.map((ex, i) => (
-                      <div key={i}>• Adicional: {ex}</div>
-                    ))}
-                    {it.vaso && <div>• Vaso: "{it.vaso}"</div>}
-                    {(it?.note || it?.listdetalle) && <div>• Nota: "{it.note || it.listdetalle}"</div>}
-                  </div>
-                )}
+                {/* Detalles (Cafetería, medida, sabor smoothie, extras, notas limpias) */}
+                {(() => {
+                  const itNL = (nombre || '').toLowerCase();
+                  const isSm = itNL.includes('smoothie') || String(it?.category || '').toLowerCase().includes('smoothie');
+                  const sz = isSm ? '12oz' : getCleanSizeLabel(it?.size || it?.medida || '');
+                  const szInfo = sz ? getSizeBadgeInfo(sz) : null;
+                  const exList = [];
+                  if (Array.isArray(it?.extras)) {
+                    it.extras.forEach((ex) => {
+                      if (ex) exList.push(String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').trim());
+                    });
+                  }
+                  if ((it?.canela || it?.withCinnamon) && !exList.some((e) => /canela/i.test(e))) exList.push('Canela');
+                  if (it?.leche_almendras && !exList.some((e) => /almendra/i.test(e))) exList.push('Leche Almendras');
+                  if (it?.extra_shot && !exList.some((e) => /shot/i.test(e))) exList.push('Extra Shot');
+                  if ((it?.sinCafe || it?.withoutCoffee || it?.isSinCafe) && !exList.some((e) => /sin\s*caf/i.test(e))) {
+                    exList.push('Sin café');
+                  }
+
+                  const cleanPrintNote = getCleanItemNote(it);
+                  if (!sz && !exList.length && !it?.vaso && !cleanPrintNote) return null;
+
+                  return (
+                    <div
+                      style={{
+                        marginLeft: '6mm',
+                        marginTop: '.6mm',
+                        fontSize: '3.1mm',
+                        color: '#333',
+                        fontWeight: 700,
+                        textAlign: 'left',
+                      }}
+                    >
+                      {sz && (
+                        <div style={szInfo?.isLarge ? { fontWeight: 'bold', fontSize: '3.4mm', color: '#000' } : {}}>
+                          • Medida: {szInfo?.label || sz} {szInfo?.isLarge ? '★ GRANDE ★' : ''}
+                        </div>
+                      )}
+                      {exList.map((ex, i) => (
+                        <div key={i}>• Adicional: {ex}</div>
+                      ))}
+                      {it?.vaso && <div>• Vaso: "{it.vaso}"</div>}
+                      {cleanPrintNote && <div>• Nota: "{cleanPrintNote}"</div>}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

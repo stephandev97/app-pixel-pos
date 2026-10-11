@@ -16,6 +16,7 @@ export const CardProductStyled = styled.div`
   grid-template-columns: 1fr auto;
   align-items: center;
   gap: 8px;
+  text-align: left;
 
   padding: ${(p) => (p.$isElectron ? '12px 14px' : '16px 18px')};
   min-height: ${(p) => (p.$isElectron ? '40px' : '72px')};
@@ -53,6 +54,7 @@ export const CardProductStyled = styled.div`
 
     .left {
       gap: 6px;
+      text-align: left;
     }
     .dot {
       width: 8px;
@@ -63,6 +65,7 @@ export const CardProductStyled = styled.div`
       font-size: 13.5px;
       font-weight: 700;
       line-height: 1.2;
+      text-align: left;
       display: -webkit-box;
       -webkit-line-clamp: 2;
       -webkit-box-orient: vertical;
@@ -80,8 +83,10 @@ export const CardProductStyled = styled.div`
   .left {
     display: flex;
     align-items: center;
+    justify-content: flex-start;
     gap: 8px;
     min-width: 0;
+    text-align: left;
   }
   .dot {
     width: ${(p) => (p.$isElectron ? '8px' : '10px')};
@@ -97,6 +102,7 @@ export const CardProductStyled = styled.div`
     color: #111;
     font-size: ${(p) => (p.$isElectron ? '15px' : '16px')};
     line-height: 1.2;
+    text-align: left;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;

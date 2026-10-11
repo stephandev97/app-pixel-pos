@@ -13,6 +13,7 @@ const INITIAL_STATE = {
   toggleRewards: false,
   toggleTvSabores: false,
   toggleBarista: false,
+  toggleBaristaRecipes: false,
   toggleCustomPrint: false,
   toggleEditorSabores: false,
   finishOrder: false,
@@ -30,6 +31,10 @@ const INITIAL_STATE = {
     typeof window !== 'undefined' ? localStorage.getItem('show_section_orders') !== 'false' : true,
   showSectionBarista:
     typeof window !== 'undefined' ? localStorage.getItem('show_section_barista') === 'true' : false,
+  showSectionBaristaRecipes:
+    typeof window !== 'undefined'
+      ? localStorage.getItem('show_section_barista_recipes') === 'true'
+      : false,
   showSectionNotes:
     typeof window !== 'undefined' ? localStorage.getItem('show_section_notes') !== 'false' : true,
   showSectionTvSabores:
@@ -71,6 +76,13 @@ const INITIAL_STATE = {
     } catch (_) {}
     return { crema: true, leche_almendras: true, extra_shot: true };
   })(),
+  hiddenProducts: (() => {
+    try {
+      const raw = typeof window !== 'undefined' ? localStorage.getItem('hidden_products') : null;
+      if (raw) return JSON.parse(raw);
+    } catch (_) {}
+    return {};
+  })(),
   loginIntent: null,
 };
 
@@ -107,6 +119,9 @@ const actionsSlice = createSlice({
     },
     toggleBarista: (state, action) => {
       state.toggleBarista = action.payload;
+    },
+    toggleBaristaRecipes: (state, action) => {
+      state.toggleBaristaRecipes = action.payload;
     },
     toggleCustomPrint: (state, action) => {
       state.toggleCustomPrint = action.payload;
@@ -176,6 +191,13 @@ const actionsSlice = createSlice({
       state.showSectionBarista = next;
       if (typeof window !== 'undefined') {
         localStorage.setItem('show_section_barista', String(next));
+      }
+    },
+    toggleSectionBaristaRecipes: (state) => {
+      const next = !state.showSectionBaristaRecipes;
+      state.showSectionBaristaRecipes = next;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('show_section_barista_recipes', String(next));
       }
     },
     toggleSectionNotes: (state) => {
@@ -256,6 +278,33 @@ const actionsSlice = createSlice({
         localStorage.setItem('extras_stock', JSON.stringify(state.extrasStock));
       }
     },
+    setHiddenProducts: (state, action) => {
+      state.hiddenProducts = action.payload || {};
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hidden_products', JSON.stringify(state.hiddenProducts));
+      }
+    },
+    toggleHideProduct: (state, action) => {
+      const id = action.payload;
+      if (!id) return;
+      const current = Boolean(state.hiddenProducts?.[id]);
+      const next = { ...(state.hiddenProducts || {}) };
+      if (current) {
+        delete next[id];
+      } else {
+        next[id] = true;
+      }
+      state.hiddenProducts = next;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hidden_products', JSON.stringify(next));
+      }
+    },
+    restoreAllHiddenProducts: (state) => {
+      state.hiddenProducts = {};
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('hidden_products', JSON.stringify({}));
+      }
+    },
   },
 });
 
@@ -267,6 +316,7 @@ export const {
   toggleSectionProducts,
   toggleSectionOrders,
   toggleSectionBarista,
+  toggleSectionBaristaRecipes,
   toggleSectionNotes,
   toggleSectionTvSabores,
   toggleSectionCafeCosts,
@@ -275,6 +325,9 @@ export const {
   toggleCupSizeStock,
   setExtrasStock,
   toggleExtraStock,
+  setHiddenProducts,
+  toggleHideProduct,
+  restoreAllHiddenProducts,
   toggleTestMode,
   toggleSimulatedPendingOrder,
   setLoginIntent,
@@ -296,6 +349,7 @@ export const {
   toggleEditorSabores,
   toggleTvSabores,
   toggleBarista,
+  toggleBaristaRecipes,
   toggleCustomPrint,
 } = actionsSlice.actions;
 

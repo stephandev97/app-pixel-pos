@@ -154,6 +154,7 @@ const pbToOrder = (rec) => ({
   copied: !!rec.copied,
 
   pagoDebito: Number(rec.pagoDebito ?? 0),
+  baristaDone: !!rec.baristaDone,
 });
 
 export const hydrateOrdersFromPocket = createAsyncThunk(
@@ -654,6 +655,29 @@ export const updateOrderPayment = createAsyncThunk(
   }
 );
 
+export const setOrderBaristaStatus = createAsyncThunk(
+  'orders/setBaristaStatus',
+  async ({ id, baristaDone }, { dispatch, rejectWithValue }) => {
+    // 1) Actualización inmediata en Redux local para respuesta visual instantánea
+    dispatch(ordersSlice.actions.upsertOrder({ id, baristaDone: !!baristaDone }));
+
+    // Si es un pedido de prueba o local, no enviamos a PocketBase
+    if (!id || String(id).startsWith('local-test-') || String(id).startsWith('mock-')) {
+      return { id, baristaDone: !!baristaDone };
+    }
+
+    // 2) Actualizar PocketBase para que replique a todos los dispositivos por realtime
+    try {
+      const updated = await pb.collection('orders').update(id, { baristaDone: !!baristaDone });
+      dispatch(ordersSlice.actions.upsertOrder(pbToOrder(updated)));
+      return { id, baristaDone: !!updated.baristaDone };
+    } catch (err) {
+      console.warn('Error al actualizar baristaDone en PocketBase:', err);
+      return { id, baristaDone: !!baristaDone, offline: true };
+    }
+  }
+);
+
 // ---------- Slice ----------
 const initialState = {
   orders: loadPendingFromStorage(), // arrancamos con los pending guardados
@@ -707,6 +731,7 @@ const ordersSlice = createSlice({
       savePendingToStorage(state.orders);
     },
     upsertOrder(state, { payload: o }) {
+      if (!o || !o.id) return;
       const pendingIdx = state.orders.findIndex((x) => x.pending && x.number === o.number);
 
       if (pendingIdx >= 0) {
@@ -716,8 +741,19 @@ const ordersSlice = createSlice({
       }
 
       const i = state.orders.findIndex((x) => x.id === o.id);
-      if (i >= 0) state.orders[i] = { ...state.orders[i], ...o };
-      else state.orders.unshift(o);
+      if (i >= 0) {
+        state.orders[i] = { ...state.orders[i], ...o };
+      } else {
+        state.orders.unshift(o);
+      }
+
+      if (Array.isArray(state.testOrders)) {
+        const tIdx = state.testOrders.findIndex((x) => x.id === o.id);
+        if (tIdx >= 0) {
+          state.testOrders[tIdx] = { ...state.testOrders[tIdx], ...o };
+          saveTestOrdersToStorage(state.testOrders);
+        }
+      }
 
       savePendingToStorage(state.orders);
     },

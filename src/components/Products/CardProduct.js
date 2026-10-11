@@ -58,6 +58,7 @@ import {
   getMatchedProductOptionKey,
 } from './productOptionsConstants';
 import { isExtraInStock, isCupInStock, isDrinkCold } from '../../utils/cafeStockSync';
+import { getCleanSizeLabel } from '../Orders/baristaRecipesData';
 import ProductInfoIcon from './ProductInfoIcon';
 
 const isElectron = !!window.electron;
@@ -117,6 +118,19 @@ export default function CardProduct({
     normalizedName.includes('milk shake') ||
     normalizedName.includes('shake') ||
     normalizedName.includes('batido');
+  const isSmoothie =
+    cleanNoSpaces.includes('smoothie') ||
+    normalizedName.includes('smoothie') ||
+    category?.toLowerCase() === 'smoothie';
+  const isFrappe =
+    cleanNoSpaces.includes('frappe') ||
+    normalizedName.includes('frappe') ||
+    category?.toLowerCase() === 'frappe' ||
+    (category?.toLowerCase() === 'frio' &&
+      (normalizedName.includes('oreo') ||
+        normalizedName.includes('pistacho') ||
+        normalizedName.includes('dulce de leche') ||
+        normalizedName.includes('mocca')));
 
   // --- Opciones/Sabores directos desde el campo JSON del producto en PocketBase ---
   const rawProductOptions =
@@ -232,8 +246,7 @@ export default function CardProduct({
     normalizedName.includes('budin') ||
     normalizedName.includes('croissant') ||
     normalizedName.includes('medialuna') ||
-    normalizedName.includes('pote gio') ||
-    normalizedName.includes('smoothie');
+    normalizedName.includes('pote gio');
 
   const isPasteleriaOrFood = isPasteleriaCategory || isPasteleriaName;
 
@@ -245,7 +258,7 @@ export default function CardProduct({
     }
 
     // Bebidas en general (chocolate caliente, cafés, té, milkshake, etc.) NO deben mostrar sabores de helado
-    if (!isPasteleriaOrFood || isMilkshake) {
+    if ((!isPasteleriaOrFood && !isSmoothie) || isMilkshake) {
       return [];
     }
 
@@ -289,6 +302,7 @@ export default function CardProduct({
   }, [
     parsedDirectOptions,
     isMilkshake,
+    isSmoothie,
     isPasteleriaOrFood,
     groupOptions,
     normalizedName,
@@ -325,6 +339,7 @@ export default function CardProduct({
   const [selectedVariety, setSelectedVariety] = useState('');
   const [selectedFlavor, setSelectedFlavor] = useState(null);
   const [withCinnamon, setWithCinnamon] = useState(false);
+  const [withCoffee, setWithCoffee] = useState(true);
   const [vasoName, setVasoName] = useState('');
   const [hasNote, setHasNote] = useState(false);
   const [noteText, setNoteText] = useState('');
@@ -347,11 +362,12 @@ export default function CardProduct({
         : activeFlavors.map(([lbl, c]) => (c > 1 ? `${c}x ${lbl}` : lbl));
 
     const finalNote = hasNote && noteText.trim() ? noteText.trim() : '';
+    const finalBreakdownName = isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name}` : name;
 
     dispatch(
       setProductFlavorBreakdown({
         id: id,
-        name: name,
+        name: finalBreakdownName,
         price: basePrice || price || 0,
         category: category || 'Cafetería',
         isCafeteria: Boolean(
@@ -392,11 +408,12 @@ export default function CardProduct({
         : activeFlavors.map(([lbl, c]) => (c > 1 ? `${c}x ${lbl}` : lbl));
 
     const finalNote = hasNote && noteText.trim() ? noteText.trim() : '';
+    const finalDecName = isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name}` : name;
 
     dispatch(
       setProductFlavorBreakdown({
         id: id,
-        name: name,
+        name: finalDecName,
         price: basePrice || price || 0,
         category: category || 'Cafetería',
         isCafeteria: Boolean(
@@ -478,6 +495,118 @@ export default function CardProduct({
     normalizedName,
   ]);
 
+  // Detección de bebidas que permiten quitar el café (Frappés que llevan café por defecto, o configurado en PocketBase)
+  const supportsSinCafeOption = useMemo(() => {
+    const explicit =
+      restProps?.permite_sin_cafe ??
+      restProps?.opcion_sin_cafe ??
+      restProps?.allow_decaf ??
+      restProps?.sin_cafe;
+
+    if (explicit === false) return false;
+    if (explicit === true) return true;
+
+    // Frappés estándar con café (excluyendo batidos y smoothies)
+    if (isFrappe && !isSmoothie && !isMilkshake) {
+      return true;
+    }
+
+    return false;
+  }, [restProps, isFrappe, isSmoothie, isMilkshake]);
+
+  // Detección de bebidas que llevan leche por naturaleza o receta
+  const isMilkDrink = useMemo(() => {
+    // Si PocketBase lo habilita explícitamente en el producto
+    if (leche_almendras || restProps?.leche_almendras || restProps?.permite_leche_almendras) {
+      return true;
+    }
+
+    // Exclusiones directas (comida, pastelería, helados, smoothies, extras)
+    if (
+      isPasteleriaOrFood ||
+      isSmoothie ||
+      category === 'extra' ||
+      category === 'Helado' ||
+      category === 'Paletas'
+    ) {
+      return false;
+    }
+
+    // Bebidas que explícitamente no llevan leche
+    if (
+      normalizedName.includes('americano') ||
+      normalizedName.includes('espresso') ||
+      normalizedName.includes('ristretto') ||
+      normalizedName.includes('infusion') ||
+      normalizedName.includes('té') ||
+      normalizedName.includes('te ') ||
+      normalizedName === 'te'
+    ) {
+      return false;
+    }
+
+    // 1. Frappés y batidos / milkshakes (todos llevan leche en su preparación)
+    if (isFrappe || isMilkshake || category === 'frappe') {
+      return true;
+    }
+
+    // 2. Cafetería caliente y fría que contiene leche por receta
+    const milkKeywords = [
+      'latte',
+      'flat white',
+      'cappuccino',
+      'capuchino',
+      'mocca',
+      'mocha',
+      'macchiato',
+      'cortado',
+      'lagrima',
+      'con leche',
+      'chocolate caliente',
+      'chocolate',
+      'submarino',
+    ];
+
+    if (milkKeywords.some((kw) => normalizedName.includes(kw))) {
+      return true;
+    }
+
+    // 3. Revisar si la receta o descripción en PocketBase menciona leche
+    const allRecipeTexts = [
+      recipe8oz,
+      recipe12oz,
+      recipe16oz,
+      description,
+      descripcion,
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase();
+
+    if (allRecipeTexts.length > 0) {
+      const cleanRecipe = allRecipeTexts.replace(/dulce\s+de\s+leche/g, '');
+      if (cleanRecipe.includes('leche')) {
+        return true;
+      }
+    }
+
+    return false;
+  }, [
+    leche_almendras,
+    restProps,
+    isPasteleriaOrFood,
+    isSmoothie,
+    category,
+    normalizedName,
+    isFrappe,
+    isMilkshake,
+    recipe8oz,
+    recipe12oz,
+    recipe16oz,
+    description,
+    descripcion,
+  ]);
+
   // Filtrar los extras disponibles según los booleanos configurados en el producto (PocketBase)
   const isExtraAllowed = useCallback(
     (extra) => {
@@ -487,9 +616,9 @@ export default function CardProduct({
         .replace(/[\u0300-\u036f]/g, '')
         .trim();
 
-      // Leche de Almendras
+      // Leche de Almendras (disponible si PB lo activa o si es cualquier bebida con leche)
       if (norm.includes('almendra')) {
-        return Boolean(leche_almendras);
+        return Boolean(leche_almendras || isMilkDrink);
       }
       // Extra Shot
       if (norm.includes('shot')) {
@@ -506,7 +635,7 @@ export default function CardProduct({
 
       return true;
     },
-    [leche_almendras, extra_shot, crema, isCappuccino]
+    [leche_almendras, isMilkDrink, extra_shot, crema, isCappuccino]
   );
 
   const allowedCafeteriaExtras = useMemo(() => {
@@ -532,6 +661,26 @@ export default function CardProduct({
         };
       });
 
+    // Si es una bebida con leche y no vino el extra "Leche de Almendras" desde PB, asegurar fallback
+    if (isMilkDrink) {
+      const hasAlmendrasAlready = list.some((e) => {
+        const norm = (e?.name || e?.title || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+        return norm.includes('almendra');
+      });
+
+      if (!hasAlmendrasAlready) {
+        list.push({
+          id: 'extra-leche-almendras-fallback',
+          name: 'Leche Almendras',
+          price_extra: 0,
+          inStock: isExtraInStock({ name: 'leche almendras' }, extrasStock),
+        });
+      }
+    }
+
     // Si NO es Cappuccino y es bebida de cafetería, asegurar que "Canela" esté como opción sin costo
     if (!isCappuccino && !isPasteleriaOrFood && category !== 'extra') {
       const hasCinnamonAlready = list.some((e) => {
@@ -552,8 +701,27 @@ export default function CardProduct({
       }
     }
 
+    // Ordenar para que Leche de Almendras quede al principio si es bebida con leche
+    if (isMilkDrink) {
+      list.sort((a, b) => {
+        const aNorm = (a?.name || '').toLowerCase();
+        const bNorm = (b?.name || '').toLowerCase();
+        if (aNorm.includes('almendra')) return -1;
+        if (bNorm.includes('almendra')) return 1;
+        return 0;
+      });
+    }
+
     return list;
-  }, [cafeteriaExtras, isExtraAllowed, extrasStock, isCappuccino, isPasteleriaOrFood, category]);
+  }, [
+    cafeteriaExtras,
+    isExtraAllowed,
+    extrasStock,
+    isMilkDrink,
+    isCappuccino,
+    isPasteleriaOrFood,
+    category,
+  ]);
 
   const isInherentlyCold = useMemo(() => {
     const catNorm = (category || '')
@@ -579,10 +747,12 @@ export default function CardProduct({
   // Detectar si el producto pertenece a cafetería (por prop, categoría o atributos de café)
   const isCafeItem = Boolean(
     isMilkshake ||
+    isSmoothie ||
     isCafeteria ||
     category === 'clasico' ||
     category === 'frappe' ||
     category === 'frio' ||
+    category === 'smoothie' ||
     category === 'pasteleria' ||
     category === 'extra' ||
     category === 'Cafetería' ||
@@ -697,6 +867,19 @@ export default function CardProduct({
   };
 
   const allConfiguredSizes = useMemo(() => {
+    if (isSmoothie) {
+      return [
+        {
+          size: '12oz',
+          label: '12oz (Única medida)',
+          name: '12oz',
+          oz: '12 oz',
+          price: price || Number(price_12oz) || 7500,
+          inStock: isCupInStock('12oz', true, cupSizesStock),
+        },
+      ];
+    }
+
     const list = [];
     const p8 = Number(price_8oz);
     const p12 = Number(price_12oz);
@@ -733,7 +916,7 @@ export default function CardProduct({
       });
     }
     return list;
-  }, [price_8oz, price_12oz, price_16oz, cupSizesStock, isColdDrink]);
+  }, [isSmoothie, price, price_8oz, price_12oz, price_16oz, cupSizesStock, isColdDrink]);
 
   const availableSizes = useMemo(() => {
     return allConfiguredSizes.filter((sz) => sz.inStock);
@@ -832,6 +1015,12 @@ export default function CardProduct({
       extrasList.push('Canela');
     }
 
+    const isSinCafeSelected = Boolean(supportsSinCafeOption && !withCoffee);
+
+    if (isSinCafeSelected && !extrasList.some((e) => /sin\s*caf/i.test(e))) {
+      extrasList.push('Sin café');
+    }
+
     const hasCinnamonSelected =
       (isCappuccino && withCinnamon) ||
       extrasList.some((e) => /canela/i.test(e));
@@ -839,34 +1028,63 @@ export default function CardProduct({
     const flavorLabel =
       selectedFlavor?.label ||
       selectedFlavor?.value ||
-      (typeof selectedFlavor === 'string' ? selectedFlavor : '');
+      (typeof selectedFlavor === 'string' ? selectedFlavor : '') ||
+      selectedVariety ||
+      '';
 
-    const finalSabores = flavorLabel ? [flavorLabel] : selectedVariety ? [selectedVariety] : [];
+    const finalSabores = flavorLabel ? [flavorLabel] : [];
 
-    const isFrio = supportsTemperatureOption && selectedTemperature === 'Frío';
-    const finalProductName = isFrio ? `${name} (Frío)` : name;
-    const finalSizeLabel = selectedSizeObj
-      ? isFrio
-        ? `${selectedSizeObj.label} · Frío`
-        : selectedSizeObj.label
-      : isFrio
-        ? 'Frío'
+    const isFrio = supportsTemperatureOption ? selectedTemperature === 'Frío' : isInherentlyCold;
+    let finalProductName = name;
+    const isCookieItem =
+      normalizedName.includes('cookie') ||
+      normalizedName.includes('galletita') ||
+      String(category || '').toLowerCase().includes('cookie');
+    if (isCookieItem && flavorLabel) {
+      const cleanFlavor = flavorLabel.charAt(0).toUpperCase() + flavorLabel.slice(1);
+      finalProductName = `Cookie ${cleanFlavor}`;
+    } else if (isSmoothie && flavorLabel) {
+      const cleanFlavor = flavorLabel.charAt(0).toUpperCase() + flavorLabel.slice(1);
+      finalProductName = `Smoothie ${cleanFlavor}`;
+    } else if (isFrappe && !/frapp[eé]/i.test(finalProductName)) {
+      finalProductName = `Frappe ${finalProductName}`;
+    } else if (isFrio && !isInherentlyCold) {
+      finalProductName = `${name} (Frío)`;
+    }
+    const finalSizeLabel = isSmoothie
+      ? '12oz'
+      : selectedSizeObj
+        ? getCleanSizeLabel(selectedSizeObj.label)
         : '';
 
-    const detailParts = [];
-    if (flavorLabel) detailParts.push(`Sabor: ${flavorLabel}`);
-    if (hasNote && noteText.trim()) detailParts.push(noteText.trim());
+    const hasAlmendrasSelected = extrasList.some((e) => /almendra/i.test(e));
 
-    const isCafItem = Boolean(
+    const finalNote = hasNote && noteText.trim() ? noteText.trim() : '';
+
+    const isMiniTorta =
+      normalizedName.includes('mini torta') ||
+      normalizedName.includes('minitorta') ||
+      normalizedName.includes('torta');
+
+    const isCafItem = !isMiniTorta && Boolean(
       isCafeteria ||
       category === 'clasico' ||
       category === 'frio' ||
       category === 'cold' ||
       category === 'frappe' ||
       category === 'smoothie' ||
+      isSmoothie ||
       category === 'pasteleria' ||
       category === 'Cafetería' ||
-      category === 'cafeteria'
+      category === 'cafeteria' ||
+      String(category || '').toLowerCase().includes('pasteler') ||
+      String(category || '').toLowerCase().includes('cookie') ||
+      String(name || '').toLowerCase().includes('cookie') ||
+      String(name || '').toLowerCase().includes('medialuna') ||
+      String(name || '').toLowerCase().includes('croissant') ||
+      String(name || '').toLowerCase().includes('budin') ||
+      String(name || '').toLowerCase().includes('alfajor') ||
+      String(name || '').toLowerCase().includes('tostado')
     );
 
     dispatch(
@@ -876,16 +1094,22 @@ export default function CardProduct({
         price: totalPrice,
         category: category || 'Cafetería',
         size: finalSizeLabel,
-        temperature: isFrio ? 'Frío' : 'Caliente',
-        isCold: isFrio || isInherentlyCold,
+        temperature: isSmoothie || isFrio ? 'Frío' : 'Caliente',
+        isCold: isSmoothie || isFrio || isInherentlyCold,
         extras: extrasList,
         canela: hasCinnamonSelected,
         withCinnamon: hasCinnamonSelected,
+        leche_almendras: hasAlmendrasSelected,
+        withAlmondMilk: hasAlmendrasSelected,
+        sinCafe: isSinCafeSelected,
+        withoutCoffee: isSinCafeSelected,
+        isSinCafe: isSinCafeSelected,
         vaso: vasoName.trim(),
         sabores: finalSabores,
+        smoothieFlavor: isSmoothie ? flavorLabel : undefined,
+        sabor: flavorLabel || undefined,
         isCafeteria: isCafItem,
-        ...(detailParts.length > 0 ? { listdetalle: detailParts.join(' · ') } : {}),
-        ...(hasNote && noteText.trim() ? { note: noteText.trim() } : {}),
+        ...(finalNote ? { note: finalNote, listdetalle: finalNote } : {}),
       })
     );
 
@@ -896,6 +1120,7 @@ export default function CardProduct({
     setSelectedFlavor(null);
     setSelectedExtraIds([]);
     setWithCinnamon(false);
+    setWithCoffee(true);
     setIsExtrasExpanded(false);
     setVasoName('');
     setHasNote(false);
@@ -905,8 +1130,12 @@ export default function CardProduct({
 
   const handleDirectAdd = () => {
     const finalPrice = availableSizes.length > 0 ? availableSizes[0].price : price || 0;
-    const sizeLabel = availableSizes.length === 1 ? availableSizes[0].label : '';
-    const isCafItem = Boolean(
+    const sizeLabel = availableSizes.length === 1 ? getCleanSizeLabel(availableSizes[0].label) : '';
+    const isMiniTorta =
+      normalizedName.includes('mini torta') ||
+      normalizedName.includes('minitorta') ||
+      normalizedName.includes('torta');
+    const isCafItem = !isMiniTorta && Boolean(
       isCafeteria ||
       category === 'clasico' ||
       category === 'frio' ||
@@ -915,12 +1144,24 @@ export default function CardProduct({
       category === 'smoothie' ||
       category === 'pasteleria' ||
       category === 'Cafetería' ||
-      category === 'cafeteria'
+      category === 'cafeteria' ||
+      String(category || '').toLowerCase().includes('pasteler') ||
+      String(category || '').toLowerCase().includes('cookie') ||
+      String(name || '').toLowerCase().includes('cookie') ||
+      String(name || '').toLowerCase().includes('medialuna') ||
+      String(name || '').toLowerCase().includes('croissant') ||
+      String(name || '').toLowerCase().includes('budin') ||
+      String(name || '').toLowerCase().includes('alfajor') ||
+      String(name || '').toLowerCase().includes('tostado')
     );
+    let finalDirectName = name;
+    if (isFrappe && !/frapp[eé]/i.test(finalDirectName)) {
+      finalDirectName = `Frappe ${finalDirectName}`;
+    }
     dispatch(
       addToCart({
         id: uniqid(),
-        name: name, // nombre limpio
+        name: finalDirectName,
         price: finalPrice,
         category: category || 'Cafetería',
         size: sizeLabel,
@@ -1188,6 +1429,7 @@ export default function CardProduct({
 
   const isSimplePasteleriaWithFlavors =
     isPasteleriaOrFood &&
+    !isSmoothie &&
     availableSizes.length <= 1 &&
     allowedCafeteriaExtras.length === 0 &&
     !isMilkshake &&
@@ -1199,7 +1441,9 @@ export default function CardProduct({
       allConfiguredSizes.length > 0 ||
       supportsTemperatureOption ||
       supportsCinnamonOption ||
+      supportsSinCafeOption ||
       isMilkshake ||
+      isSmoothie ||
       cafeteriaProductOptions.length > 0 ||
       parsedDirectOptions.length > 0 ||
       allowedCafeteriaExtras.length > 0 ||
@@ -1213,15 +1457,17 @@ export default function CardProduct({
           onClick={() => {
             if (isOutOfCupStock) {
               setWithCinnamon(isCappuccino);
+              setWithCoffee(true);
               setOpen(true);
               return;
             }
             if (needsModal) {
-              setSelectedSize('');
+              setSelectedSize(isSmoothie ? '12oz' : '');
               setSelectedVariety('');
               setSelectedFlavor(null);
               setSelectedExtraIds([]);
               setWithCinnamon(isCappuccino);
+              setWithCoffee(true);
               setVasoName('');
               setHasNote(false);
               setNoteText('');
@@ -1237,7 +1483,7 @@ export default function CardProduct({
           $isElectron={isElectron}
         >
           <div className="left">
-            <span className="name">{name}</span>
+            <span className="name">{name?.trim()}</span>
             <ProductInfoIcon product={productInfoData} size="small" />
             {isOutOfCupStock && (
               <span
@@ -1300,8 +1546,24 @@ export default function CardProduct({
                         wordBreak: 'break-word',
                       }}
                     >
-                      {name}
+                      {isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name}` : name}
                     </a>
+                    {isSmoothie && (
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 800,
+                          color: '#be185d',
+                          background: '#fdf2f8',
+                          border: '1px solid #fbcfe8',
+                          padding: '2px 8px',
+                          borderRadius: 6,
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        🍓 Frozen
+                      </span>
+                    )}
                     <ProductInfoIcon product={productInfoData} selectedSize={selectedSize} size="normal" />
                   </div>
 
@@ -1637,24 +1899,27 @@ export default function CardProduct({
 
                   {/* Selector de Variedad / Sabor para otros productos de Cafetería (Cookies, Pastelería, etc.) */}
                   {cafeteriaProductOptions.length > 0 && (
-                    <div style={{ marginBottom: 10 }}>
+                    <div style={{ marginBottom: 14 }}>
                       <span
                         style={{
-                          fontSize: 12,
+                          fontSize: 12.5,
                           fontWeight: 700,
-                          opacity: 0.8,
+                          color: '#1e293b',
                           display: 'block',
-                          marginBottom: 5,
+                          marginBottom: 6,
                         }}
                       >
-                        Sabor / Variedad <span style={{ color: '#e11d48' }}>*</span>
+                        {isSmoothie ? '🍓 Sabor del smoothie' : 'Sabor / Variedad'}{' '}
+                        <span style={{ color: '#e11d48' }}>*</span>
                       </span>
                       {cafeteriaProductOptions.length <= 24 ? (
                         <div
                           style={{
                             display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
-                            gap: 6,
+                            gridTemplateColumns: isSmoothie
+                              ? 'repeat(2, 1fr)'
+                              : 'repeat(auto-fill, minmax(110px, 1fr))',
+                            gap: isSmoothie ? 8 : 6,
                           }}
                         >
                           {cafeteriaProductOptions.map((opt) => {
@@ -1665,19 +1930,36 @@ export default function CardProduct({
                                 type="button"
                                 onClick={() => setSelectedVariety(opt.value)}
                                 style={{
-                                  padding: '6px 10px',
-                                  borderRadius: 8,
-                                  border: '1.5px solid',
-                                  borderColor: isSelected ? '#4d0012' : '#e4e4e7',
-                                  background: isSelected ? '#fff5f7' : '#fff',
-                                  fontWeight: isSelected ? 700 : 600,
-                                  color: isSelected ? '#4d0012' : '#333',
+                                  padding: isSmoothie ? '10px 12px' : '6px 10px',
+                                  borderRadius: isSmoothie ? 10 : 8,
+                                  border: '2px solid',
+                                  borderColor: isSelected
+                                    ? isSmoothie
+                                      ? '#be185d'
+                                      : '#4d0012'
+                                    : '#e4e4e7',
+                                  background: isSelected
+                                    ? isSmoothie
+                                      ? '#fdf2f8'
+                                      : '#fff5f7'
+                                    : '#fff',
+                                  fontWeight: isSelected ? 800 : 600,
+                                  color: isSelected
+                                    ? isSmoothie
+                                      ? '#be185d'
+                                      : '#4d0012'
+                                    : '#333',
                                   cursor: 'pointer',
                                   textAlign: 'center',
-                                  fontSize: 12,
+                                  fontSize: isSmoothie ? 13 : 12,
                                   fontFamily: 'Inter, sans-serif',
                                   transition: 'all 0.15s ease',
                                   outline: 'none',
+                                  boxShadow: isSelected
+                                    ? isSmoothie
+                                      ? '0 2px 8px rgba(190, 24, 93, 0.22)'
+                                      : '0 2px 8px rgba(77, 0, 18, 0.15)'
+                                    : 'none',
                                 }}
                               >
                                 {opt.label}
@@ -1790,6 +2072,102 @@ export default function CardProduct({
                               position: 'absolute',
                               top: 2,
                               left: withCinnamon ? 18 : 2,
+                              transition: 'left 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+                              boxShadow: '0 1px 3px rgba(0, 0, 0, 0.28)',
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opción de Café en Frappés: Con café / Sin café */}
+                  {supportsSinCafeOption && (
+                    <div style={{ marginBottom: 14 }}>
+                      <div
+                        onClick={() => setWithCoffee((prev) => !prev)}
+                        title={withCoffee ? 'Quitar shot de café' : 'Agregar shot de café'}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '9px 12px',
+                          borderRadius: 10,
+                          border: '1.5px solid',
+                          borderColor: withCoffee ? '#4d0012' : '#fca5a5',
+                          background: withCoffee ? '#fff5f7' : '#fef2f2',
+                          cursor: 'pointer',
+                          userSelect: 'none',
+                          transition: 'all 0.15s ease',
+                          boxShadow: withCoffee
+                            ? '0 2px 8px rgba(77, 0, 18, 0.12)'
+                            : '0 1px 2px rgba(0, 0, 0, 0.03)',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <div
+                            style={{
+                              width: 28,
+                              height: 28,
+                              borderRadius: 8,
+                              background: withCoffee ? '#fce7ee' : '#fee2e2',
+                              border: `1px solid ${withCoffee ? '#fbcfe8' : '#fca5a5'}`,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              color: withCoffee ? '#4d0012' : '#dc2626',
+                              transition: 'all 0.15s ease',
+                              flexShrink: 0,
+                              fontSize: 14,
+                            }}
+                          >
+                            {withCoffee ? '☕' : '🚫'}
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column' }}>
+                            <span
+                              style={{
+                                fontSize: 13,
+                                fontWeight: 800,
+                                color: withCoffee ? '#4d0012' : '#991b1b',
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              Con café
+                            </span>
+                            <span
+                              style={{
+                                fontSize: 11,
+                                fontWeight: 600,
+                                color: withCoffee ? '#701a2d' : '#dc2626',
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              {withCoffee ? 'Con shot de espresso (receta estándar)' : '🚫 Sin café (Quitar shot de espresso)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Switch Pill Toggle */}
+                        <div
+                          style={{
+                            width: 38,
+                            height: 22,
+                            borderRadius: 11,
+                            background: withCoffee ? '#4d0012' : '#cbd5e1',
+                            position: 'relative',
+                            transition: 'background 0.18s ease',
+                            flexShrink: 0,
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: 18,
+                              height: 18,
+                              borderRadius: '50%',
+                              background: '#ffffff',
+                              position: 'absolute',
+                              top: 2,
+                              left: withCoffee ? 18 : 2,
                               transition: 'left 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
                               boxShadow: '0 1px 3px rgba(0, 0, 0, 0.28)',
                             }}
@@ -1962,8 +2340,8 @@ export default function CardProduct({
                     </div>
                   )}
 
-                  {/* Nombre en vaso (para cafés clásicos y fríos, no para pastelería) */}
-                  {category !== 'pasteleria' && category !== 'Pastelería' && (
+                  {/* Nombre en vaso (para cafés clásicos, fríos y smoothies, no para pastelería) */}
+                  {(isSmoothie || (category !== 'pasteleria' && category !== 'Pastelería')) && (
                     <div style={{ marginBottom: 18 }}>
                       <span
                         style={{
@@ -2102,7 +2480,9 @@ export default function CardProduct({
                         : !isSizeValid
                           ? 'Elegí el tamaño'
                           : !isVarietyValid
-                            ? 'Elegí el sabor / variedad'
+                            ? isSmoothie
+                              ? 'Elegí el sabor del smoothie'
+                              : 'Elegí el sabor / variedad'
                             : `Agregar al pedido ($${totalPrice.toLocaleString('es-AR')})`}
                   </button>
                 </div>
@@ -2123,13 +2503,13 @@ export default function CardProduct({
           $isElectron={isElectron}
         >
           <div className="left">
-            <span className="name">{name}</span>
+            <span className="name">{isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name?.trim()}` : name?.trim()}</span>
           </div>
         </CardProductStyled>
       ) : (
         <CardProductStyled $accent={ACCENTS[category]} onClick={openModal} $isElectron={isElectron}>
           <div className="left">
-            <span className="name">{name}</span>
+            <span className="name">{isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name?.trim()}` : name?.trim()}</span>
           </div>
         </CardProductStyled>
       )}

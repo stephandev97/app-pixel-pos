@@ -1,4 +1,4 @@
-import { Calculator, Coffee, FlaskConical, Heart, QrCode, ShoppingBasket, Timer, Tv } from 'lucide-react'; // ✅ nuevo
+import { BookOpen, Calculator, Coffee, FlaskConical, Heart, QrCode, ShoppingBasket, Timer, Tv } from 'lucide-react'; // ✅ nuevo
 import { useState } from 'react';
 import { HiClipboardList, HiOutlineClipboardList } from 'react-icons/hi';
 import {
@@ -12,6 +12,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import logoPixelWhite from '../../assets/logoprintwhite.png';
 import {
   toggleBarista,
+  toggleBaristaRecipes,
   toggleCafeCosts,
   toggleConfig,
   toggleCustomPrint,
@@ -36,12 +37,16 @@ export default function Sidebar() {
   const activeRewards = useSelector((s) => s.actions.toggleRewards);
   const activeTvSabores = useSelector((s) => s.actions.toggleTvSabores); // ✅ nuevo
   const activeBarista = useSelector((s) => s.actions.toggleBarista);
+  const activeBaristaRecipes = useSelector((s) => s.actions.toggleBaristaRecipes);
   const activeCustomPrint = useSelector((s) => s.actions.toggleCustomPrint);
   const activeCafeCosts = useSelector((s) => s.actions.toggleCafeCosts);
   const showDevQr = useSelector((s) => s.actions?.showDevQr);
   const showSectionProducts = useSelector((s) => s.actions?.showSectionProducts ?? true);
   const showSectionOrders = useSelector((s) => s.actions?.showSectionOrders ?? true);
   const showSectionBarista = useSelector((s) => s.actions?.showSectionBarista ?? false);
+  const showSectionBaristaRecipes = useSelector(
+    (s) => s.actions?.showSectionBaristaRecipes ?? false
+  );
   const showSectionNotes = useSelector((s) => s.actions?.showSectionNotes ?? true);
   const showSectionTvSabores = useSelector((s) => s.actions?.showSectionTvSabores ?? true);
   const showSectionCafeCosts = useSelector((s) => s.actions?.showSectionCafeCosts ?? false);
@@ -62,6 +67,7 @@ export default function Sidebar() {
     dispatch(toggleRewards(false));
     dispatch(toggleTvSabores(false));
     dispatch(toggleBarista(false));
+    dispatch(toggleBaristaRecipes(false));
     dispatch(toggleCustomPrint(false));
     dispatch(toggleCafeCosts(false));
   };
@@ -111,6 +117,12 @@ export default function Sidebar() {
   const goBarista = () => {
     resetViews();
     dispatch(toggleBarista(true));
+    dispatch(toggleEditor(true));
+  };
+
+  const goBaristaRecipes = () => {
+    resetViews();
+    dispatch(toggleBaristaRecipes(true));
     dispatch(toggleEditor(true));
   };
 
@@ -179,6 +191,17 @@ export default function Sidebar() {
             title="Barista"
           >
             <Coffee size={22} />
+          </Item>
+        )}
+
+        {showSectionBaristaRecipes && (
+          <Item
+            aria-label="Recetario Barista"
+            data-active={activeBaristaRecipes}
+            onClick={goBaristaRecipes}
+            title="Recetario Barista"
+          >
+            <BookOpen size={22} />
           </Item>
         )}
 

@@ -5,7 +5,7 @@ import { useDispatch, useSelector } from 'react-redux';
 import CardProduct from '../../components/Products/CardProduct';
 import { pb } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
-import { setCupSizesStock, setExtrasStock } from '../../redux/actions/actionsSlice';
+import { setCupSizesStock, setExtrasStock, setHiddenProducts } from '../../redux/actions/actionsSlice';
 import { pointsApiClient } from '../../utils/pointsApiClient';
 import { explodeOptionsFromRecords } from '../../utils/productUtils';
 import {
@@ -945,15 +945,23 @@ export default function Products() {
     }
   }, [showTabCafeteria, activeTab]);
 
+  const hiddenProducts = useSelector((s) => s.actions?.hiddenProducts || {});
+
   const cafeteriaExtras = useMemo(() => {
     return cafeteriaProducts.filter((p) => p?.category === 'extra');
   }, [cafeteriaProducts]);
 
-  const filtered = useMemo(() => filterProducts(products, q), [products, q]);
+  const filtered = useMemo(() => {
+    const visible = products.filter((p) => !hiddenProducts[p.id] && !hiddenProducts[p.name]);
+    return filterProducts(visible, q);
+  }, [products, q, hiddenProducts]);
+
   const filteredCafeteria = useMemo(() => {
-    const withoutExtras = cafeteriaProducts.filter((p) => p?.category !== 'extra');
+    const withoutExtras = cafeteriaProducts.filter(
+      (p) => p?.category !== 'extra' && !hiddenProducts[p.id] && !hiddenProducts[p.name]
+    );
     return filterProducts(withoutExtras, q);
-  }, [cafeteriaProducts, q]);
+  }, [cafeteriaProducts, q, hiddenProducts]);
 
   // Contar cantidad de coincidencias por pestaña para mostrar en los badges
   const counts = useMemo(() => {
@@ -1052,6 +1060,7 @@ export default function Products() {
           const cfgData = configRes.items[0].data;
           if (cfgData.cupSizesStock) dispatch(setCupSizesStock(cfgData.cupSizesStock));
           if (cfgData.extrasStock) dispatch(setExtrasStock(cfgData.extrasStock));
+          if (cfgData.hiddenProducts) dispatch(setHiddenProducts(cfgData.hiddenProducts));
         }
       } catch (e) {
         if (cancelled) return;
@@ -1108,6 +1117,9 @@ export default function Products() {
         }
         if (e.record.data.extrasStock) {
           dispatch(setExtrasStock(e.record.data.extrasStock));
+        }
+        if (e.record.data.hiddenProducts) {
+          dispatch(setHiddenProducts(e.record.data.hiddenProducts));
         }
       }
     };

@@ -12,27 +12,6 @@ export const MASTER_RECIPES = {
     isCold: true,
     glass: 'Vaso Domo con tapa domo',
     sizes: {
-      '8oz': {
-        glass: 'Vaso Domo 8oz',
-        ingredients: [
-          { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
-          { name: 'Leche fría', amount: '70ml', icon: 'milk' },
-          { name: 'Hielo en rolito', amount: '100g', icon: 'ice' },
-          { name: 'Salsa de Chocolate', amount: '10g', icon: 'sauce' },
-          { name: 'Syrup de Vainilla', amount: '10ml (1 pump)', icon: 'syrup' },
-          { name: 'Galletitas Oreo', amount: '1.5 u', icon: 'cookie' },
-          { name: 'Crema Chantilly', amount: '25g', icon: 'cream' },
-          { name: 'Oreo decoración', amount: '1 u (tope)', icon: 'cookie' },
-        ],
-        steps: [
-          'En la licuadora colocar: 100g de hielo, 70ml de leche fría, 10g salsa de chocolate, 10ml (1 pump) syrup de vainilla y 1.5 galletitas Oreo troceadas.',
-          'Extraer 1 shot de espresso y agregarlo a la licuadora.',
-          'Licuar a potencia media-alta por 20 segundos hasta consistencia frozen homogénea sin trozos de hielo.',
-          'Dibujar espirales de salsa de chocolate en las paredes internas del vaso domo.',
-          'Servir el frappé, coronar con crema chantilly (25g), 1 galletita Oreo entera arriba y lluvia de migas.',
-          'Cerrar con tapa domo y sorbete grueso.',
-        ],
-      },
       '12oz': {
         glass: 'Vaso Domo 12oz',
         ingredients: [
@@ -87,26 +66,6 @@ export const MASTER_RECIPES = {
     isCold: true,
     glass: 'Vaso Domo con tapa domo',
     sizes: {
-      '8oz': {
-        glass: 'Vaso Domo 8oz',
-        ingredients: [
-          { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
-          { name: 'Leche fría', amount: '70ml', icon: 'milk' },
-          { name: 'Hielo en rolito', amount: '100g', icon: 'ice' },
-          { name: 'Salsa Dulce de Leche', amount: '10g', icon: 'sauce' },
-          { name: 'Syrup Dulce de Leche', amount: '15ml (1.5 pumps)', icon: 'syrup' },
-          { name: 'Syrup de Vainilla', amount: '8ml (~1 pump)', icon: 'syrup' },
-          { name: 'Crema Chantilly', amount: '25g', icon: 'cream' },
-        ],
-        steps: [
-          'En la licuadora colocar: 100g de hielo, 70ml de leche fría, 10g salsa de dulce de leche, 15ml (1.5 pumps) syrup DDL y 8ml (~1 pump) syrup vainilla.',
-          'Extraer 1 shot de espresso y agregarlo a la licuadora.',
-          'Licuar por 20 segundos a potencia media-alta.',
-          'Decorar las paredes internas del vaso domo 8oz con hilos de salsa de dulce de leche.',
-          'Servir el frappé, coronar con crema chantilly (25g) y lluvia de salsa de dulce de leche.',
-          'Cerrar con tapa domo y sorbete grueso.',
-        ],
-      },
       '12oz': {
         glass: 'Vaso Domo 12oz',
         ingredients: [
@@ -159,25 +118,6 @@ export const MASTER_RECIPES = {
     isCold: true,
     glass: 'Vaso Domo con tapa domo',
     sizes: {
-      '8oz': {
-        glass: 'Vaso Domo 8oz',
-        ingredients: [
-          { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
-          { name: 'Leche fría', amount: '70ml', icon: 'milk' },
-          { name: 'Hielo en rolito', amount: '100g', icon: 'ice' },
-          { name: 'Salsa de Pistacho', amount: '15g', icon: 'sauce' },
-          { name: 'Syrup de Pistacho', amount: '10ml (1 pump)', icon: 'syrup' },
-          { name: 'Crema Chantilly', amount: '25g', icon: 'cream' },
-        ],
-        steps: [
-          'En la licuadora colocar: 100g hielo, 70ml leche fría, 15g salsa de pistacho y 10ml (1 pump) syrup de pistacho.',
-          'Extraer 1 shot de espresso y agregarlo a la mezcla.',
-          'Licuar por 20 segundos a potencia media-alta.',
-          'Decorar paredes internas del vaso domo 8oz con salsa de pistacho.',
-          'Servir el frappé, coronar con crema chantilly (25g) y salsa de pistacho.',
-          'Cerrar con tapa domo y sorbete grueso.',
-        ],
-      },
       '12oz': {
         glass: 'Vaso Domo 12oz',
         ingredients: [
@@ -228,24 +168,6 @@ export const MASTER_RECIPES = {
     isCold: true,
     glass: 'Vaso Domo con tapa domo',
     sizes: {
-      '8oz': {
-        glass: 'Vaso Domo 8oz',
-        ingredients: [
-          { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
-          { name: 'Leche fría', amount: '70ml', icon: 'milk' },
-          { name: 'Hielo en rolito', amount: '100g', icon: 'ice' },
-          { name: 'Salsa de Chocolate', amount: '6g', icon: 'sauce' },
-          { name: 'Syrup de Chocolate', amount: '15ml (1.5 pumps)', icon: 'syrup' },
-          { name: 'Crema Chantilly', amount: '25g', icon: 'cream' },
-        ],
-        steps: [
-          'En la licuadora colocar: 100g hielo, 70ml leche fría, 6g salsa chocolate y 15ml (1.5 pumps) syrup chocolate.',
-          'Extraer 1 shot de espresso y agregarlo a la licuadora.',
-          'Licuar por 20 segundos a potencia alta.',
-          'Decorar vaso domo con salsa de chocolate, servir y coronar con crema chantilly y líneas de chocolate.',
-          'Cerrar con tapa domo y sorbete.',
-        ],
-      },
       '12oz': {
         glass: 'Vaso Domo 12oz',
         ingredients: [
@@ -386,33 +308,22 @@ export const MASTER_RECIPES = {
     category: 'frio',
     isFrappe: true,
     isCold: true,
-    glass: 'Vaso Milkshake / Domo',
+    glass: 'Vaso Domo 12oz',
+    pumpRule: '5 pumps aprox para 100gr (~20g por disparo)',
     sizes: {
       '12oz': {
-        glass: 'Vaso 12oz',
+        glass: 'Vaso Domo 12oz',
         ingredients: [
-          { name: 'Pulpa de fruta concentrada', amount: '95g', icon: 'fruit' },
+          { name: 'Pulpa de fruta concentrada', amount: '95g (~5 pumps)', icon: 'fruit' },
           { name: 'Hielo en rolito', amount: '150g', icon: 'ice' },
           { name: 'Agua purificada fría', amount: '125ml', icon: 'water' },
         ],
         steps: [
-          'En el vaso licuador colocar 150g de hielo, 95g de pulpa de fruta concentrada y 125ml de agua fría.',
-          'Licuar a velocidad máxima por 25-30 segundos hasta textura frozen brillante sin trozos de hielo.',
-          'Servir de inmediato en vaso frío con tapa domo y sorbete grueso.',
+          'En el vaso licuador colocar 150g de hielo, 95g (~5 pumps aprox) de pulpa de fruta concentrada y 125ml de agua purificada fría.',
+          'Licuar a velocidad máxima por 25-30 segundos hasta consistencia smoothie brillante y homogénea.',
+          'Servir de inmediato en vaso domo 12oz frío con tapa domo y sorbete grueso.',
         ],
-      },
-      '16oz': {
-        glass: 'Vaso 16oz',
-        ingredients: [
-          { name: 'Pulpa de fruta concentrada', amount: '130g', icon: 'fruit' },
-          { name: 'Hielo en rolito', amount: '200g', icon: 'ice' },
-          { name: 'Agua purificada fría', amount: '170ml', icon: 'water' },
-        ],
-        steps: [
-          'Colocar en licuadora: 200g de hielo, 130g de pulpa de fruta y 170ml de agua purificada fría.',
-          'Licuar a velocidad máxima por 30 segundos hasta consistencia smoothie brillante y homogénea.',
-          'Verter en el vaso domo de 16oz, cerrar con tapa y servir con sorbete ancho.',
-        ],
+        tip: 'Dosificación de pulpa: 5 pumps aprox equivalen a 100g de pulpa (1 pump ≈ 20g).',
       },
     },
   },
@@ -985,6 +896,458 @@ export function formatSyrupWithPumps(amount, name) {
   return amount;
 }
 
+// Convierte cantidades de pulpa de fruta a formato de pumps (5 pumps aprox para 100g -> 1 pump ≈ 20g)
+export function formatFruitWithPumps(amount, name) {
+  if (!amount || typeof amount !== 'string') return amount;
+  const isFruit =
+    (name || '').toLowerCase().includes('pulpa') ||
+    (name || '').toLowerCase().includes('smoothie') ||
+    (name || '').toLowerCase().includes('fruta');
+  if (!isFruit) return amount;
+  if (amount.toLowerCase().includes('pump')) return amount;
+
+  const match = amount.match(/^(\d+(?:\.\d+)?)\s*g$/i);
+  if (match) {
+    const grams = parseFloat(match[1]);
+    const pumps = Math.round((grams / 20) * 10) / 10;
+    let pumpStr = '';
+    if (pumps <= 1) pumpStr = '~1 pump';
+    else if (pumps >= 4.5 && pumps <= 5.5) pumpStr = '~5 pumps';
+    else pumpStr = `~${pumps} pumps`;
+
+    return `${amount} (${pumpStr})`;
+  }
+  return amount;
+}
+
+// Detecta el sabor de un smoothie a partir de cualquier propiedad del ítem
+export function getSmoothieFlavor(item) {
+  if (!item) return '';
+  if (item.sabor && typeof item.sabor === 'string' && item.sabor.trim()) return item.sabor.trim();
+  if (item.flavor && typeof item.flavor === 'string' && item.flavor.trim()) return item.flavor.trim();
+  if (item.smoothieFlavor && typeof item.smoothieFlavor === 'string' && item.smoothieFlavor.trim()) {
+    return item.smoothieFlavor.trim();
+  }
+
+  if (Array.isArray(item.sabores) && item.sabores.length > 0) {
+    const clean = item.sabores
+      .map((s) => (typeof s === 'string' ? s : s?.label || s?.name || ''))
+      .filter(Boolean);
+    if (clean.length > 0) return clean.join(' + ');
+  }
+
+  if (item.listdetalle && typeof item.listdetalle === 'string') {
+    const m = item.listdetalle.match(/(?:sabor|gusto):\s*([^·,|]+)/i);
+    if (m) return m[1].trim();
+  }
+
+  if (item.note && typeof item.note === 'string') {
+    const m = item.note.match(/(?:sabor|gusto):\s*([^·,|]+)/i);
+    if (m) return m[1].trim();
+  }
+
+  const n = normalizeStr(item.name || '');
+  const known = [
+    'frutilla-naranja',
+    'frutos del bosque',
+    'mango-maracuya',
+    'mango-maracuyá',
+    'maracuya',
+    'maracuyá',
+    'frutilla',
+    'mango',
+    'naranja',
+    'banana',
+    'durazno',
+    'arandanos',
+    'arándanos',
+  ];
+  for (const k of known) {
+    if (n.includes(normalizeStr(k))) {
+      return k.charAt(0).toUpperCase() + k.slice(1);
+    }
+  }
+  return '';
+}
+
+/**
+ * Detecta el sabor / variedad de una cookie a partir de cualquier propiedad del ítem
+ * (sabores, sabor, flavor, variety, saboresBreakdown, listdetalle, note, o el nombre).
+ */
+export function getCookieFlavor(item) {
+  if (!item) return '';
+  if (typeof item !== 'object') {
+    const str = String(item).trim();
+    const strNorm = normalizeStr(str);
+    const known = [
+      'kinder bueno',
+      'kinder',
+      'marroc',
+      'pistacho',
+      'nutella',
+      'oreo',
+      'rasta',
+      'franui',
+      'salted caramel',
+      'caramel',
+      'double',
+      'red malva',
+      'lotus',
+      'ferrero rocher',
+      'ferrero',
+    ];
+    for (const k of known) {
+      if (strNorm.includes(k)) {
+        return k.charAt(0).toUpperCase() + k.slice(1);
+      }
+    }
+    return '';
+  }
+
+  // 1. Array de sabores (el formato estándar de PocketBase y del POS)
+  if (Array.isArray(item.sabores) && item.sabores.length > 0) {
+    const clean = item.sabores
+      .map((s) => (typeof s === 'string' ? s : s?.label || s?.name || ''))
+      .filter(Boolean);
+    if (clean.length > 0 && clean[0].trim()) {
+      return clean[0].trim();
+    }
+  }
+
+  // 2. Propiedades sabor / flavor / variety
+  if (typeof item.sabor === 'string' && item.sabor.trim()) return item.sabor.trim();
+  if (typeof item.flavor === 'string' && item.flavor.trim()) return item.flavor.trim();
+  if (typeof item.variety === 'string' && item.variety.trim()) return item.variety.trim();
+
+  // 3. Objeto saboresBreakdown (ej: {"Pistacho": 1})
+  if (item.saboresBreakdown && typeof item.saboresBreakdown === 'object') {
+    const keys = Object.keys(item.saboresBreakdown);
+    if (keys.length > 0 && keys[0].trim()) return keys[0].trim();
+  }
+
+  // 4. Buscar en listdetalle o note si tiene formato "Sabor: X" o "Gusto: X"
+  const rawNote =
+    (typeof item.listdetalle === 'string' && item.listdetalle) ||
+    (typeof item.note === 'string' && item.note) ||
+    '';
+  if (rawNote) {
+    const m = rawNote.match(/(?:sabor|gusto):\s*([^·,|]+)/i);
+    if (m && m[1].trim()) return m[1].trim();
+  }
+
+  // 5. Sabores conocidos contenidos en el nombre del producto
+  const rawName = String(item.name || item.title || '').trim();
+  const nameNorm = normalizeStr(rawName);
+  const knownFlavors = [
+    'Kinder Bueno',
+    'Kinder',
+    'Marroc',
+    'Pistacho',
+    'Nutella',
+    'Oreo',
+    'Rasta',
+    'Franui',
+    'Salted Caramel',
+    'Double',
+    'Red Malva',
+    'Lotus',
+    'Ferrero Rocher',
+    'Ferrero',
+  ];
+  for (const kf of knownFlavors) {
+    if (nameNorm.includes(normalizeStr(kf))) {
+      return kf;
+    }
+  }
+
+  return '';
+}
+
+/**
+ * Formatea el nombre visible de un ítem para comanda, tickets y checkout,
+ * asegurando que si es un frappé lleve la palabra "Frappe" delante
+ * (ej. "Frappe Pistacho", "Frappe Oreo", "Frappe Dulce de Leche"),
+ * y si es una cookie lleve "Cookie [Sabor]" (ej. "Cookie Pistacho", "Cookie Nutella").
+ */
+export function getFormattedDrinkName(item) {
+  if (!item) return '';
+  const name = typeof item === 'string' ? item : item.name || item.title || item.label || '';
+  if (!name) return '';
+  const cat = typeof item === 'object' ? String(item.category || '').toLowerCase() : '';
+  const norm = normalizeStr(name);
+
+  // Si ya contiene Frappe o Frappé en el nombre, devolver tal cual
+  if (/frapp[eé]/i.test(name)) return name;
+
+  // Detección y formateo de Cookies:
+  // "que no diga por ejemplo cookie rellena y especifique sabor debajo.
+  //  sino que diga cookie pistacho por ejemplo. cookie nutella y etc"
+  if (norm.includes('cookie') || norm.includes('galletita') || cat.includes('cookie')) {
+    const ckFlavor = typeof item === 'object' ? getCookieFlavor(item) : '';
+    if (ckFlavor) {
+      const cleanFlavor = ckFlavor.charAt(0).toUpperCase() + ckFlavor.slice(1);
+      return `Cookie ${cleanFlavor}`;
+    }
+    const cleanedCookieName = name
+      .replace(/cookies?\s+rellenas?/i, 'Cookie')
+      .replace(/cookies?\s+con\s+relleno/i, 'Cookie')
+      .replace(/cookies?\s+simples?/i, 'Cookie')
+      .replace(/cookies?\s+tradicional(es)?/i, 'Cookie')
+      .trim();
+    if (cleanedCookieName && cleanedCookieName.toLowerCase() !== 'cookie') {
+      return cleanedCookieName;
+    }
+    return name;
+  }
+
+  // Si es pastelería, comida o helado tradicional, no es frappé
+  if (
+    cat.includes('pasteler') ||
+    cat === 'helado' ||
+    cat === 'paletas' ||
+    norm.includes('croissant') ||
+    norm.includes('budin') ||
+    norm.includes('medialuna') ||
+    norm.includes('tostado') ||
+    norm.includes('roll') ||
+    norm.includes('sandwich') ||
+    norm.includes('panini') ||
+    norm.includes('muffin') ||
+    norm.includes('chipa')
+  ) {
+    return name;
+  }
+
+  // Si es un smoothie
+  if (norm.includes('smoothie')) {
+    const smFl = typeof item === 'object' ? getSmoothieFlavor(item) : '';
+    if (smFl && !norm.includes(normalizeStr(smFl))) {
+      return `Smoothie ${smFl}`;
+    }
+    return name;
+  }
+
+  // Detección de frappé
+  const isFrappe =
+    cat === 'frappe' ||
+    item?.isFrappe ||
+    (cat === 'frio' && (norm.includes('oreo') || norm.includes('pistacho') || norm.includes('dulce de leche') || norm.includes('mocca'))) ||
+    norm === 'pistacho' ||
+    norm === 'oreo' ||
+    (norm === 'dulce de leche' && (cat.includes('frio') || cat.includes('frappe'))) ||
+    (norm.includes('mocca') && cat === 'frappe');
+
+  if (isFrappe) {
+    if (norm === 'dulce de leche') {
+      return 'Frappe Dulce de Leche';
+    }
+    return `Frappe ${name}`;
+  }
+
+  return name;
+}
+
+/**
+ * Extrae y limpia notas u observaciones reales escritas por el cajero/cliente,
+ * descartando redundancias sintéticas que ya se muestran en badges
+ * (como "Sabor: ...", "Sin café", "Con café", "Leche Almendras", extras, etc.)
+ */
+export function getCleanItemNote(item) {
+  if (!item) return '';
+
+  const rawNote =
+    (typeof item.note === 'string' && item.note.trim()) ||
+    (typeof item.observaciones === 'string' && item.observaciones.trim()) ||
+    (typeof item.observacion === 'string' && item.observacion.trim()) ||
+    (typeof item.listdetalle === 'string' && item.listdetalle.trim()) ||
+    '';
+
+  if (!rawNote) return '';
+
+  // Dividir por delimitadores habituales
+  const parts = rawNote
+    .split(/[·|\n;]+/)
+    .map((p) => p.trim())
+    .filter(Boolean);
+
+  const cleanParts = parts.filter((part) => {
+    const norm = part
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .trim();
+
+    // Descartar redundancias sintéticas que ya tienen badge propio
+    if (/^(?:sabor|gusto)\s*:\s*/i.test(norm)) return false;
+    if (/^sin\s*caf/i.test(norm)) return false;
+    if (/^con\s*caf/i.test(norm)) return false;
+    if (/^leche\s*(?:de\s*)?almendras?/i.test(norm)) return false;
+    if (/^extra\s*shot/i.test(norm)) return false;
+    if (/^crema(?:\s*chantilly)?$/i.test(norm)) return false;
+    if (/^canela$/i.test(norm)) return false;
+
+    // Descartar si es exactamente el sabor del smoothie o de la cookie ya mostrada en el título
+    if (item.smoothieFlavor && norm === item.smoothieFlavor.toLowerCase()) return false;
+    const ckFl = getCookieFlavor(item);
+    if (ckFl && norm === ckFl.toLowerCase()) return false;
+    if (item.sabor && norm === String(item.sabor).toLowerCase()) return false;
+    if (Array.isArray(item.sabores)) {
+      const isSabor = item.sabores.some((s) => {
+        const sNorm = (typeof s === 'string' ? s : s?.label || s?.name || '')
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .trim();
+        return sNorm && norm === sNorm;
+      });
+      if (isSabor) return false;
+    }
+
+    // Descartar si coincide con algún extra del array
+    if (Array.isArray(item.extras)) {
+      const isExtra = item.extras.some((ex) => {
+        const exClean = String(ex).replace(/\s*\(\+?\$?\d+\)/g, '').toLowerCase().trim();
+        return exClean && norm === exClean;
+      });
+      if (isExtra) return false;
+    }
+
+    return true;
+  });
+
+  return cleanParts.join(' · ').trim();
+}
+
+/**
+ * Limpia el texto de medida de un ítem para evitar redundancias con badges de temperatura.
+ * Por ejemplo: "Plus (12oz) · Frío" -> "Plus (12oz)"
+ *              "plus 12oz frio" -> "Plus 12oz"
+ *              "12oz Frío" -> "12oz"
+ *              "Frío" -> "" (no es una medida de vaso válida)
+ */
+export function getCleanSizeLabel(size) {
+  if (!size || typeof size !== 'string') return '';
+  let s = size.trim();
+  // Quitar "(Única medida)"
+  s = s.replace(/\s*\(Única medida\)/gi, '');
+  // Quitar temperatura al final o con separadores
+  s = s.replace(/[\s·\-,/|]+(?:fr[ií]o|caliente|iced|cold|hot)\b/gi, '');
+  // Quitar temperatura al inicio o con separadores
+  s = s.replace(/\b(?:fr[ií]o|caliente|iced|cold|hot)[\s·\-,/|]*/gi, '');
+  // Limpiar caracteres separadores sobrantes al inicio/final
+  s = s.replace(/^[\s·\-,/|]+|[\s·\-,/|]+$/g, '').trim();
+  // Si sólo era temperatura (o quedó vacío)
+  if (!s || /^(?:fr[ií]o|caliente|iced|cold|hot)$/i.test(s)) {
+    return '';
+  }
+  // Normalizar mayúscula inicial si venía en minúsculas (ej. "plus 12oz" -> "Plus 12oz")
+  if (/^[a-z]/.test(s)) {
+    s = s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  return s;
+}
+
+/**
+ * Retorna la configuración de color, contraste y descriptor para la medida del vaso.
+ * Diseñado específicamente para reducir errores en barra (color-coding + descriptor textual + alerta en 16oz).
+ */
+export function getSizeBadgeInfo(rawSize) {
+  if (!rawSize) return null;
+  const clean = getCleanSizeLabel(rawSize);
+  if (!clean) return null;
+
+  const lower = clean.toLowerCase();
+
+  // 16oz / Grande / XL / Maxi / Ultra
+  if (
+    lower.includes('16oz') ||
+    lower.includes('16 oz') ||
+    /\b16\b/.test(lower) ||
+    lower.includes('grande') ||
+    lower.includes('maxi') ||
+    lower.includes('ultra') ||
+    lower.includes('xl')
+  ) {
+    return {
+      key: '16oz',
+      size: '16oz',
+      name: 'GRANDE',
+      label: '16oz · GRANDE',
+      shortLabel: '16oz GRANDE',
+      badgeText: '16oz · GRANDE',
+      color: '#581c87', // Púrpura profundo de alto contraste
+      bg: '#f3e8ff',    // Lila suave
+      border: '#a855f7', // Violeta brillante (alerta)
+      glow: '0 2px 7px rgba(168, 85, 247, 0.32)',
+      isLarge: true,
+    };
+  }
+
+  // 8oz / Chico / Pocillo / Cortado / Mini
+  if (
+    lower.includes('8oz') ||
+    lower.includes('8 oz') ||
+    /\b8\b/.test(lower) ||
+    lower.includes('chico') ||
+    lower.includes('small') ||
+    lower.includes('mini') ||
+    lower.includes('pocillo')
+  ) {
+    return {
+      key: '8oz',
+      size: '8oz',
+      name: 'CHICO',
+      label: '8oz · CHICO',
+      shortLabel: '8oz CHICO',
+      badgeText: '8oz · CHICO',
+      color: '#065f46', // Verde bosque / menta
+      bg: '#d1fae5',    // Menta pastel
+      border: '#34d399', // Verde esmeralda
+      glow: '0 1px 4px rgba(52, 211, 153, 0.25)',
+      isSmall: true,
+    };
+  }
+
+  // 12oz / Mediano / Estándar / Plus
+  if (
+    lower.includes('12oz') ||
+    lower.includes('12 oz') ||
+    /\b12\b/.test(lower) ||
+    lower.includes('mediano') ||
+    lower.includes('medium') ||
+    lower.includes('plus') ||
+    lower.includes('estandar') ||
+    lower.includes('estándar')
+  ) {
+    return {
+      key: '12oz',
+      size: '12oz',
+      name: 'MEDIANO',
+      label: '12oz · MEDIANO',
+      shortLabel: '12oz MEDIANO',
+      badgeText: '12oz · MEDIANO',
+      color: '#1d4ed8', // Azul cobalto
+      bg: '#dbeafe',    // Azul pastel
+      border: '#60a5fa', // Azul
+      glow: '0 1px 4px rgba(96, 165, 250, 0.25)',
+      isMedium: true,
+    };
+  }
+
+  return {
+    key: 'other',
+    size: clean,
+    name: clean.toUpperCase(),
+    label: clean,
+    shortLabel: clean,
+    badgeText: clean,
+    color: '#334155',
+    bg: '#f1f5f9',
+    border: '#cbd5e1',
+    glow: 'none',
+  };
+}
+
 function parseDbRecipeLines(rawText) {
   if (!rawText) return [];
   const lines = rawText
@@ -1015,7 +1378,14 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
   const rawName = item.name || '';
   const normName = normalizeStr(rawName);
 
-  const rawSize = (item.size || '').toLowerCase();
+  const sizeCandidate = String(
+    item.size || item.medida || item.sizeLabel || item.activeSize || ''
+  ).toLowerCase();
+  let rawSize = sizeCandidate;
+  if (!rawSize) {
+    const matchName = String(item.name || '').match(/\b(8|12|16)\s*oz\b/i);
+    if (matchName) rawSize = matchName[0].toLowerCase();
+  }
   let activeSize = '12oz';
   let sizeLabel = 'Plus (12oz)';
 
@@ -1043,7 +1413,8 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
     return pNorm === normName || pNorm.includes(normName) || normName.includes(pNorm);
   });
 
-  const isDbFrappe = dbProd?.category === 'frappe' || dbProd?.category === 'frio';
+  const isItemCatFrappe = item?.category === 'frappe' || String(item?.category || '').toLowerCase() === 'frappe' || Boolean(item?.isFrappe);
+  const isDbFrappe = dbProd?.category === 'frappe' || dbProd?.category === 'frio' || isItemCatFrappe;
   const isNameFrappe =
     normName.includes('frappe') ||
     normName.includes('oreo') ||
@@ -1078,24 +1449,64 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
     else if (normName.includes('espresso') || normName.includes('ristretto')) masterKey = 'espresso';
   }
 
-  const master = masterKey ? MASTER_RECIPES[masterKey] : null;
+  let master = masterKey ? MASTER_RECIPES[masterKey] : null;
+
+  // Para smoothie, la medida es fija de 12oz de momento
+  if (masterKey === 'smoothie') {
+    activeSize = '12oz';
+    sizeLabel = '12oz';
+  }
 
   let ingredients = [];
   let steps = [];
   let glass = isFrappe ? 'Vaso Domo con tapa' : 'Vaso / Taza según tamaño';
 
-  if (master) {
+  // 1. Revisar si hay recetas personalizadas guardadas en dev / localStorage (SOLO para la medida exacta activa)
+  const customRecipes = getCustomBaristaRecipes();
+  const customDrink = masterKey ? customRecipes[masterKey] : null;
+  let customSizeData = null;
+
+  if (customDrink) {
+    if (
+      isCold &&
+      customDrink.coldOverride &&
+      customDrink.coldOverride[activeSize]
+    ) {
+      customSizeData = customDrink.coldOverride[activeSize];
+    } else if (
+      !isCold &&
+      customDrink.sizes &&
+      customDrink.sizes[activeSize]
+    ) {
+      customSizeData = customDrink.sizes[activeSize];
+    }
+  }
+
+  if (customSizeData) {
+    ingredients = customSizeData.ingredients
+      ? customSizeData.ingredients.map((i) => ({ ...i }))
+      : [];
+    steps = customSizeData.steps ? [...customSizeData.steps] : [];
+    if (customSizeData.glass) glass = customSizeData.glass;
+  } else if (master) {
     let sizeData = null;
 
     if (isCold && !master.isFrappe && master.coldOverride) {
-      sizeData = master.coldOverride[activeSize] || master.coldOverride['12oz'] || master.sizes[activeSize];
+      sizeData =
+        master.coldOverride[activeSize] ||
+        master.coldOverride['12oz'] ||
+        master.sizes[activeSize];
     } else {
-      sizeData = master.sizes[activeSize] || master.sizes['12oz'] || master.sizes['8oz'] || master.sizes['16oz'];
+      sizeData =
+        master.sizes[activeSize] ||
+        master.sizes['12oz'] ||
+        master.sizes['8oz'] ||
+        master.sizes['16oz'];
     }
 
     if (sizeData) {
-      ingredients = sizeData.ingredients || [];
-      steps = sizeData.steps || [];
+      ingredients = sizeData.ingredients ? [...sizeData.ingredients] : [];
+      steps = sizeData.steps ? [...sizeData.steps] : [];
       if (sizeData.glass) glass = sizeData.glass;
     }
   }
@@ -1106,11 +1517,34 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
     ingredients = parseDbRecipeLines(dbRecipeField);
   }
 
-  // Asegurar formato con pumps en todos los syrups
+  // Asegurar formato con pumps en todos los syrups y pulpas
   ingredients = ingredients.map((ing) => ({
     ...ing,
-    amount: formatSyrupWithPumps(ing.amount, ing.name),
+    amount: formatFruitWithPumps(formatSyrupWithPumps(ing.amount, ing.name), ing.name),
   }));
+
+  // Personalización específica para Smoothie
+  const isSmoothie = masterKey === 'smoothie' || normName.includes('smoothie');
+  const smoothieFlavor = isSmoothie ? getSmoothieFlavor(item) : '';
+
+  if (isSmoothie) {
+    if (smoothieFlavor) {
+      ingredients = ingredients.map((ing) => {
+        if ((ing.name || '').toLowerCase().includes('pulpa')) {
+          return {
+            ...ing,
+            name: `Pulpa de ${smoothieFlavor}`,
+            amount: '95g (~5 pumps)',
+          };
+        }
+        return ing;
+      });
+
+      steps = steps.map((st) =>
+        st.replace(/pulpa de fruta concentrada/gi, `pulpa de fruta (${smoothieFlavor})`)
+      );
+    }
+  }
 
   if (steps.length === 0) {
     if (isFrappe) {
@@ -1169,23 +1603,566 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
     });
   }
 
+  // Detección de Leche de Almendras (vegetal)
+  const hasAlmendras = Boolean(
+    item.hasAlmendras ||
+    item.leche_almendras ||
+    item.withAlmondMilk ||
+    (Array.isArray(item.extras) && item.extras.some((e) => /almendra/i.test(String(e)))) ||
+    (typeof item.name === 'string' && /almendra/i.test(item.name)) ||
+    (typeof item.note === 'string' && /almendra/i.test(item.note)) ||
+    (typeof item.listdetalle === 'string' && /almendra/i.test(item.listdetalle))
+  );
+
+  if (hasAlmendras) {
+    let replacedAny = false;
+    ingredients = ingredients.map((ing) => {
+      const n = (ing.name || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      // Sustituir cualquier ingrediente de leche tradicional por Leche de Almendras (vegetal)
+      // Excluyendo dulce de leche
+      if (n.includes('leche') && !n.includes('dulce de leche') && !n.includes('almendra')) {
+        replacedAny = true;
+        return {
+          ...ing,
+          name: 'Leche de Almendras (vegetal)',
+          icon: 'milk',
+        };
+      }
+      return ing;
+    });
+
+    if (!replacedAny) {
+      const normN = (rawName || '').toLowerCase();
+      if (!normN.includes('espresso') && !normN.includes('americano') && !normN.includes('smoothie')) {
+        ingredients.push({
+          name: 'Leche de Almendras (vegetal)',
+          amount: 'Según medida',
+          icon: 'milk',
+        });
+      }
+    }
+
+    // Actualizar los pasos de preparación para especificar Leche de Almendras
+    steps = steps.map((st) => {
+      if (typeof st !== 'string') return st;
+      return st
+        .replace(/leche\s+fr[ií]a/gi, 'leche de almendras fría')
+        .replace(/leche\s+entera/gi, 'leche de almendras')
+        .replace(/la\s+leche\s+texturizada/gi, 'la leche de almendras texturizada')
+        .replace(/la\s+leche\s+a\s*65/gi, 'la leche de almendras (cuidar temp máx 60-65°C)')
+        .replace(/vaporizar\s+la\s+leche/gi, 'vaporizar la leche de almendras (60-65°C)')
+        .replace(/chorrito\s+de\s+leche/gi, 'chorrito de leche de almendras')
+        .replace(/chorro\s+de\s+leche/gi, 'chorro de leche de almendras')
+        .replace(/totales\s+de\s+leche/gi, 'totales de leche de almendras')
+        .replace(/leche\s+totales/gi, 'leche de almendras totales')
+        .replace(/en\s+la\s+leche\s+y/gi, 'en la leche de almendras y');
+    });
+  }
+
+  // Detección de "Sin Café" (pedido explícito o modificador para frappés u otras bebidas)
+  const isSinCafe = Boolean(
+    item.sinCafe ||
+    item.withoutCoffee ||
+    item.isSinCafe ||
+    (Array.isArray(item.extras) && item.extras.some((e) => /sin\s*caf/i.test(String(e)))) ||
+    (typeof item.name === 'string' && /sin\s*caf/i.test(item.name)) ||
+    (typeof item.note === 'string' && /sin\s*caf/i.test(item.note)) ||
+    (typeof item.listdetalle === 'string' && /sin\s*caf/i.test(item.listdetalle))
+  );
+
+  if (isSinCafe) {
+    // 1. Filtrar ingredientes de espresso / café
+    ingredients = ingredients.filter((ing) => {
+      const n = (ing.name || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
+      if (
+        n.includes('espresso') ||
+        n.includes('ristretto') ||
+        n.includes('shot de cafe') ||
+        (n.includes('cafe') && !n.includes('salsa') && !n.includes('syrup') && !n.includes('licor'))
+      ) {
+        return false;
+      }
+      return true;
+    });
+
+    // 2. Filtrar y limpiar pasos que mencionan la extracción o adición del café espresso
+    steps = steps
+      .filter((st) => {
+        if (typeof st !== 'string') return true;
+        const normSt = st
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+        if (/extraer.*(?:espresso|shot|cafe)/i.test(normSt)) return false;
+        if (/a[ñn]adir.*(?:espresso|shot de cafe)/i.test(normSt) && !normSt.includes('hielo') && !normSt.includes('leche')) return false;
+        if (/incorporar.*(?:espresso|shot de cafe)/i.test(normSt) && !normSt.includes('hielo') && !normSt.includes('leche')) return false;
+        return true;
+      })
+      .map((st) => {
+        if (typeof st !== 'string') return st;
+        return st
+          .replace(/\s*,?\s*y\s*(?:el\s*)?(?:café|cafe)?\s*espresso(?:\s*concentrado|\s*doble)?/gi, '')
+          .replace(/\s*,?\s*y\s*(?:el\s*)?shot\s*de\s*(?:café|cafe|espresso)/gi, '')
+          .replace(/\s*,?\s*más\s*(?:el\s*)?(?:café|cafe)?\s*espresso/gi, '');
+      });
+  }
+
   const finalExtras = Array.isArray(item.extras) ? [...item.extras] : [];
   if (hasCanela && !finalExtras.some((e) => /canela/i.test(e))) {
     finalExtras.push('Canela');
   }
+  if (hasAlmendras && !finalExtras.some((e) => /almendra/i.test(e))) {
+    finalExtras.push('Leche Almendras');
+  }
+  if (isSinCafe && !finalExtras.some((e) => /sin\s*caf/i.test(e))) {
+    finalExtras.push('Sin café');
+  }
+
+  const isMilkDrink = Boolean(
+    hasAlmendras ||
+    isFrappe ||
+    normName.includes('latte') ||
+    normName.includes('flat white') ||
+    normName.includes('cappuccino') ||
+    normName.includes('capuchino') ||
+    normName.includes('mocca') ||
+    normName.includes('mocha') ||
+    normName.includes('macchiato') ||
+    normName.includes('cortado') ||
+    normName.includes('lagrima') ||
+    normName.includes('con leche') ||
+    normName.includes('chocolate') ||
+    normName.includes('submarino') ||
+    normName.includes('milkshake') ||
+    ingredients.some((ing) => {
+      const iname = (ing.name || '').toLowerCase();
+      return iname.includes('leche') && !iname.includes('dulce de leche');
+    })
+  ) && !normName.includes('espresso') && !normName.includes('americano') && !isSmoothie;
+
+  // Tamaños disponibles para la bebida (oculta medidas no disponibles/usadas)
+  let availableSizes = [];
+  if (isSmoothie) {
+    availableSizes = ['12oz'];
+  } else if (masterKey === 'espresso') {
+    availableSizes = ['8oz'];
+  } else if (masterKey === 'flat white') {
+    availableSizes = ['8oz', '12oz'];
+  } else if (isFrappe) {
+    availableSizes = ['12oz', '16oz'];
+  } else if (dbProd) {
+    if (Number(dbProd.price_8oz) > 0 || (dbProd.recipe8oz && dbProd.recipe8oz.trim())) {
+      availableSizes.push('8oz');
+    }
+    if (Number(dbProd.price_12oz) > 0 || (dbProd.recipe12oz && dbProd.recipe12oz.trim())) {
+      availableSizes.push('12oz');
+    }
+    if (Number(dbProd.price_16oz) > 0 || (dbProd.recipe16oz && dbProd.recipe16oz.trim())) {
+      availableSizes.push('16oz');
+    }
+  }
+
+  if (availableSizes.length === 0) {
+    const raw = master?.sizes ? Object.keys(master.sizes) : ['8oz', '12oz', '16oz'];
+    availableSizes = isFrappe ? raw.filter((s) => s !== '8oz') : raw;
+  }
+  if (availableSizes.length === 0) {
+    availableSizes = ['12oz'];
+  }
+
+  let finalProductName = rawName;
+  if (isSmoothie && smoothieFlavor && !rawName.toLowerCase().includes(smoothieFlavor.toLowerCase())) {
+    finalProductName = `Smoothie ${smoothieFlavor}`;
+  } else {
+    finalProductName = getFormattedDrinkName({
+      name: rawName,
+      category: item.category || dbProd?.category,
+      isFrappe,
+    });
+  }
 
   return {
-    productName: rawName,
+    productName: finalProductName,
+    masterKey,
     activeSize,
-    sizeLabel: item.size || sizeLabel,
+    sizeLabel: isSmoothie ? '12oz' : getCleanSizeLabel(item.size || item.medida) || sizeLabel,
+    availableSizes,
     isFrappe,
     isCold,
-    typeLabel: isFrappe ? '🍧 Frappé / Frozen' : isCold ? '🧊 Café Frío' : '☕ Café Caliente',
+    isSmoothie,
+    isSinCafe,
+    flavor: smoothieFlavor,
+    pumpRule: isSmoothie ? '5 pumps aprox para 100gr (~20g por disparo)' : undefined,
+    typeLabel: isSmoothie
+      ? '🍓 Smoothie Frozen'
+      : isFrappe
+      ? isSinCafe
+        ? hasAlmendras ? '🍧 Frappé (Sin café · Almendras)' : '🍧 Frappé (Sin café)'
+        : hasAlmendras ? '🍧 Frappé (Almendras)' : '🍧 Frappé / Frozen'
+      : isCold
+      ? isSinCafe
+        ? hasAlmendras ? '🧊 Frío (Sin café · Almendras)' : '🧊 Frío (Sin café)'
+        : hasAlmendras ? '🧊 Café Frío (Almendras)' : '🧊 Café Frío'
+      : isSinCafe
+      ? hasAlmendras ? '☕ Caliente (Sin café · Almendras)' : '☕ Caliente (Sin café)'
+      : hasAlmendras ? '☕ Café Caliente (Almendras)' : '☕ Café Caliente',
     glass,
     ingredients,
     steps,
     extras: finalExtras,
+    hasAlmendras,
+    isMilkDrink,
     vaso: item.vaso || '',
     note: item.note || '',
+    observaciones: item.observaciones || '',
+    listdetalle: item.listdetalle || '',
+    isCustom: Boolean(customSizeData),
+    dbProdId: dbProd?.id || null,
   };
 }
+
+// =========================================================================
+// GESTIÓN Y PERSISTENCIA DE RECETAS PERSONALIZADAS (SOLO DEV / ADMIN)
+// =========================================================================
+
+export function getCustomBaristaRecipes() {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem('barista_custom_recipes_v1');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    console.error('Error leyendo barista_custom_recipes_v1:', e);
+    return {};
+  }
+}
+
+export function saveCustomBaristaRecipe({
+  masterKey,
+  size,
+  glass,
+  ingredients,
+  steps,
+  pumpRule,
+  isCold = false,
+  dbProdId = null,
+}) {
+  if (typeof window === 'undefined' || !masterKey) return false;
+  try {
+    const current = getCustomBaristaRecipes();
+    if (!current[masterKey]) current[masterKey] = {};
+
+    const recipePayload = {
+      glass: glass || '',
+      ingredients: Array.isArray(ingredients) ? ingredients : [],
+      steps: Array.isArray(steps) ? steps : [],
+      pumpRule: pumpRule || undefined,
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isCold) {
+      if (!current[masterKey].coldOverride) current[masterKey].coldOverride = {};
+      current[masterKey].coldOverride[size] = recipePayload;
+    } else {
+      if (!current[masterKey].sizes) current[masterKey].sizes = {};
+      current[masterKey].sizes[size] = recipePayload;
+    }
+
+    localStorage.setItem('barista_custom_recipes_v1', JSON.stringify(current));
+    window.dispatchEvent(
+      new CustomEvent('barista-recipes-updated', { detail: { masterKey, size, isCold } })
+    );
+
+    // Sincronizar en PocketBase (en background si hay conexión a internet)
+    if (typeof window !== 'undefined' && window.navigator?.onLine) {
+      import('../../lib/pb')
+        .then(({ pb }) => {
+          if (!pb) return;
+          const recipeLines = (recipePayload.ingredients || [])
+            .map((i) => `${i.amount || ''} ${i.name || ''}`.trim())
+            .filter(Boolean)
+            .join('\n');
+
+          const updateObj = {};
+          if (size === '8oz') updateObj.recipe8oz = recipeLines;
+          else if (size === '16oz') updateObj.recipe16oz = recipeLines;
+          else updateObj.recipe12oz = recipeLines;
+
+          if (dbProdId) {
+            pb.collection('products_cafeteria').update(dbProdId, updateObj).catch((e) => {
+              console.warn('PB sync warning for custom recipe:', e?.message);
+            });
+          }
+        })
+        .catch(() => {});
+    }
+
+    return true;
+  } catch (err) {
+    console.error('Error guardando receta personalizada:', err);
+    return false;
+  }
+}
+
+export function resetCustomBaristaRecipe(masterKey, size, isCold = false) {
+  if (typeof window === 'undefined' || !masterKey) return false;
+  try {
+    const current = getCustomBaristaRecipes();
+    if (current[masterKey]) {
+      if (isCold && current[masterKey].coldOverride && current[masterKey].coldOverride[size]) {
+        delete current[masterKey].coldOverride[size];
+        if (Object.keys(current[masterKey].coldOverride).length === 0) {
+          delete current[masterKey].coldOverride;
+        }
+      } else if (!isCold && current[masterKey].sizes && current[masterKey].sizes[size]) {
+        delete current[masterKey].sizes[size];
+        if (Object.keys(current[masterKey].sizes).length === 0) {
+          delete current[masterKey].sizes;
+        }
+      }
+      if (Object.keys(current[masterKey]).length === 0) {
+        delete current[masterKey];
+      }
+      localStorage.setItem('barista_custom_recipes_v1', JSON.stringify(current));
+      window.dispatchEvent(
+        new CustomEvent('barista-recipes-updated', { detail: { masterKey, size, isCold } })
+      );
+    }
+    return true;
+  } catch (err) {
+    console.error('Error restaurando receta original:', err);
+    return false;
+  }
+}
+
+export function hasCustomBaristaRecipe(masterKey, size, isCold = false) {
+  const current = getCustomBaristaRecipes();
+  if (!current[masterKey]) return false;
+  if (isCold && current[masterKey].coldOverride && current[masterKey].coldOverride[size]) return true;
+  if (!isCold && current[masterKey].sizes && current[masterKey].sizes[size]) return true;
+  return false;
+}
+
+export function hasAnyCustomBaristaRecipeForDrink(masterKey) {
+  const current = getCustomBaristaRecipes();
+  if (!current || !masterKey) return false;
+  return Boolean(current[masterKey]);
+}
+
+export function resetAllCustomBaristaRecipesForDrink(masterKey) {
+  if (typeof window === 'undefined' || !masterKey) return false;
+  try {
+    const current = getCustomBaristaRecipes();
+    if (current[masterKey]) {
+      delete current[masterKey];
+      localStorage.setItem('barista_custom_recipes_v1', JSON.stringify(current));
+      window.dispatchEvent(
+        new CustomEvent('barista-recipes-updated', { detail: { masterKey, resetDrink: true } })
+      );
+    }
+    return true;
+  } catch (err) {
+    console.error('Error restaurando recetas de la bebida a predeterminadas de IA:', err);
+    return false;
+  }
+}
+
+export function resetAllCustomBaristaRecipes() {
+  if (typeof window === 'undefined') return false;
+  try {
+    localStorage.removeItem('barista_custom_recipes_v1');
+    window.dispatchEvent(
+      new CustomEvent('barista-recipes-updated', { detail: { resetAll: true } })
+    );
+    return true;
+  } catch (err) {
+    console.error('Error reseteando todas las recetas a la predeterminada de la IA:', err);
+    return false;
+  }
+}
+
+// Obtiene la receta oficial predeterminada de la IA directamente de MASTER_RECIPES
+export function getMasterAIRecipe(masterKey, size = '12oz', isCold = false) {
+  const master = MASTER_RECIPES[masterKey];
+  if (!master) return null;
+
+  let sizeData = null;
+  if (isCold && !master.isFrappe && master.coldOverride) {
+    sizeData = master.coldOverride[size] || master.coldOverride['12oz'] || master.sizes[size];
+  } else {
+    sizeData = master.sizes[size] || master.sizes['12oz'] || master.sizes['8oz'] || master.sizes['16oz'];
+  }
+
+  if (!sizeData) return null;
+
+  return {
+    glass: sizeData.glass || master.glass || 'Vaso / Taza según tamaño',
+    ingredients: (sizeData.ingredients || []).map((i) => ({ ...i })),
+    steps: [...(sizeData.steps || [])],
+    pumpRule: master.pumpRule,
+  };
+}
+
+// =========================================================================
+// ESCALADO Y ADAPTACIÓN COMPARATIVA DE RECETAS ENTRE MEDIDAS
+// =========================================================================
+
+/**
+ * Obtiene el factor y texto comparativo de volumen entre dos tamaños (ej. '12oz' a '16oz')
+ */
+export function getVolumeRatio(fromSize = '12oz', toSize = '16oz') {
+  const parseOz = (s) => {
+    const m = String(s || '').match(/(\d+)/);
+    return m ? parseInt(m[1], 10) : 12;
+  };
+  const fromNum = parseOz(fromSize);
+  const toNum = parseOz(toSize);
+  if (fromNum <= 0 || toNum <= 0) {
+    return { factor: 1, percentDiff: 0, label: '1.0x (mismo volumen)', fromNum: 12, toNum: 12 };
+  }
+
+  const factor = toNum / fromNum;
+  const percentDiff = Math.round((factor - 1) * 100);
+  const label =
+    percentDiff > 0
+      ? `${factor.toFixed(2)}x (+${percentDiff}% volumen)`
+      : percentDiff < 0
+      ? `${factor.toFixed(2)}x (${percentDiff}% volumen)`
+      : '1.0x (mismo volumen)';
+
+  return { factor, percentDiff, label, fromNum, toNum };
+}
+
+/**
+ * Escala inteligentemente cantidades numéricas con unidades de cafetería (ml, g, pumps, shots, u)
+ */
+export function scaleAmountString(amountStr, factor) {
+  if (!amountStr || typeof amountStr !== 'string') return amountStr;
+  if (!factor || factor === 1) return amountStr;
+
+  // Si no hay dígitos numéricos (ej. "Lluvia", "Decoración", "A gusto"), devolver tal cual
+  if (!/\d/.test(amountStr)) return amountStr;
+
+  return amountStr.replace(/(\d+(?:[.,]\d+)?)\s*([a-zA-ZáéíóúÁÉÍÓÚ°]+)?/g, (match, numStr, unit) => {
+    const num = parseFloat(numStr.replace(',', '.'));
+    if (isNaN(num)) return match;
+
+    // Si es cm (microespuma), no alterar
+    if (unit && unit.toLowerCase() === 'cm') {
+      return match;
+    }
+
+    const scaled = num * factor;
+    let roundedNum;
+    const lowerUnit = (unit || '').toLowerCase();
+
+    if (lowerUnit === 'ml' || lowerUnit === 'g' || lowerUnit === 'gr') {
+      if (scaled >= 100) {
+        roundedNum = Math.round(scaled / 10) * 10;
+      } else if (scaled >= 20) {
+        roundedNum = Math.round(scaled / 5) * 5;
+      } else if (scaled >= 5) {
+        roundedNum = Math.round(scaled);
+      } else {
+        roundedNum = Math.round(scaled * 10) / 10;
+      }
+    } else if (
+      lowerUnit === 'pump' ||
+      lowerUnit === 'pumps' ||
+      lowerUnit === 'disparo' ||
+      lowerUnit === 'disparos'
+    ) {
+      roundedNum = Math.round(scaled * 2) / 2; // pasos de 0.5 pump
+    } else if (lowerUnit === 'shot' || lowerUnit === 'shots') {
+      roundedNum = Math.max(1, Math.round(scaled)); // mínimo 1 shot
+    } else if (lowerUnit === 'u' || lowerUnit === 'unid' || lowerUnit === 'unidades') {
+      roundedNum = Math.max(1, Math.round(scaled));
+    } else {
+      if (scaled >= 50) {
+        roundedNum = Math.round(scaled / 5) * 5;
+      } else if (scaled >= 10) {
+        roundedNum = Math.round(scaled);
+      } else {
+        roundedNum = Math.round(scaled * 10) / 10;
+      }
+    }
+
+    const finalNumStr = Number.isInteger(roundedNum) ? String(roundedNum) : String(roundedNum);
+    return unit ? `${finalNumStr}${unit}` : finalNumStr;
+  });
+}
+
+/**
+ * Adapta una receta técnica completa desde una medida de origen a una medida de destino
+ */
+export function adaptRecipeFromSize({
+  masterKey,
+  productName,
+  sourceSize = '12oz',
+  targetSize = '16oz',
+  isCold = false,
+  cafeteriaProducts = [],
+}) {
+  if (!masterKey || !sourceSize || !targetSize) return null;
+
+  // 1. Obtener la receta fuente (usando la receta personalizada activa si fue editada, o la maestra)
+  const dummySourceItem = {
+    name: productName || masterKey,
+    size: sourceSize,
+    isCold,
+  };
+  const sourceRecipe = getBaristaRecipe(dummySourceItem, cafeteriaProducts);
+  if (!sourceRecipe) return null;
+
+  // 2. Calcular la proporción de volumen
+  const { factor, percentDiff, label } = getVolumeRatio(sourceSize, targetSize);
+
+  // 3. Escalar los ingredientes
+  const scaledIngredients = (sourceRecipe.ingredients || []).map((ing) => {
+    return {
+      name: ing.name || '',
+      amount: scaleAmountString(ing.amount || '', factor),
+      icon: ing.icon,
+    };
+  });
+
+  // 4. Adaptar el vaso (reemplazar la mención de sourceSize por targetSize)
+  let adaptedGlass = sourceRecipe.glass || 'Vaso / Taza según tamaño';
+  const sizeRegex = new RegExp(`\\b${sourceSize}\\b`, 'gi');
+  if (sizeRegex.test(adaptedGlass)) {
+    adaptedGlass = adaptedGlass.replace(sizeRegex, targetSize);
+  } else {
+    adaptedGlass = adaptedGlass.replace(/\d+\s*oz/gi, targetSize);
+  }
+
+  // 5. Adaptar los pasos (reemplazar la mención del tamaño anterior en las instrucciones)
+  const adaptedSteps = (sourceRecipe.steps || []).map((st) => {
+    if (typeof st !== 'string') return st;
+    return st.replace(new RegExp(`\\b${sourceSize}\\b`, 'gi'), targetSize);
+  });
+
+  // 6. Regla de dosificación adaptada
+  let adaptedPumpRule = sourceRecipe.pumpRule || '';
+  if (adaptedPumpRule && factor !== 1) {
+    adaptedPumpRule = scaleAmountString(adaptedPumpRule, factor);
+  }
+
+  return {
+    sourceSize,
+    targetSize,
+    factor,
+    percentDiff,
+    ratioLabel: label,
+    glass: adaptedGlass,
+    ingredients: scaledIngredients,
+    steps: adaptedSteps,
+    pumpRule: adaptedPumpRule,
+  };
+}
+
+

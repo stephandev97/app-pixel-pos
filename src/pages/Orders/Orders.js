@@ -16,6 +16,7 @@ import {
   fetchTodayPendingOrders,
   hydrateAllTodayOrders,
   hydrateOrdersFromPocket,
+  setOrderBaristaStatus,
   subscribeOrdersRealtime,
   syncPendingOrders,
 } from '../../redux/orders/ordersSlice';
@@ -74,19 +75,39 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     return map;
   });
 
-  const handleMarkPrepared = (orderId) => {
-    localStorage.setItem(`barista-prepared-${orderId}`, 'true');
-    setPreparedOrders((prev) => ({ ...prev, [orderId]: true }));
-  };
+  const isOrderPrepared = useCallback(
+    (o) => {
+      if (!o) return false;
+      // Para órdenes sincronizadas en PocketBase / Redux, manda el boolean del servidor
+      if (typeof o.baristaDone === 'boolean') {
+        return o.baristaDone;
+      }
+      return Boolean(preparedOrders[o.id]);
+    },
+    [preparedOrders]
+  );
 
-  const handleUnmarkPrepared = (orderId) => {
-    localStorage.removeItem(`barista-prepared-${orderId}`);
-    setPreparedOrders((prev) => {
-      const updated = { ...prev };
-      delete updated[orderId];
-      return updated;
-    });
-  };
+  const handleMarkPrepared = useCallback(
+    (orderId) => {
+      localStorage.setItem(`barista-prepared-${orderId}`, 'true');
+      setPreparedOrders((prev) => ({ ...prev, [orderId]: true }));
+      dispatch(setOrderBaristaStatus({ id: orderId, baristaDone: true }));
+    },
+    [dispatch]
+  );
+
+  const handleUnmarkPrepared = useCallback(
+    (orderId) => {
+      localStorage.removeItem(`barista-prepared-${orderId}`);
+      setPreparedOrders((prev) => {
+        const updated = { ...prev };
+        delete updated[orderId];
+        return updated;
+      });
+      dispatch(setOrderBaristaStatus({ id: orderId, baristaDone: false }));
+    },
+    [dispatch]
+  );
 
   const handleDeleteTestOrder = useCallback(
     (orderId) => {
@@ -102,6 +123,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   );
 
   const [showCompletedBarista, setShowCompletedBarista] = useState(false);
+  const [baristaTab, setBaristaTab] = useState('pending'); // 'pending' | 'completed'
   const [showMockOrders, setShowMockOrders] = useState(false);
 
   const [cafeteriaProducts, setCafeteriaProducts] = useState(() => {
@@ -515,16 +537,16 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   const completedCount = useMemo(() => {
     if (!isBarista) return 0;
     return allOrdersList.filter((o) => {
-      return isBaristaOrder(o) && Boolean(preparedOrders[o.id]);
+      return isBaristaOrder(o) && isOrderPrepared(o);
     }).length;
-  }, [isBarista, allOrdersList, preparedOrders]);
+  }, [isBarista, allOrdersList, isOrderPrepared]);
 
   const pendingBaristaCount = useMemo(() => {
     if (!isBarista) return 0;
     return allOrdersList.filter((o) => {
-      return isBaristaOrder(o) && !preparedOrders[o.id];
+      return isBaristaOrder(o) && !isOrderPrepared(o);
     }).length;
-  }, [isBarista, allOrdersList, preparedOrders]);
+  }, [isBarista, allOrdersList, isOrderPrepared]);
 
   const filteredTodayOrders = useMemo(() => {
     const q = addressQuery.trim().toLowerCase();
@@ -535,7 +557,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
         // Solo mostrar si es orden de barista (contiene cafetería o es pedido de prueba)
         if (!isBaristaOrder(o)) return false;
 
-        const isPrepared = Boolean(preparedOrders[o.id]);
+        const isPrepared = isOrderPrepared(o);
         if (showCompletedBarista) {
           if (!isPrepared) return false;
         } else {
@@ -560,7 +582,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
         if (o?.pending) {
           isPend = true;
         } else if (isBarista) {
-          isPend = !preparedOrders[o?.id];
+          isPend = !isOrderPrepared(o);
         } else {
           isPend = !isCopied && !isHidden;
         }
@@ -593,7 +615,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
         } else if (o?.pending) {
           isPend = true;
         } else if (isBarista) {
-          isPend = !preparedOrders[o?.id];
+          isPend = !isOrderPrepared(o);
         } else {
           isPend = !isCopied && !isHidden;
         }
@@ -618,7 +640,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     orderTypeFilter,
     orderSort,
     isBarista,
-    preparedOrders,
+    isOrderPrepared,
     showCompletedBarista,
     copiedIdsSet,
     hiddenIdsSet,
@@ -1291,17 +1313,20 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                   >
                     <button
                       type="button"
-                      onClick={() => setShowCompletedBarista(false)}
+                      onClick={() => {
+                        setBaristaTab('pending');
+                        setShowCompletedBarista(false);
+                      }}
                       style={{
                         border: 'none',
                         cursor: 'pointer',
                         padding: '5px 10px',
                         borderRadius: 7,
                         fontSize: '0.78rem',
-                        fontWeight: !showCompletedBarista ? 700 : 500,
-                        background: !showCompletedBarista ? '#ffffff' : 'transparent',
-                        color: !showCompletedBarista ? '#09090b' : '#71717a',
-                        boxShadow: !showCompletedBarista ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                        fontWeight: baristaTab === 'pending' ? 700 : 500,
+                        background: baristaTab === 'pending' ? '#ffffff' : 'transparent',
+                        color: baristaTab === 'pending' ? '#09090b' : '#71717a',
+                        boxShadow: baristaTab === 'pending' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 5,
@@ -1317,8 +1342,8 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                           fontWeight: 800,
                           padding: '1px 5px',
                           borderRadius: 5,
-                          background: !showCompletedBarista ? '#09090b' : '#e4e4e7',
-                          color: !showCompletedBarista ? '#ffffff' : '#52525b',
+                          background: baristaTab === 'pending' ? '#09090b' : '#e4e4e7',
+                          color: baristaTab === 'pending' ? '#ffffff' : '#52525b',
                         }}
                       >
                         {pendingBaristaCount}
@@ -1327,17 +1352,20 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
 
                     <button
                       type="button"
-                      onClick={() => setShowCompletedBarista(true)}
+                      onClick={() => {
+                        setBaristaTab('completed');
+                        setShowCompletedBarista(true);
+                      }}
                       style={{
                         border: 'none',
                         cursor: 'pointer',
                         padding: '5px 10px',
                         borderRadius: 7,
                         fontSize: '0.78rem',
-                        fontWeight: showCompletedBarista ? 700 : 500,
-                        background: showCompletedBarista ? '#ffffff' : 'transparent',
-                        color: showCompletedBarista ? '#09090b' : '#71717a',
-                        boxShadow: showCompletedBarista ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
+                        fontWeight: baristaTab === 'completed' ? 700 : 500,
+                        background: baristaTab === 'completed' ? '#ffffff' : 'transparent',
+                        color: baristaTab === 'completed' ? '#09090b' : '#71717a',
+                        boxShadow: baristaTab === 'completed' ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
                         display: 'flex',
                         alignItems: 'center',
                         gap: 5,
@@ -1353,8 +1381,8 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                           fontWeight: 800,
                           padding: '1px 5px',
                           borderRadius: 5,
-                          background: showCompletedBarista ? '#15803d' : '#e4e4e7',
-                          color: showCompletedBarista ? '#ffffff' : '#52525b',
+                          background: baristaTab === 'completed' ? '#15803d' : '#e4e4e7',
+                          color: baristaTab === 'completed' ? '#ffffff' : '#52525b',
                         }}
                       >
                         {completedCount}
@@ -1511,7 +1539,8 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                     {...o}
                     isBarista={isBarista}
                     isTestOrder={Boolean(o?.isTestOrder || String(o?.id || '').startsWith('local-test-'))}
-                    isPrepared={Boolean(preparedOrders[o.id])}
+                    isPrepared={isOrderPrepared(o)}
+                    baristaDone={Boolean(o?.baristaDone)}
                     onMarkPrepared={handleMarkPrepared}
                     onUnmarkPrepared={handleUnmarkPrepared}
                     onOpenRecipe={handleOpenRecipe}
@@ -1561,6 +1590,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
         recipeModalData={recipeModalData}
         onClose={() => setRecipeModalData(null)}
         onSelectSize={(size) => setRecipeModalData((prev) => ({ ...prev, activeSize: size }))}
+        cafeteriaProducts={cafeteriaProducts}
       />
     </GlobalOrders>
   );

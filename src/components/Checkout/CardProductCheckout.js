@@ -10,6 +10,7 @@ import {
 } from '../../redux/cart/cartSlice';
 import { formatPrice } from '../../utils/formatPrice';
 import { isBaristaItem } from '../../utils/cafeStockSync';
+import { getCleanItemNote, getFormattedDrinkName, getCleanSizeLabel, getSizeBadgeInfo } from '../Orders/baristaRecipesData';
 import {
   BaristaFlagBadge,
   ButtonMinus,
@@ -50,7 +51,17 @@ const CardProductCheckout = ({
   const dispatch = useDispatch();
   const [isEditing, setIsEditing] = useState(false);
 
-  const itemNote = note || listdetalle;
+  const itemNote = getCleanItemNote({
+    name,
+    category,
+    size,
+    extras,
+    vaso,
+    note,
+    listdetalle,
+    sabores,
+    ...restProps,
+  });
   const hasBreakdown =
     saboresBreakdown &&
     typeof saboresBreakdown === 'object' &&
@@ -91,7 +102,7 @@ const CardProductCheckout = ({
         <HeaderLeft>
           <NameCard>
             <span>
-              {name}
+              {getFormattedDrinkName({ name, category, ...restProps }) || name}
               {!hasBreakdown && sabores && sabores.length === 1 && ` · ${sabores[0]}`}
             </span>
           </NameCard>
@@ -233,11 +244,27 @@ const CardProductCheckout = ({
                 marginTop: 2,
               }}
             >
-              {size && (
-                <div style={{ fontSize: '11px', color: '#666', fontWeight: 600 }}>
-                  Tamaño: <span style={{ color: '#4d0012' }}>{size}</span>
-                </div>
-              )}
+              {getCleanSizeLabel(size) && (() => {
+                const szInfo = getSizeBadgeInfo(size);
+                return (
+                  <div style={{ fontSize: '11px', color: '#666', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    Tamaño:
+                    <span
+                      style={{
+                        color: szInfo ? szInfo.color : '#4d0012',
+                        background: szInfo ? szInfo.bg : 'transparent',
+                        border: szInfo ? (szInfo.isLarge ? `1.5px solid ${szInfo.border}` : `1px solid ${szInfo.border}`) : 'none',
+                        padding: szInfo ? '1px 6px' : 0,
+                        borderRadius: 4,
+                        fontWeight: 800,
+                        fontSize: '0.72rem',
+                      }}
+                    >
+                      {szInfo ? szInfo.label : getCleanSizeLabel(size)}
+                    </span>
+                  </div>
+                );
+              })()}
               {extras && extras.length > 0 && (
                 <div style={{ fontSize: '11px', color: '#666', fontWeight: 600 }}>
                   Extras: <span style={{ color: '#333' }}>{extras.join(', ')}</span>
