@@ -812,6 +812,8 @@ export default function CardProduct({
       normalizedName === 'espresso' ||
       normalizedName.startsWith('espresso ') ||
       normalizedName === 'flat white' ||
+      normalizedName === 'cortado' ||
+      normalizedName.startsWith('cortado ') ||
       normalizedName.includes('chocolate caliente');
 
     if (isHotOnlyDrink) return false;

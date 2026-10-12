@@ -337,27 +337,27 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
           { name: 'Leche texturizada', amount: '150ml', icon: 'milk' },
           { name: 'Microespuma', amount: '0.5cm', icon: 'foam' },
         ],
         steps: [
-          'Extraer 1 shot de espresso directamente en la taza o vaso térmico.',
+          'Extraer 1 shot de espresso directamente en el vaso o vaso térmico.',
           'Vaporizar 150ml de leche fresca a 65°C con microespuma sedosa y fina (0.5cm).',
           'Verter la leche texturizada sobre el espresso integrando suavemente desde el centro (opcional: arte latte).',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Café Espresso', amount: '18g (2 shots)', icon: 'coffee' },
           { name: 'Leche texturizada', amount: '220ml', icon: 'milk' },
           { name: 'Microespuma', amount: '0.5cm', icon: 'foam' },
         ],
         steps: [
-          'Extraer espresso doble (36g líquido) en la taza o vaso de 12oz.',
+          'Extraer espresso doble (36g líquido) en el vaso de 12oz.',
           'Vaporizar 220ml de leche fresca a 65°C logrando microespuma brillante y elástica.',
           'Verter la leche sobre el espresso integrando suavemente (opcional: diseño arte latte).',
         ],
@@ -427,7 +427,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza Cappuccino 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
           { name: 'Leche vaporizada', amount: '120ml', icon: 'milk' },
@@ -435,14 +435,14 @@ export const MASTER_RECIPES = {
           { name: 'Cacao amargo', amount: 'Lluvia', icon: 'spice' },
         ],
         steps: [
-          'Extraer 1 shot de espresso en taza de cappuccino.',
+          'Extraer 1 shot de espresso en el vaso de 8oz.',
           'Vaporizar 120ml de leche fría generando espuma espesa y cremosa hasta 65°C (1.5cm).',
           'Verter la leche empujando la espuma en el centro para formar el clásico domo blanco.',
           'Espolvorear con cacao amargo o canela a gusto.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Café Espresso', amount: '18g (2 shots)', icon: 'coffee' },
           { name: 'Leche vaporizada', amount: '180ml', icon: 'milk' },
@@ -450,7 +450,7 @@ export const MASTER_RECIPES = {
           { name: 'Cacao amargo', amount: 'Lluvia', icon: 'spice' },
         ],
         steps: [
-          'Extraer espresso doble en la taza o vaso de 12oz.',
+          'Extraer espresso doble en el vaso de 12oz.',
           'Vaporizar 180ml de leche generando abundante espuma densa y aterciopelada a 65°C.',
           'Verter la leche empujando una buena capa de espuma en la parte superior.',
           'Finalizar con lluvia de cacao puro en polvo.',
@@ -479,27 +479,27 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza de cerámica 8oz / Vaso vidrio',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Café Ristretto', amount: '18g (doble corto)', icon: 'coffee' },
           { name: 'Leche texturizada', amount: '120ml', icon: 'milk' },
           { name: 'Microespuma', amount: 'Plana (<0.5cm)', icon: 'foam' },
         ],
         steps: [
-          'Extraer ristretto doble corto (extracción corta de 25g de máxima dulzura) en la taza.',
+          'Extraer ristretto doble corto (extracción corta de 25g de máxima dulzura) en el vaso de 8oz.',
           'Vaporizar 120ml de leche con microespuma sedosa y plana (sin espuma gruesa).',
           'Integrar la leche sobre el ristretto desde altura baja manteniendo la superficie totalmente plana y brillante.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Café Espresso', amount: '18g (2 shots)', icon: 'coffee' },
           { name: 'Leche texturizada', amount: '200ml', icon: 'milk' },
           { name: 'Microespuma', amount: 'Plana (<0.5cm)', icon: 'foam' },
         ],
         steps: [
-          'Extraer espresso doble (18g in / 36g out) en la taza.',
+          'Extraer espresso doble (18g in / 36g out) en el vaso de 12oz.',
           'Vaporizar 200ml de leche con microespuma plana y sedosa.',
           'Verter e integrar logrando homogeneidad total entre café y leche con superficie plana.',
         ],
@@ -513,7 +513,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Syrup de Vainilla', amount: '10ml (1 pump)', icon: 'syrup' },
           { name: 'Leche vaporizada', amount: '140ml', icon: 'milk' },
@@ -521,14 +521,14 @@ export const MASTER_RECIPES = {
           { name: 'Salsa de Caramelo', amount: '10g (rejilla)', icon: 'sauce' },
         ],
         steps: [
-          'Colocar 10ml (1 pump) de syrup de vainilla en el fondo de la taza.',
+          'Colocar 10ml (1 pump) de syrup de vainilla en el fondo del vaso.',
           'Vaporizar 140ml de leche con buena capa de espuma cremosa y servir sobre el syrup dejando 2cm arriba.',
           'Extraer 1 shot de espresso y verterlo lentamente en el centro para "marcar" la leche a través de la espuma.',
           'Dibujar una rejilla clásica con salsa de caramelo sobre la espuma.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Syrup de Vainilla', amount: '15ml (1.5 pumps)', icon: 'syrup' },
           { name: 'Leche vaporizada', amount: '210ml', icon: 'milk' },
@@ -536,7 +536,7 @@ export const MASTER_RECIPES = {
           { name: 'Salsa de Caramelo', amount: '15g (rejilla)', icon: 'sauce' },
         ],
         steps: [
-          'Servir 15ml (1.5 pumps) de syrup de vainilla en la base del vaso/taza.',
+          'Servir 15ml (1.5 pumps) de syrup de vainilla en la base del vaso.',
           'Vaporizar 210ml de leche a 65°C y volcarla en el vaso hasta casi el tope.',
           'Extraer espresso doble y verterlo despacio en el centro para marcar la leche.',
           'Dibujar una cuadrícula/rejilla con salsa de caramelo sobre la superficie.',
@@ -599,7 +599,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Salsa de Chocolate', amount: '5g', icon: 'sauce' },
           { name: 'Syrup de Chocolate', amount: '20ml (2 pumps)', icon: 'syrup' },
@@ -607,14 +607,14 @@ export const MASTER_RECIPES = {
           { name: 'Leche texturizada', amount: '140ml', icon: 'milk' },
         ],
         steps: [
-          'Colocar 5g de salsa y 20ml (2 pumps) de syrup de chocolate en el fondo de la taza.',
+          'Colocar 5g de salsa y 20ml (2 pumps) de syrup de chocolate en el fondo del vaso.',
           'Extraer el shot de espresso directamente encima y revolver con cuchara para disolver el chocolate.',
           'Vaporizar 140ml de leche a 65°C y verterla sobre la mezcla chocolatada.',
           'Opcional: espolvorear cacao o salsear chocolate.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Salsa de Chocolate', amount: '8g', icon: 'sauce' },
           { name: 'Syrup de Chocolate', amount: '30ml (3 pumps)', icon: 'syrup' },
@@ -682,7 +682,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Syrup Chocolate Blanco', amount: '20ml (2 pumps)', icon: 'syrup' },
           { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
@@ -695,7 +695,7 @@ export const MASTER_RECIPES = {
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Syrup Chocolate Blanco', amount: '30ml (3 pumps)', icon: 'syrup' },
           { name: 'Café Espresso', amount: '18g (2 shots)', icon: 'coffee' },
@@ -729,24 +729,24 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Agua caliente', amount: '150ml (90°C)', icon: 'water' },
           { name: 'Café Espresso', amount: '9g (1 shot)', icon: 'coffee' },
         ],
         steps: [
-          'Servir primero 150ml de agua caliente (90°C) en la taza.',
+          'Servir primero 150ml de agua caliente (90°C) en el vaso.',
           'Extraer 1 shot de espresso directamente sobre el agua caliente para conservar la crema dorada superior.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Agua caliente', amount: '220ml (90°C)', icon: 'water' },
           { name: 'Café Espresso', amount: '18g (2 shots)', icon: 'coffee' },
         ],
         steps: [
-          'Colocar 220ml de agua caliente a 90°C en el vaso o taza.',
+          'Colocar 220ml de agua caliente a 90°C en el vaso de 12oz.',
           'Extraer 2 shots de espresso doble directamente sobre el agua.',
         ],
       },
@@ -808,7 +808,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza 8oz / Vaso Térmico 8oz',
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
         ingredients: [
           { name: 'Leche entera', amount: '180ml', icon: 'milk' },
           { name: 'Cacao barista', amount: '17g', icon: 'chocolate' },
@@ -816,11 +816,11 @@ export const MASTER_RECIPES = {
         steps: [
           'En jarra de acero disolver 17g de cacao en un chorrito de leche.',
           'Agregar los 180ml de leche totales y vaporizar a 70°C hasta consistencia espesa y cremosa.',
-          'Servir en taza o vaso térmico.',
+          'Servir en vaso de 8oz o vaso térmico.',
         ],
       },
       '12oz': {
-        glass: 'Taza 12oz / Vaso Térmico 12oz',
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
         ingredients: [
           { name: 'Leche entera', amount: '260ml', icon: 'milk' },
           { name: 'Cacao barista', amount: '24g', icon: 'chocolate' },
@@ -828,7 +828,7 @@ export const MASTER_RECIPES = {
         steps: [
           'En la jarra disolver 24g de cacao en un chorro de leche.',
           'Sumar los 260ml de leche totales y vaporizar a 70°C hasta que espese y tome brillo.',
-          'Servir en taza o vaso de 12oz.',
+          'Servir en vaso de 12oz o vaso térmico.',
         ],
       },
       '16oz': {
@@ -851,7 +851,7 @@ export const MASTER_RECIPES = {
     isFrappe: false,
     sizes: {
       '8oz': {
-        glass: 'Taza de espresso (70ml)',
+        glass: 'Vaso de espresso (70ml) / Vaso 8oz',
         ingredients: [
           { name: 'Café molienda fina', amount: '9g', icon: 'coffee' },
           { name: 'Extracción líquida', amount: '18-20ml', icon: 'water' },
@@ -859,6 +859,53 @@ export const MASTER_RECIPES = {
         steps: [
           'Extraer 1 shot de espresso (ratio 1:2 en 25-28 segundos para obtener 18-20ml con crema avellanada espesa).',
           'Acompañar con un pequeño vaso de agua con gas / soda.',
+        ],
+      },
+    },
+  },
+
+  cortado: {
+    name: 'Cortado',
+    category: 'clasico',
+    isFrappe: false,
+    sizes: {
+      '8oz': {
+        glass: 'Vaso 8oz / Vaso Térmico 8oz',
+        ingredients: [
+          { name: 'Café Espresso', amount: '9g (1 shot - 30ml)', icon: 'coffee' },
+          { name: 'Leche texturizada', amount: '30ml (1:1 partes iguales)', icon: 'milk' },
+          { name: 'Microespuma', amount: 'Fina capa (0.5cm)', icon: 'foam' },
+        ],
+        steps: [
+          'Extraer 1 shot de café espresso (30ml) directamente en el vaso de 8oz.',
+          'Texturizar una pequeña cantidad de leche fresca a 65°C con microespuma sedosa y fina.',
+          'Cortar el espresso vertiendo suavemente 30ml de leche texturizada en partes iguales (1:1) en el centro, conservando la fuerza y la crema dorada del café.',
+        ],
+      },
+      '12oz': {
+        glass: 'Vaso 12oz / Vaso Térmico 12oz',
+        ingredients: [
+          { name: 'Café Espresso', amount: '18g (2 shots - 60ml)', icon: 'coffee' },
+          { name: 'Leche texturizada', amount: '60ml (1:1 partes iguales)', icon: 'milk' },
+          { name: 'Microespuma', amount: 'Fina capa (0.5cm)', icon: 'foam' },
+        ],
+        steps: [
+          'Extraer espresso doble (2 shots - 60ml) en el vaso de 12oz.',
+          'Texturizar leche fresca a 65°C con microespuma fina y elástica.',
+          'Cortar el espresso doble vertiendo 60ml de leche texturizada en partes iguales (1:1) en el centro.',
+        ],
+      },
+      '16oz': {
+        glass: 'Vaso Térmico 16oz',
+        ingredients: [
+          { name: 'Café Espresso', amount: '18g (2 shots - 60ml)', icon: 'coffee' },
+          { name: 'Leche texturizada', amount: '60ml (1:1 partes iguales)', icon: 'milk' },
+          { name: 'Microespuma', amount: 'Fina capa (0.5cm)', icon: 'foam' },
+        ],
+        steps: [
+          'Extraer espresso doble (2 shots - 60ml) en el vaso térmico de 16oz.',
+          'Vaporizar leche fresca a 65°C con microespuma sedosa.',
+          'Cortar vertiendo 60ml de leche texturizada en partes iguales (1:1) en el centro y colocar tapa térmica.',
         ],
       },
     },
@@ -1129,17 +1176,26 @@ export function getFormattedDrinkName(item) {
 
   // Detección de frappé
   const isFrappe =
+    Boolean(item?.isFrappe) ||
     cat === 'frappe' ||
-    item?.isFrappe ||
-    (cat === 'frio' && (norm.includes('oreo') || norm.includes('pistacho') || norm.includes('dulce de leche') || norm.includes('mocca'))) ||
-    norm === 'pistacho' ||
+    norm.includes('frappe') ||
+    norm.includes('frapp') ||
     norm === 'oreo' ||
-    (norm === 'dulce de leche' && (cat.includes('frio') || cat.includes('frappe'))) ||
-    (norm.includes('mocca') && cat === 'frappe');
+    (norm === 'dulce de leche' && cat.includes('frappe')) ||
+    (norm === 'pistacho' && cat.includes('frappe'));
 
   if (isFrappe) {
     if (norm === 'dulce de leche') {
       return 'Frappe Dulce de Leche';
+    }
+    if (norm === 'pistacho') {
+      return 'Frappe Pistacho';
+    }
+    if (norm === 'oreo') {
+      return 'Frappe Oreo';
+    }
+    if (/^frapp[eé]/i.test(name)) {
+      return name;
     }
     return `Frappe ${name}`;
   }
@@ -1283,7 +1339,7 @@ export function getSizeBadgeInfo(rawSize) {
     };
   }
 
-  // 8oz / Chico / Pocillo / Cortado / Mini
+  // 8oz / Chico / Cortado / Mini
   if (
     lower.includes('8oz') ||
     lower.includes('8 oz') ||
@@ -1403,27 +1459,71 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
   const isColdExplicit = Boolean(
     item.isCold ||
     item.temperature === 'Frío' ||
+    item.temperature === 'Frio' ||
     normName.includes('frio') ||
     normName.includes('iced') ||
     rawSize.includes('frio')
   );
 
-  const dbProd = (cafeteriaProducts || []).find((p) => {
-    const pNorm = normalizeStr(p.name);
-    return pNorm === normName || pNorm.includes(normName) || normName.includes(pNorm);
-  });
+  const isHotExplicit = Boolean(
+    item.temperature === 'Caliente' ||
+    normName.includes('caliente') ||
+    rawSize.includes('caliente')
+  );
 
-  const isItemCatFrappe = item?.category === 'frappe' || String(item?.category || '').toLowerCase() === 'frappe' || Boolean(item?.isFrappe);
-  const isDbFrappe = dbProd?.category === 'frappe' || dbProd?.category === 'frio' || isItemCatFrappe;
-  const isNameFrappe =
+  // 1. Buscar en catálogo de cafetería priorizando coincidencia EXACTA
+  const exactDbProd = (cafeteriaProducts || []).find((p) => normalizeStr(p.name) === normName);
+  const dbProd =
+    exactDbProd ||
+    (cafeteriaProducts || []).find((p) => {
+      const pNorm = normalizeStr(p.name);
+      return (
+        pNorm.startsWith(normName) ||
+        normName.startsWith(pNorm) ||
+        pNorm.includes(normName) ||
+        normName.includes(pNorm)
+      );
+    });
+
+  // 2. Determinar si es una bebida clásica de café (Mocca, Latte, Cappuccino, etc.)
+  const isClassicCoffee =
+    normName === 'mocca' ||
+    normName === 'mocca blanco' ||
+    normName.startsWith('mocca ') ||
+    normName === 'latte' ||
+    normName.startsWith('latte ') ||
+    normName.includes('cappuccino') ||
+    normName.includes('capuchino') ||
+    normName.includes('flat white') ||
+    normName.includes('caramel macchiato') ||
+    normName.includes('americano') ||
+    normName.includes('cortado') ||
+    normName.includes('espresso');
+
+  // 3. Determinar si es intrínsecamente un Frappé
+  const hasFrappeKeyword =
     normName.includes('frappe') ||
+    normName.includes('frapp') ||
     normName.includes('oreo') ||
     normName.includes('smoothie') ||
-    normName.includes('milkshake') ||
-    (isDbFrappe && (normName.includes('dulce de leche') || normName.includes('pistacho') || normName.includes('mocca')));
+    normName.includes('milkshake');
 
-  const isFrappe = Boolean(isDbFrappe || isNameFrappe);
-  const isCold = Boolean(isColdExplicit || isFrappe);
+  const isItemCatFrappe =
+    item?.category === 'frappe' ||
+    String(item?.category || '').toLowerCase() === 'frappe' ||
+    Boolean(item?.isFrappe);
+
+  const isDbCatFrappe = Boolean(exactDbProd?.category === 'frappe');
+
+  // Solo es frappé si tiene la palabra clave, o si la categoría es frappe Y no es un café clásico caliente
+  let isFrappe = false;
+  if (hasFrappeKeyword) {
+    isFrappe = true;
+  } else if (!isHotExplicit && !isClassicCoffee && (isItemCatFrappe || isDbCatFrappe)) {
+    isFrappe = true;
+  }
+
+  const isCold = Boolean(isColdExplicit || (isFrappe && !isHotExplicit));
 
   let masterKey = null;
 
@@ -1444,6 +1544,7 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
     else if (normName.includes('mocca blanco')) masterKey = 'mocca blanco';
     else if (normName.includes('mocca')) masterKey = 'mocca';
     else if (normName.includes('latte')) masterKey = 'latte';
+    else if (normName.includes('cortado')) masterKey = 'cortado';
     else if (normName.includes('americano')) masterKey = 'americano';
     else if (normName.includes('chocolate')) masterKey = 'chocolate caliente';
     else if (normName.includes('espresso') || normName.includes('ristretto')) masterKey = 'espresso';
@@ -1459,7 +1560,7 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
 
   let ingredients = [];
   let steps = [];
-  let glass = isFrappe ? 'Vaso Domo con tapa' : 'Vaso / Taza según tamaño';
+  let glass = isFrappe ? 'Vaso Domo con tapa' : 'Vaso según tamaño';
 
   // 1. Revisar si hay recetas personalizadas guardadas en dev / localStorage (SOLO para la medida exacta activa)
   const customRecipes = getCustomBaristaRecipes();
@@ -1562,7 +1663,7 @@ export function getBaristaRecipe(item, cafeteriaProducts = []) {
       ];
     } else {
       steps = [
-        'Extraer el espresso directamente en la taza o vaso térmico.',
+        'Extraer el espresso directamente en el vaso o vaso térmico.',
         'Vaporizar la leche a 65°C cuidando la textura de la microespuma.',
         'Verter la leche texturizada integrando suavemente con el café.',
       ];
@@ -2001,7 +2102,7 @@ export function getMasterAIRecipe(masterKey, size = '12oz', isCold = false) {
   if (!sizeData) return null;
 
   return {
-    glass: sizeData.glass || master.glass || 'Vaso / Taza según tamaño',
+    glass: sizeData.glass || master.glass || 'Vaso según tamaño',
     ingredients: (sizeData.ingredients || []).map((i) => ({ ...i })),
     steps: [...(sizeData.steps || [])],
     pumpRule: master.pumpRule,
@@ -2132,7 +2233,7 @@ export function adaptRecipeFromSize({
   });
 
   // 4. Adaptar el vaso (reemplazar la mención de sourceSize por targetSize)
-  let adaptedGlass = sourceRecipe.glass || 'Vaso / Taza según tamaño';
+  let adaptedGlass = sourceRecipe.glass || 'Vaso según tamaño';
   const sizeRegex = new RegExp(`\\b${sourceSize}\\b`, 'gi');
   if (sizeRegex.test(adaptedGlass)) {
     adaptedGlass = adaptedGlass.replace(sizeRegex, targetSize);

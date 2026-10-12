@@ -28,6 +28,7 @@ import {
   Sparkles,
   Trash2,
   TriangleAlert,
+  Utensils,
 } from 'lucide-react';
 import { ChevronDown, ChevronUp, MapPin } from 'react-feather';
 import { BiHomeAlt2 } from 'react-icons/bi';
@@ -201,10 +202,19 @@ const CardOrders = React.memo(({
   const showDevQr = useSelector((s) => s.actions?.showDevQr);
   const isDev = process.env.NODE_ENV === 'development' || Boolean(isAdmin);
 
+  const dirNormLower = String(direccion || '')
+    .trim()
+    .toLowerCase();
   const isRetiro =
-    String(direccion || '')
-      .trim()
-      .toLowerCase() === 'retiro';
+    dirNormLower === 'retiro' ||
+    dirNormLower.includes('take away') ||
+    dirNormLower.includes('llevar');
+  const isLocal =
+    dirNormLower.includes('local') ||
+    dirNormLower.includes('salon') ||
+    dirNormLower.includes('salón') ||
+    dirNormLower.includes('comer') ||
+    dirNormLower.includes('mesa');
 
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
@@ -266,11 +276,16 @@ const CardOrders = React.memo(({
       name: String(it?.name || '').replace(/^\s*envio\s*\d*/i, 'Envío'),
     }));
 
-    if (direccion !== 'Retiro' && !hasEnvio) {
+    const isNonDelivery =
+      isRetiro ||
+      isLocal ||
+      direccion === 'Retiro' ||
+      direccion === 'Comer en el local';
+    if (!isNonDelivery && !hasEnvio) {
       base.push({ name: 'Envío', quantity: 1, category: 'Envio' });
     }
     return { items: base, hasEnvio1, hasEnvio2, hasEnvio3 };
-  }, [items, direccion]);
+  }, [items, direccion, isRetiro, isLocal]);
   const itemsNorm = itemsNormMemo.items;
   const { hasEnvio1, hasEnvio2, hasEnvio3 } = itemsNormMemo;
 
@@ -534,8 +549,10 @@ const CardOrders = React.memo(({
     const lines = [];
 
     let emoji = '📍';
-    if (direccion === 'Retiro') {
-      emoji = '🏠';
+    if (isLocal) {
+      emoji = '🍽️';
+    } else if (isRetiro) {
+      emoji = '🛍️';
     }
 
     lines.push(`${emoji} *${direccion}*`);
@@ -1035,12 +1052,19 @@ const CardOrders = React.memo(({
   if (isBarista) {
     const isTest = Boolean(isTestOrder || (id && String(id).startsWith('local-test-')));
     const dirTrim = String(direccion || '').trim();
-    const isRetiro = dirTrim.toLowerCase() === 'retiro';
-    const isMesa =
-      dirTrim.toLowerCase().includes('mesa') ||
-      dirTrim.toLowerCase().includes('salon') ||
-      dirTrim.toLowerCase().includes('salón');
-    const isDelivery = dirTrim && !isRetiro && !isMesa;
+    const dirTrimLower = dirTrim.toLowerCase();
+    const isLocal =
+      dirTrimLower.includes('local') ||
+      dirTrimLower.includes('comer') ||
+      dirTrimLower.includes('salon') ||
+      dirTrimLower.includes('salón') ||
+      dirTrimLower.includes('mesa');
+    const isRetiro =
+      !isLocal &&
+      (dirTrimLower === 'retiro' ||
+        dirTrimLower.includes('take away') ||
+        dirTrimLower.includes('llevar'));
+    const isDelivery = dirTrim && !isRetiro && !isLocal;
 
     const handleConfirm = () => {
       setIsDismissing(true);
@@ -1222,7 +1246,26 @@ const CardOrders = React.memo(({
               </div>
             )}
 
-            {isRetiro ? (
+            {isLocal ? (
+              <span
+                style={{
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  color: '#065f46',
+                  background: '#ecfdf5',
+                  border: '1px solid #a7f3d0',
+                  borderRadius: 6,
+                  padding: '2.5px 8px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Utensils size={12} strokeWidth={2.4} /> Comer en el local
+              </span>
+            ) : isRetiro ? (
               <span
                 style={{
                   fontSize: '0.72rem',
@@ -1239,23 +1282,7 @@ const CardOrders = React.memo(({
                   gap: 4,
                 }}
               >
-                <Coffee size={12} strokeWidth={2.2} /> Retiro en barra
-              </span>
-            ) : isMesa ? (
-              <span
-                style={{
-                  fontSize: '0.72rem',
-                  fontWeight: 700,
-                  color: '#1d4ed8',
-                  background: '#eff6ff',
-                  border: '1px solid #dbeafe',
-                  borderRadius: 6,
-                  padding: '2.5px 8px',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0,
-                }}
-              >
-                {dirTrim}
+                <Coffee size={12} strokeWidth={2.2} /> Take Away
               </span>
             ) : isDelivery ? (
               <span
@@ -2132,15 +2159,13 @@ const CardOrders = React.memo(({
             <ContentButtonsTitle>
               {showDevQr &&
                 !pointsClaimed &&
-                String(direccion || '')
-                  .trim()
-                  .toLowerCase() === 'retiro' && (
+                (isRetiro || isLocal) && (
                   <ButtonTitle onClick={() => setLinkOpen(true)} title="Vincular cliente (QR)">
                     <QrCodeScannerIcon fontSize="small" />
                   </ButtonTitle>
                 )}
-              {/* Botón Copiar (solo si NO es retiro) */}
-              {!isRetiro && (
+              {/* Botón Copiar (solo si es delivery) */}
+              {!isRetiro && !isLocal && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {copiado ? (
                     <ButtonCopy
@@ -2331,8 +2356,16 @@ const CardOrders = React.memo(({
         </Dialog>
       </TitleCard>
       <DirCard>
-        {direccion === 'Retiro' ? <BiHomeAlt2 size={18} /> : <MapPin size={18} />}
-        <Direccion>{direccion}</Direccion>
+        {isLocal ? (
+          <Utensils size={18} color="#047857" />
+        ) : isRetiro ? (
+          <BiHomeAlt2 size={18} />
+        ) : (
+          <MapPin size={18} />
+        )}
+        <Direccion style={{ color: isLocal ? '#065f46' : undefined, fontWeight: isLocal ? 800 : undefined }}>
+          {isLocal ? 'Comer en el local' : direccion === 'Retiro' ? 'Take Away' : direccion}
+        </Direccion>
         <Checkbox icon={<ChevronDown />} checkedIcon={<ChevronUp />} onClick={toggleHidden} />
       </DirCard>
       {extrasCalc.length > 0 && (

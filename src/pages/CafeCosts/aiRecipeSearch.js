@@ -599,6 +599,10 @@ export async function searchBeverageRecipeOnline(name = '', category = '', confi
       coffee = is8 ? 9 : 18;
       milk = is16 ? 300 : is12 ? 220 : 150;
       desc = 'Caffè Latte tradicional suave con leche texturizada';
+    } else if (norm.includes('cortado')) {
+      coffee = is8 ? 9 : 18;
+      milk = is16 ? 60 : is12 ? 60 : 30;
+      desc = 'Café espresso cortado con partes iguales (1:1) de leche texturizada';
     } else if (norm.includes('americano')) {
       coffee = is8 ? 9 : 18;
       milk = 0;

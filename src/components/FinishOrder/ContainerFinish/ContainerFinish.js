@@ -17,7 +17,7 @@ import {
   toggleHiddenCart,
   toggleHiddenFinish,
 } from '../../../redux/actions/actionsSlice';
-import { clearCart } from '../../../redux/cart/cartSlice';
+import { clearCart, clearDeliveryInfo } from '../../../redux/cart/cartSlice';
 import { addOrderOnBoth } from '../../../redux/orders/ordersSlice';
 import { formatPrice } from '../../../utils/formatPrice';
 import {
@@ -322,7 +322,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       envioOpcion: getValues('envioOpcion'),
       pago: 0,
       cambio: 0,
-      check: mode === 'retiro',
+      check: mode === 'retiro' || mode === 'local',
       hora: time,
     };
     console.log('DEBUG ContainerFinish - baseOrder:', baseOrder);
@@ -501,6 +501,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       }
     } finally {
       dispatch(clearCart());
+      dispatch(clearDeliveryInfo());
       dispatch(changePago(''));
       dispatch(toggleHiddenFinish(true));
       dispatch(toggleHiddenCart(true));

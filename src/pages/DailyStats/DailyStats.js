@@ -585,6 +585,7 @@ export default function DailyStats() {
   const byMode = detail.ordersByMode || {};
   const cantRetiro = nz(byMode.retiro);
   const cantDelivery = nz(byMode.delivery);
+  const cantLocal = nz(byMode.local);
 
   return (
     <Container>
@@ -721,7 +722,7 @@ export default function DailyStats() {
               )}
             </div>
 
-            {/* Take away / Delivery */}
+            {/* Take away / Delivery / Local */}
             <div style={{ display: 'grid', gap: 6, width: '100%' }}>
               <div style={rowLine}>
                 <span style={rowLabel}>Take away</span>
@@ -731,6 +732,12 @@ export default function DailyStats() {
                 <span style={rowLabel}>Delivery</span>
                 <strong style={rowValue}>{cantDelivery}</strong>
               </div>
+              {cantLocal > 0 && (
+                <div style={rowLine}>
+                  <span style={rowLabel}>En el local</span>
+                  <strong style={rowValue}>{cantLocal}</strong>
+                </div>
+              )}
             </div>
 
             {/* Métodos de pago */}

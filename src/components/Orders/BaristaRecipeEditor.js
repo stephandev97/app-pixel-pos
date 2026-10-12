@@ -709,7 +709,7 @@ export default function BaristaRecipeEditor({
             style={{ width: '100%' }}
             value={glass}
             onChange={(e) => setGlass(e.target.value)}
-            placeholder="Ej: Vaso Domo 12oz, Taza de Cerámica..."
+            placeholder="Ej: Vaso Domo 12oz, Vaso Térmico 8oz..."
           />
         </div>
 

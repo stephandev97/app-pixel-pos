@@ -144,8 +144,8 @@ export function ticket58Html(ticketData, opts = {}) {
     </div>
 
     <div style="width:100%; text-align:center; margin:1.5mm 0 .8mm">
-      <div style="font-size:3.5mm; line-height:1.2; max-width:52mm; margin:0 auto; white-space:pre-wrap; word-break:break-word; font-weight:700;">
-        ${esc(direccion || 'Retiro')}
+      <div style="font-size:3.5mm; line-height:1.2; max-width:52mm; margin:0 auto; white-space:pre-wrap; word-break:break-word; font-weight:800; text-transform:uppercase;">
+        ${esc(direccion === 'Retiro' ? 'TAKE AWAY' : (direccion || 'TAKE AWAY'))}
       </div>
     </div>
 

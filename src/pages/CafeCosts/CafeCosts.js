@@ -238,7 +238,7 @@ const DEFAULT_CONFIG = {
   // Fondo de absorción / compensación para leche vegetal libre de recargo
   plantMilkFundPrice: 50,
   plantMilkFundQty: 1,
-  plantMilkFundUnit: 'taza',
+  plantMilkFundUnit: 'vaso',
   plantMilkFund: 50,
 
   // Fiambrería y quesos para tostados, medialunas rellenas y cocina
@@ -1312,7 +1312,7 @@ export function getRecipeIngredientList(recipe, sizeKey = '', config = null) {
     list.push({
       icon: '💧',
       label: isCold ? 'Agua Fría' : 'Agua Caliente',
-      value: water > 0 ? `${water}ml` : 'Completar taza',
+      value: water > 0 ? `${water}ml` : 'Completar vaso',
       detail: isCold ? 'Fría' : 'Caliente filtrada',
       bg: 'rgba(14, 165, 233, 0.15)',
       color: '#38bdf8',
@@ -2368,16 +2368,22 @@ export function detectAiRecipe(name = '', sizeKey = '', category = '', config = 
     norm.includes('piccolo') ||
     (norm.includes('macchiato') && !norm.includes('caramel'))
   ) {
-    let milk = 120;
-    if (size.includes('8oz') || size === '8') milk = 70;
-    else if (size.includes('16oz') || size === '16') milk = 180;
+    let coffee = 18;
+    let milk = 60;
+    if (size.includes('8oz') || size === '8') {
+      coffee = 9;
+      milk = 30;
+    } else if (size.includes('16oz') || size === '16') {
+      coffee = 18;
+      milk = 60;
+    }
     return makeResult({
-      coffeeGrams: 18,
+      coffeeGrams: coffee,
       milkMl: milk,
       cupType: 'hot',
       isCold: false,
-      aiExplanation: `IA: Cortado de especialidad (18g café doble + ${milk}ml leche).`,
-      rawRecipeText: `18g café • ${milk}ml leche`,
+      aiExplanation: `IA: Cortado (partes iguales 1:1 de espresso y leche texturizada: ${coffee}g café + ${milk}ml leche).`,
+      rawRecipeText: `${coffee}g café • ${milk}ml leche`,
     });
   }
 
@@ -5578,7 +5584,7 @@ export default function CafeCosts() {
           </MetricCard>
 
           <MetricCard>
-            <span className="label">Ganancia / Taza</span>
+            <span className="label">Ganancia / Vaso</span>
             <span className="value">${metrics.avgProfit.toLocaleString('es-AR')}</span>
             <span className="subtext">Promedio neto</span>
           </MetricCard>
@@ -7055,7 +7061,7 @@ export default function CafeCosts() {
                     value={config.plantMilkFundPrice ?? config.plantMilkFund ?? 50}
                     onChange={(e) => handleConfigChange('plantMilkFundPrice', e.target.value)}
                   />
-                  <span className="unit">/ taza</span>
+                  <span className="unit">/ vaso</span>
                 </MiniInputNumber>
               </div>
 
@@ -8004,7 +8010,7 @@ export default function CafeCosts() {
                 {Math.round(
                   simResult.suggested * (1 - config.fee / 100) - simResult.costs.total
                 ).toLocaleString('es-AR')}{' '}
-                por taza
+                por vaso
               </div>
             </div>
 

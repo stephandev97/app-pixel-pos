@@ -648,22 +648,29 @@ export async function upsertCustomerFromOrder({
 }
 
 export function detectFulfillment(direccion, checkFlag = null) {
+  // String
+  const raw = String(direccion ?? '').trim();
+  const s = raw.toLowerCase();
+
+  const isLocalCheck =
+    s.includes('local') ||
+    s.includes('salon') ||
+    s.includes('salón') ||
+    s.includes('comer') ||
+    s.includes('mesa');
+
   // Si ya traés el flag desde tu UI:
-  if (checkFlag === true) return { mode: 'retiro', address: null };
+  if (checkFlag === true) return { mode: isLocalCheck ? 'local' : 'retiro', address: null };
   if (checkFlag === false) {
     const addr = extractAddress(direccion);
-    return { mode: addr ? 'delivery' : 'retiro', address: addr };
+    return { mode: addr ? 'delivery' : (isLocalCheck ? 'local' : 'retiro'), address: addr };
   }
 
   // Objeto de dirección (ej: {calle, numero, piso, dpto, barrio})
   if (direccion && typeof direccion === 'object') {
     const addr = buildAddressFromObj(direccion);
-    return { mode: addr ? 'delivery' : 'retiro', address: addr };
+    return { mode: addr ? 'delivery' : (isLocalCheck ? 'local' : 'retiro'), address: addr };
   }
-
-  // String
-  const raw = String(direccion ?? '').trim();
-  const s = raw.toLowerCase();
 
   const pickupKeywords = [
     'retiro',
@@ -675,14 +682,22 @@ export function detectFulfillment(direccion, checkFlag = null) {
     'takeaway',
     'local',
     'en local',
+    'comer',
+    'comer en el local',
+    'comer acá',
+    'comer aca',
+    'salon',
+    'salón',
     'mostrador',
     'paso',
     'pasa',
     'voy',
   ];
-  const isPickup = pickupKeywords.some((k) => s === k || s.startsWith(k));
+  const isPickup = pickupKeywords.some((k) => s === k || s.startsWith(k) || s.includes(k));
 
-  if (!raw || isPickup) return { mode: 'retiro', address: null };
+  if (!raw || isPickup || isLocalCheck) {
+    return { mode: isLocalCheck ? 'local' : 'retiro', address: null };
+  }
   return { mode: 'delivery', address: raw };
 }
 

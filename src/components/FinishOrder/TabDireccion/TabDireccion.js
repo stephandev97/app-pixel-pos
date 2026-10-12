@@ -1,7 +1,7 @@
 import { ToggleButton, ToggleButtonGroup } from '@mui/material';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { FaRegPaste } from 'react-icons/fa6';
-import { MdHome } from 'react-icons/md';
+import { MdHome, MdRestaurant } from 'react-icons/md';
 import { RiTakeawayFill } from 'react-icons/ri';
 import { useDispatch, useSelector } from 'react-redux';
 
@@ -21,11 +21,20 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
   const isRetiro = useSelector((state) => state.actions.toggleAddress);
   const deliveryInfo = useSelector((state) => state.cart?.deliveryInfo);
 
+  const currentDir = watch?.('direccion');
+  const deliveryType = deliveryInfo?.deliveryType;
+
+  const currentMode = useMemo(() => {
+    if (deliveryType === 'local' || currentDir === 'Comer en el local') return 'local';
+    if (!isRetiro || deliveryType === 'delivery') return 'delivery';
+    return 'retiro';
+  }, [deliveryType, currentDir, isRetiro]);
+
   const clickPaste = async () => {
     try {
       const text = await navigator.clipboard.readText();
       setValue('direccion', text, { shouldValidate: true });
-      dispatch(setDeliveryInfo({ direccion: text, isRetiro: false }));
+      dispatch(setDeliveryInfo({ direccion: text, isRetiro: false, deliveryType: 'delivery' }));
     } catch (err) {
       console.error('Error pasting clipboard', err);
     }
@@ -42,11 +51,13 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
   const changeDelivery = () => {
     dispatch(toggleAddress(false));
     const savedDir =
-      deliveryInfo?.direccion && deliveryInfo.direccion !== 'Retiro'
+      deliveryInfo?.direccion &&
+      deliveryInfo.direccion !== 'Retiro' &&
+      deliveryInfo.direccion !== 'Comer en el local'
         ? deliveryInfo.direccion
         : '';
     setValue('direccion', savedDir, { shouldValidate: true });
-    dispatch(setDeliveryInfo({ isRetiro: false, direccion: savedDir }));
+    dispatch(setDeliveryInfo({ isRetiro: false, deliveryType: 'delivery', direccion: savedDir }));
     const selectedOpt =
       deliveryOptions.find((o) => String(o.key) === String(deliveryInfo?.envioOpcion)) ||
       deliveryOptions[0];
@@ -61,7 +72,24 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
     dispatch(
       setDeliveryInfo({
         isRetiro: true,
+        deliveryType: 'retiro',
         direccion: 'Retiro',
+        envioTarifa: 0,
+        envioOpcion: null,
+      })
+    );
+  };
+
+  const changeLocal = () => {
+    dispatch(toggleAddress(true));
+    setValue('direccion', 'Comer en el local', { shouldValidate: true });
+    setValue('envioTarifa', 0, { shouldValidate: true });
+    setValue('envioOpcion', null, { shouldValidate: true });
+    dispatch(
+      setDeliveryInfo({
+        isRetiro: true,
+        deliveryType: 'local',
+        direccion: 'Comer en el local',
         envioTarifa: 0,
         envioOpcion: null,
       })
@@ -70,8 +98,12 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
 
   // 👇 Pre-cargar valores guardados en deliveryInfo si está en Delivery
   useEffect(() => {
-    if (!isRetiro && deliveryInfo) {
-      if (deliveryInfo.direccion && deliveryInfo.direccion !== 'Retiro') {
+    if (currentMode === 'delivery' && deliveryInfo) {
+      if (
+        deliveryInfo.direccion &&
+        deliveryInfo.direccion !== 'Retiro' &&
+        deliveryInfo.direccion !== 'Comer en el local'
+      ) {
         setValue('direccion', deliveryInfo.direccion, { shouldValidate: true });
       }
       if (deliveryInfo.envioTarifa !== undefined) {
@@ -81,31 +113,37 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
         setValue('envioOpcion', String(deliveryInfo.envioOpcion), { shouldValidate: true });
       }
     }
-  }, [isRetiro, deliveryInfo, setValue]);
+  }, [currentMode, deliveryInfo, setValue]);
 
   // 👇 Default si ya estoy en Delivery, no hay selección y llegan las opciones
   useEffect(() => {
     const current = watch?.('envioOpcion');
     const dir = watch?.('direccion');
     if (
-      !isRetiro &&
+      currentMode === 'delivery' &&
       (!current || !deliveryOptions?.some((o) => String(o.key) === String(current)))
     ) {
       const first = deliveryOptions?.[0];
       if (first) applyShipping(first);
-      if (dir === 'Retiro') setValue('direccion', '', { shouldValidate: true });
+      if (dir === 'Retiro' || dir === 'Comer en el local') {
+        setValue('direccion', '', { shouldValidate: true });
+      }
     }
-  }, [isRetiro, deliveryOptions, watch, setValue]);
+  }, [currentMode, deliveryOptions, watch, setValue]);
 
-  // Si está en Retiro, nos aseguramos que el form tenga "Retiro"
+  // Si está en Retiro o Local, nos aseguramos que el form tenga el valor correcto
   useEffect(() => {
-    if (isRetiro) {
-      const dir = watch?.('direccion');
-      if (!dir || dir === 'n/a') {
+    const dir = watch?.('direccion');
+    if (currentMode === 'local') {
+      if (dir !== 'Comer en el local') {
+        setValue('direccion', 'Comer en el local', { shouldValidate: true });
+      }
+    } else if (currentMode === 'retiro') {
+      if (!dir || dir === 'n/a' || dir === 'Comer en el local') {
         setValue('direccion', 'Retiro', { shouldValidate: true });
       }
     }
-  }, [isRetiro, watch, setValue]);
+  }, [currentMode, watch, setValue]);
 
   return (
     <TabContainer>
@@ -126,11 +164,13 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
         }}
       >
         <ToggleButtonGroup
-          value={isRetiro ? 'retiro' : 'delivery'}
+          value={currentMode}
           exclusive
           onChange={(e, val) => {
+            if (!val) return;
             if (val === 'retiro') changeRetiro();
             else if (val === 'delivery') changeDelivery();
+            else if (val === 'local') changeLocal();
           }}
           fullWidth
           sx={{
@@ -140,10 +180,11 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
               margin: '0 1px',
               textTransform: 'none',
               fontWeight: 700,
-              fontSize: 'inherit',
+              fontSize: '0.85rem',
               fontFamily: "'Inter', sans-serif",
               padding: '2px 6px',
               color: '#4d0012',
+              whiteSpace: 'nowrap',
               '&.Mui-selected': {
                 backgroundColor: '#4d0012',
                 color: '#fff',
@@ -159,20 +200,41 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
         >
           <ToggleButton value="retiro">Take Away</ToggleButton>
           <ToggleButton value="delivery">Delivery</ToggleButton>
+          <ToggleButton value="local">Comer en el local</ToggleButton>
         </ToggleButtonGroup>
       </div>
-      {isRetiro ? (
-        <AnimSection key="retiro">
+
+      {currentMode === 'local' ? (
+        <AnimSection key="local">
           <InputGroup>
             <Icon style={{ color: '#64748b' }}>
-              <MdHome />
+              <MdRestaurant />
             </Icon>
             <Input
               disabled
-              value="Retiro"
+              value="Comer en el local"
               style={{
                 background: '#f3f4f6',
-                color: '#8c97a5ff',
+                color: '#475569',
+                fontWeight: 800,
+                cursor: 'not-allowed',
+                paddingLeft: '52px',
+              }}
+            />
+          </InputGroup>
+        </AnimSection>
+      ) : currentMode === 'retiro' ? (
+        <AnimSection key="retiro">
+          <InputGroup>
+            <Icon style={{ color: '#64748b' }}>
+              <RiTakeawayFill />
+            </Icon>
+            <Input
+              disabled
+              value="Take Away (Retiro)"
+              style={{
+                background: '#f3f4f6',
+                color: '#475569',
                 fontWeight: 800,
                 cursor: 'not-allowed',
                 paddingLeft: '52px',
@@ -193,9 +255,9 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
                     data-active={active}
                     onClick={() => {
                       applyShipping(opt);
-                      if (watch?.('direccion') === 'Retiro') {
+                      if (watch?.('direccion') === 'Retiro' || watch?.('direccion') === 'Comer en el local') {
                         setValue('direccion', '', { shouldValidate: true });
-                        dispatch(setDeliveryInfo({ direccion: '', isRetiro: false }));
+                        dispatch(setDeliveryInfo({ direccion: '', isRetiro: false, deliveryType: 'delivery' }));
                       }
                     }}
                     style={{ marginBottom: 10 }}
@@ -214,7 +276,7 @@ const TabDireccion = ({ register, setValue, watch, deliveryOptions }) => {
               {...register('direccion', {
                 required: true,
                 onChange: (e) => {
-                  dispatch(setDeliveryInfo({ direccion: e.target.value, isRetiro: false }));
+                  dispatch(setDeliveryInfo({ direccion: e.target.value, isRetiro: false, deliveryType: 'delivery' }));
                 },
               })}
               type="text"

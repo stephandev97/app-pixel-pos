@@ -269,6 +269,7 @@ export function isBaristaItem(it) {
     nameNorm.includes('frappe') ||
     nameNorm.includes('macchiato') ||
     nameNorm.includes('flat white') ||
+    nameNorm.includes('cortado') ||
     nameNorm.includes('submarino') ||
     nameNorm.includes('chocolate caliente') ||
     nameNorm.includes('smoothie') ||

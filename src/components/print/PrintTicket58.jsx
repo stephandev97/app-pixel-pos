@@ -39,12 +39,16 @@ export default function PrintTicket58({
       name: String(it?.name || '').replace(/^\s*envio\s*\d*/i, 'Envío'),
     }));
 
-    if (
-      String(direccion || '')
-        .trim()
-        .toLowerCase() !== 'retiro' &&
-      !hasEnvio
-    ) {
+    const dirNorm = String(direccion || '').trim().toLowerCase();
+    const isNonDelivery =
+      dirNorm === 'retiro' ||
+      dirNorm.includes('local') ||
+      dirNorm.includes('salon') ||
+      dirNorm.includes('salón') ||
+      dirNorm.includes('take away') ||
+      dirNorm.includes('comer');
+
+    if (!isNonDelivery && !hasEnvio) {
       base.push({ name: 'Envío', quantity: 1, category: 'Envio' });
     }
     return base;
@@ -203,10 +207,11 @@ export default function PrintTicket58({
               margin: '0 auto',
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
-              fontWeight: 700,
+              fontWeight: 800,
+              textTransform: 'uppercase',
             }}
           >
-            {direccion || 'Retiro'}
+            {direccion === 'Retiro' ? 'TAKE AWAY' : (direccion || 'TAKE AWAY')}
           </div>
         </div>
 

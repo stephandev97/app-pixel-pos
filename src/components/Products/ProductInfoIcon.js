@@ -52,6 +52,12 @@ const CATALOG = [
     contains: ['Café espresso 100% arábica'],
   },
   {
+    id: 'cortado',
+    matches: (n) => n.includes('cortado'),
+    desc: 'Café espresso intenso cortado con una pequeña cantidad de leche texturizada y suave microespuma.',
+    contains: ['Café espresso', 'Poca leche texturizada'],
+  },
+  {
     id: 'chocolate_caliente',
     matches: (n) => n.includes('chocolate caliente'),
     desc: 'Bebida dulce y reconfortante preparada con cacao puro y leche vaporizada cremosa.',
