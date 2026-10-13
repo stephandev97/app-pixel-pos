@@ -205,16 +205,18 @@ const CardOrders = React.memo(({
   const dirNormLower = String(direccion || '')
     .trim()
     .toLowerCase();
-  const isRetiro =
-    dirNormLower === 'retiro' ||
-    dirNormLower.includes('take away') ||
-    dirNormLower.includes('llevar');
   const isLocal =
     dirNormLower.includes('local') ||
     dirNormLower.includes('salon') ||
     dirNormLower.includes('salón') ||
     dirNormLower.includes('comer') ||
     dirNormLower.includes('mesa');
+  const isRetiro =
+    !isLocal &&
+    (dirNormLower === 'retiro' ||
+      dirNormLower.includes('take away') ||
+      dirNormLower.includes('llevar'));
+  const isDelivery = Boolean(dirNormLower) && !isRetiro && !isLocal;
 
   let ef = Number(pagoEfectivo || 0);
   let mp = Number(pagoMp || 0);
@@ -546,6 +548,7 @@ const CardOrders = React.memo(({
   };
 
   const copyOrder = () => {
+    if (!isDelivery) return;
     const lines = [];
 
     let emoji = '📍';
@@ -625,6 +628,7 @@ const CardOrders = React.memo(({
   };
 
   const clickBtnCopy = async () => {
+    if (!isDelivery) return;
     setDeliveryCopyOpen(true);
   };
 
@@ -2067,7 +2071,7 @@ const CardOrders = React.memo(({
           }}
         >
           #{numeracion}
-          {!isRetiro && (
+          {isDelivery && (
             isCopied ? (
               <span
                 onClick={async (e) => {
@@ -2165,7 +2169,7 @@ const CardOrders = React.memo(({
                   </ButtonTitle>
                 )}
               {/* Botón Copiar (solo si es delivery) */}
-              {!isRetiro && !isLocal && (
+              {isDelivery && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   {copiado ? (
                     <ButtonCopy
@@ -2641,7 +2645,7 @@ const CardOrders = React.memo(({
 
             {/* Fila 2 */}
             <div style={{ opacity: 0.75, fontWeight: 700, justifySelf: 'start', textAlign: 'left' }}>
-              {isRetiro ? 'Pagó' : 'Paga'}
+              {(isRetiro || isLocal) ? 'Pagó' : 'Paga'}
             </div>
 
             {(() => {
@@ -2672,7 +2676,7 @@ const CardOrders = React.memo(({
                         textAlign: 'right',
                       }}
                     >
-                      {isRetiro ? 'Efectivo' : formatPrice(paid)}
+                      {(isRetiro || isLocal) ? 'Efectivo' : formatPrice(paid)}
                     </span>
                   </div>
                 );

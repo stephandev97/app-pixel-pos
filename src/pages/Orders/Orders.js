@@ -426,7 +426,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   }, [todayOrders, simulatedPendingOrder, isBarista, isTestOrders]);
 
   const [addressQuery, setAddressQuery] = useState('');
-  const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // 'all' | 'retiro' | 'delivery'
+  const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // 'all' | 'retiro' | 'delivery' | 'local' | 'pending'
   const [orderSort, setOrderSort] = useState(() => {
     return localStorage.getItem('pixel_orders_sort') || 'recent';
   }); // 'recent' | 'pending'
@@ -510,8 +510,20 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     for (let i = 0; i < sortedTodayOrders.length; i++) {
       const o = sortedTodayOrders[i];
       const dirTrim = String(o?.direccion ?? '').trim().toLowerCase();
-      const isRetiro = dirTrim === 'retiro';
-      if (isRetiro) continue; // Los pedidos de retiro no entran ni cuentan para pendientes
+      const isLocal =
+        dirTrim === 'comer en el local' ||
+        dirTrim.includes('local') ||
+        dirTrim.includes('salon') ||
+        dirTrim.includes('salón') ||
+        dirTrim.includes('comer') ||
+        dirTrim.includes('mesa');
+      const isRetiro =
+        !isLocal &&
+        (dirTrim === 'retiro' ||
+          dirTrim.includes('take away') ||
+          dirTrim.includes('llevar'));
+      const isDelivery = Boolean(dirTrim) && !isRetiro && !isLocal;
+      if (!isDelivery) continue; // Ni retiro ni comer en el local cuentan para pendientes
 
       const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
       const isHidden = hiddenIdsSet.has(o?.id);
@@ -568,14 +580,25 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
       const dirRaw = String(o?.direccion ?? '');
       const dir = dirRaw.toLowerCase();
 
-      const isRetiro = dir.trim() === 'retiro';
-      const isDelivery = !isRetiro;
+      const isLocal =
+        dir.includes('local') ||
+        dir.includes('salon') ||
+        dir.includes('salón') ||
+        dir.includes('comer') ||
+        dir.includes('mesa');
+      const isRetiro =
+        !isLocal &&
+        (dir.trim() === 'retiro' ||
+          dir.includes('take away') ||
+          dir.includes('llevar'));
+      const isDelivery = Boolean(dir.trim()) && !isRetiro && !isLocal;
 
       // filtro por tipo
+      if (orderTypeFilter === 'local' && !isLocal) return false;
       if (orderTypeFilter === 'retiro' && !isRetiro) return false;
       if (orderTypeFilter === 'delivery' && !isDelivery) return false;
       if (orderTypeFilter === 'pending') {
-        if (isRetiro) return false; // Los pedidos de retiro no entran ni cuentan para pendientes
+        if (!isDelivery) return false; // Ni retiro ni comer en el local entran en pendientes
         const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
         const isHidden = hiddenIdsSet.has(o?.id);
         let isPend = false;
@@ -605,13 +628,25 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
 
       for (let i = 0; i < filtered.length; i++) {
         const o = filtered[i];
-        const isRetiro = String(o?.direccion ?? '').trim().toLowerCase() === 'retiro';
+        const dir = String(o?.direccion ?? '').trim().toLowerCase();
+        const isLocal =
+          dir.includes('local') ||
+          dir.includes('salon') ||
+          dir.includes('salón') ||
+          dir.includes('comer') ||
+          dir.includes('mesa');
+        const isRetiro =
+          !isLocal &&
+          (dir === 'retiro' ||
+            dir.includes('take away') ||
+            dir.includes('llevar'));
+        const isDelivery = Boolean(dir) && !isRetiro && !isLocal;
         const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
         const isHidden = hiddenIdsSet.has(o?.id);
 
         let isPend = false;
-        if (isRetiro) {
-          isPend = false; // Los pedidos de retiro no entran ni cuentan para pendientes
+        if (!isDelivery) {
+          isPend = false; // Ni retiro ni comer en el local entran en pendientes
         } else if (o?.pending) {
           isPend = true;
         } else if (isBarista) {
@@ -1105,6 +1140,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                       ['all', 'Todo'],
                       ['retiro', 'Retiro'],
                       ['delivery', 'Delivery'],
+                      ['local', 'En el local'],
                       ...(totalPendingCount > 0
                         ? [['pending', `Pendientes (${totalPendingCount})`]]
                         : []),
