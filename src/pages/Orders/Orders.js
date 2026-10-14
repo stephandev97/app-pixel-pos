@@ -26,7 +26,9 @@ import { useLanSync } from '../../utils/lanSyncClient';
 import {
   isBaristaSoundEnabled,
   playBaristaNotificationSound,
+  setBaristaScreenActive,
   setBaristaSoundEnabled,
+  testBaristaSound,
 } from '../../utils/soundNotifications';
 
 import {
@@ -68,6 +70,13 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   const simulatedPendingOrder = useSelector((s) => s.actions?.simulatedPendingOrder);
   const { isConnected: isLanConnected, isServer: isLanServer } = useLanSync();
   const [soundActive, setSoundActive] = useState(() => isBaristaSoundEnabled());
+
+  useEffect(() => {
+    if (isBarista) {
+      setBaristaScreenActive(true);
+      return () => setBaristaScreenActive(false);
+    }
+  }, [isBarista]);
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -1489,41 +1498,69 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                   </div>
 
                   {/* Botón de Sonido Barista */}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const next = !soundActive;
-                      setSoundActive(next);
-                      setBaristaSoundEnabled(next);
-                      if (next) {
-                        playBaristaNotificationSound(null, true);
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !soundActive;
+                        setSoundActive(next);
+                        setBaristaSoundEnabled(next);
+                        if (next) {
+                          testBaristaSound();
+                        }
+                      }}
+                      style={{
+                        border: '1px solid #e4e4e7',
+                        background: soundActive ? '#f0fdf4' : '#f4f4f5',
+                        color: soundActive ? '#16a34a' : '#71717a',
+                        borderRadius: 7,
+                        padding: '5px 8px',
+                        cursor: 'pointer',
+                        fontWeight: 600,
+                        fontSize: '0.74rem',
+                        fontFamily: "'Inter', sans-serif",
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        whiteSpace: 'nowrap',
+                        transition: 'all 0.15s ease',
+                      }}
+                      title={
+                        soundActive
+                          ? 'Sonido activado (clic para silenciar)'
+                          : 'Sonido silenciado (clic para activar)'
                       }
-                    }}
-                    style={{
-                      border: '1px solid #e4e4e7',
-                      background: soundActive ? '#f0fdf4' : '#f4f4f5',
-                      color: soundActive ? '#16a34a' : '#71717a',
-                      borderRadius: 7,
-                      padding: '5px 8px',
-                      cursor: 'pointer',
-                      fontWeight: 600,
-                      fontSize: '0.74rem',
-                      fontFamily: "'Inter', sans-serif",
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      whiteSpace: 'nowrap',
-                      transition: 'all 0.15s ease',
-                    }}
-                    title={
-                      soundActive
-                        ? 'Sonido de comanda activado (clic para silenciar o probar)'
-                        : 'Sonido silenciado (clic para activar)'
-                    }
-                  >
-                    {soundActive ? <Bell size={12} color="#16a34a" /> : <BellOff size={12} color="#71717a" />}
-                    <span>{soundActive ? 'Sonido' : 'Mudo'}</span>
-                  </button>
+                    >
+                      {soundActive ? <Bell size={12} color="#16a34a" /> : <BellOff size={12} color="#71717a" />}
+                      <span>{soundActive ? 'Sonido' : 'Mudo'}</span>
+                    </button>
+
+                    {soundActive && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          testBaristaSound();
+                        }}
+                        style={{
+                          border: '1px solid #bbf7d0',
+                          background: '#dcfce7',
+                          color: '#15803d',
+                          borderRadius: 7,
+                          padding: '5px 7px',
+                          cursor: 'pointer',
+                          fontWeight: 700,
+                          fontSize: '0.72rem',
+                          fontFamily: "'Inter', sans-serif",
+                          whiteSpace: 'nowrap',
+                          transition: 'all 0.15s ease',
+                        }}
+                        title="Probar sonido ahora"
+                      >
+                        Probar
+                      </button>
+                    )}
+                  </div>
 
                   {/* Botón Simular pedidos (Modo Dev) */}
                   {isDev && !isAndroidApp && (

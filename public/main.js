@@ -326,12 +326,48 @@ function getLanIps() {
   const interfaces = os.networkInterfaces();
   const ips = [];
   for (const name of Object.keys(interfaces)) {
+    const lowerName = name.toLowerCase();
+    const isVirtual =
+      lowerName.includes('radmin') ||
+      lowerName.includes('vpn') ||
+      lowerName.includes('virtual') ||
+      lowerName.includes('vmware') ||
+      lowerName.includes('vbox') ||
+      lowerName.includes('wsl') ||
+      lowerName.includes('pseudo') ||
+      lowerName.includes('teredo') ||
+      lowerName.includes('tailscale') ||
+      lowerName.includes('zerotier');
+
     for (const iface of interfaces[name] || []) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        ips.push({ name, address: iface.address });
+        const isRadminIp = iface.address.startsWith('26.');
+        const isVirtualAdapter = isVirtual || isRadminIp;
+        const isRecommended =
+          !isVirtualAdapter &&
+          (iface.address.startsWith('192.168.') ||
+            iface.address.startsWith('10.') ||
+            iface.address.startsWith('172.'));
+
+        ips.push({
+          name,
+          address: iface.address,
+          isVirtual: isVirtualAdapter,
+          isRecommended,
+        });
       }
     }
   }
+
+  // Ordenar: primero las recomendadas (Ethernet/Wi-Fi reales)
+  ips.sort((a, b) => {
+    if (a.isRecommended && !b.isRecommended) return -1;
+    if (!a.isRecommended && b.isRecommended) return 1;
+    if (!a.isVirtual && b.isVirtual) return -1;
+    if (a.isVirtual && !b.isVirtual) return 1;
+    return 0;
+  });
+
   return ips;
 }
 
@@ -493,12 +529,29 @@ function startLanServer() {
 
 // IPC Handlers para Sincronización LAN
 ipcMain.handle('get-lan-server-info', () => {
+  const ips = getLanIps();
+  const rec = ips.find((i) => i.isRecommended)?.address || (ips[0]?.address ?? '');
   return {
     running: Boolean(lanHttpServer && lanHttpServer.listening),
     port: LAN_PORT,
-    ips: getLanIps(),
+    ips,
+    recommendedIp: rec,
     clientCount: lanWss ? lanWss.clients.size : 0,
   };
+});
+
+ipcMain.handle('open-firewall-port', async () => {
+  log.info('[LAN Server] Solicitando apertura de firewall en puerto 8085...');
+  try {
+    const { exec } = require('child_process');
+    // Ejecuta el comando de firewall con elevación UAC en Windows
+    const cmd = `powershell -NoProfile -Command "Start-Process cmd -ArgumentList '/c netsh advfirewall firewall add rule name=\\\"PixelPOS LAN Sync\\\" dir=in action=allow protocol=TCP localport=8085 profile=any & timeout /t 3' -Verb RunAs"`;
+    exec(cmd);
+    return { ok: true };
+  } catch (err) {
+    log.error('[LAN Server] Error abriendo firewall:', err);
+    return { ok: false, error: String(err) };
+  }
 });
 
 ipcMain.on('lan-sync-orders-cache', (_e, orders) => {

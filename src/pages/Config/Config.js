@@ -6,7 +6,7 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Settings } from 'react-feather';
-import { Bell, BookOpen, Calculator, Check, ClipboardList, Coffee, Copy, EyeOff, FlaskConical, Heart, Lock, QrCode, Server, ShoppingBag, Tv, Wifi } from 'lucide-react';
+import { Bell, BookOpen, Calculator, Check, ClipboardList, Coffee, Copy, EyeOff, FlaskConical, Heart, Lock, QrCode, Search, Server, Shield, ShoppingBag, Tv, Wifi } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useLanSync } from '../../utils/lanSyncClient';
@@ -14,6 +14,7 @@ import {
   isBaristaSoundEnabled,
   playBaristaNotificationSound,
   setBaristaSoundEnabled,
+  testBaristaSound,
 } from '../../utils/soundNotifications';
 
 import pkg from '../../../package.json';
@@ -265,6 +266,8 @@ const Config = () => {
     serverIp: lanServerIp,
     setServerIp: setLanServerIp,
     testConnection: testLanConnection,
+    scanForServer: scanLanForServer,
+    openFirewall: requestOpenFirewall,
   } = useLanSync();
 
   const [lanDialogOpen, setLanDialogOpen] = useState(false);
@@ -272,6 +275,8 @@ const Config = () => {
   const [testResult, setTestResult] = useState(null);
   const [copiedIp, setCopiedIp] = useState(false);
   const [baristaSound, setBaristaSound] = useState(() => isBaristaSoundEnabled());
+  const [isScanningLan, setIsScanningLan] = useState(false);
+  const [firewallStatus, setFirewallStatus] = useState(null);
 
   useEffect(() => {
     if (lanServerIp) setTargetIpInput(lanServerIp);
@@ -281,6 +286,35 @@ const Config = () => {
     setTestResult({ loading: true });
     const res = await testLanConnection(targetIpInput);
     setTestResult(res);
+  };
+
+  const handleScanLan = async () => {
+    setIsScanningLan(true);
+    setTestResult({ loading: true, scanning: true });
+    try {
+      const res = await scanLanForServer(targetIpInput);
+      if (res.ok && res.ip) {
+        setTargetIpInput(res.ip);
+        setTestResult({ ok: true, data: { name: 'PC de Caja (Auto-detectada)' } });
+      } else {
+        setTestResult({ ok: false, error: res.error || 'No se detectó la PC en el Wi-Fi' });
+      }
+    } catch (e) {
+      setTestResult({ ok: false, error: 'Error durante el escaneo automático' });
+    } finally {
+      setIsScanningLan(false);
+    }
+  };
+
+  const handleOpenFirewall = async () => {
+    setFirewallStatus('solicitando');
+    const res = await requestOpenFirewall();
+    if (res?.ok) {
+      setFirewallStatus('ok');
+    } else {
+      setFirewallStatus('error');
+    }
+    setTimeout(() => setFirewallStatus(null), 6000);
   };
 
   const handleSaveLan = () => {
@@ -876,16 +910,39 @@ const Config = () => {
               const next = !baristaSound;
               setBaristaSound(next);
               setBaristaSoundEnabled(next);
-              if (next) playBaristaNotificationSound(null, true);
+              if (next) testBaristaSound();
             }}
           >
             <IconButton>
               <Bell size={16} />
             </IconButton>
             <a>Sonido de Pedido Barista</a>
-            <SwitchToggle $checked={baristaSound}>
-              <div className="thumb" />
-            </SwitchToggle>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  testBaristaSound();
+                }}
+                style={{
+                  padding: '4px 10px',
+                  borderRadius: 6,
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  background: '#1e2238',
+                  color: '#38bdf8',
+                  fontSize: '0.8rem',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+                title="Probar sonido ahora"
+              >
+                Probar Sonido
+              </button>
+              <SwitchToggle $checked={baristaSound}>
+                <div className="thumb" />
+              </SwitchToggle>
+            </div>
           </ButtonPage>
 
           {isAndroidApp && (
@@ -1742,56 +1799,103 @@ const Config = () => {
                   </div>
                 </div>
 
+                {/* Botón de apertura de Firewall de Windows */}
+                <button
+                  type="button"
+                  onClick={handleOpenFirewall}
+                  disabled={firewallStatus === 'solicitando'}
+                  style={{
+                    width: '100%',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    border: firewallStatus === 'ok' ? '1px solid #10b981' : '1px solid rgba(59, 130, 246, 0.5)',
+                    background: firewallStatus === 'ok' ? 'rgba(16, 185, 129, 0.2)' : '#1e293b',
+                    color: firewallStatus === 'ok' ? '#34d399' : '#93c5fd',
+                    fontSize: '0.85rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    marginBottom: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                    transition: 'all 0.15s ease',
+                  }}
+                >
+                  <Shield size={16} />
+                  {firewallStatus === 'solicitando'
+                    ? 'Abriendo solicitud de permisos en Windows...'
+                    : firewallStatus === 'ok'
+                      ? '✓ Regla ejecutada (Comprueba el mensaje de Windows)'
+                      : '🛡️ Habilitar Puerto 8085 en Firewall de Windows'}
+                </button>
+
                 <div style={{ marginBottom: 16 }}>
                   <DenomLabel style={{ marginBottom: 8 }}>Dirección IP para conectar la Tablet:</DenomLabel>
                   {lanServerInfo?.ips && lanServerInfo.ips.length > 0 ? (
-                    lanServerInfo.ips.map((iface, idx) => (
-                      <div
-                        key={idx}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          background: '#1e2238',
-                          padding: '10px 14px',
-                          borderRadius: 10,
-                          marginBottom: 8,
-                          border: '1px solid rgba(255, 255, 255, 0.08)',
-                        }}
-                      >
-                        <div>
-                          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#38bdf8', letterSpacing: '0.5px' }}>
-                            {iface.address}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                            {iface.name}
-                          </div>
-                        </div>
-                        <button
-                          onClick={() => {
-                            navigator.clipboard.writeText(iface.address);
-                            setCopiedIp(iface.address);
-                            setTimeout(() => setCopiedIp(false), 2000);
-                          }}
+                    lanServerInfo.ips.map((iface, idx) => {
+                      const isRec = Boolean(iface.isRecommended);
+                      const isVirt = Boolean(iface.isVirtual);
+                      return (
+                        <div
+                          key={idx}
                           style={{
-                            background: copiedIp === iface.address ? '#10b981' : '#334155',
-                            border: 'none',
-                            color: '#fff',
-                            padding: '6px 12px',
-                            borderRadius: 8,
-                            fontSize: '0.8rem',
-                            fontWeight: 600,
-                            cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: 4,
+                            justifyContent: 'space-between',
+                            background: isRec ? 'rgba(16, 185, 129, 0.1)' : '#1e2238',
+                            padding: '10px 14px',
+                            borderRadius: 10,
+                            marginBottom: 8,
+                            border: isRec ? '1.5px solid #10b981' : '1px solid rgba(255, 255, 255, 0.08)',
                           }}
                         >
-                          {copiedIp === iface.address ? <Check size={14} /> : <Copy size={14} />}
-                          {copiedIp === iface.address ? 'Copiado' : 'Copiar'}
-                        </button>
-                      </div>
-                    ))
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                              <span style={{ fontSize: '1.05rem', fontWeight: 700, color: isRec ? '#34d399' : isVirt ? '#94a3b8' : '#38bdf8', letterSpacing: '0.5px' }}>
+                                {iface.address}
+                              </span>
+                              {isRec && (
+                                <span style={{ background: '#10b981', color: '#fff', fontSize: '0.65rem', fontWeight: 800, padding: '2px 6px', borderRadius: 6 }}>
+                                  RECOMENDADA
+                                </span>
+                              )}
+                              {isVirt && (
+                                <span style={{ background: '#334155', color: '#94a3b8', fontSize: '0.65rem', fontWeight: 600, padding: '2px 6px', borderRadius: 6 }}>
+                                  VPN / VIRTUAL
+                                </span>
+                              )}
+                            </div>
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: 2 }}>
+                              {iface.name}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(iface.address);
+                              setCopiedIp(iface.address);
+                              setTimeout(() => setCopiedIp(false), 2000);
+                            }}
+                            style={{
+                              background: copiedIp === iface.address ? '#10b981' : '#334155',
+                              border: 'none',
+                              color: '#fff',
+                              padding: '6px 12px',
+                              borderRadius: 8,
+                              fontSize: '0.8rem',
+                              fontWeight: 600,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                          >
+                            {copiedIp === iface.address ? <Check size={14} /> : <Copy size={14} />}
+                            {copiedIp === iface.address ? 'Copiado' : 'Copiar'}
+                          </button>
+                        </div>
+                      );
+                    })
                   ) : (
                     <div style={{ color: '#94a3b8', fontSize: '0.88rem' }}>Detectando interfaces de red...</div>
                   )}
@@ -1833,25 +1937,50 @@ const Config = () => {
               </div>
             ) : (
               <div>
-                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 16 }}>
-                  Ingresa la IP de la <strong>PC de Caja</strong> (la que figura en su menú de Configuración). Debe estar en el mismo Wi-Fi.
+                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 14 }}>
+                  Ingresa la IP recomendada de la <strong>PC de Caja</strong> (figura en el menú Configuración de la PC). Ambos equipos deben estar en el mismo Wi-Fi.
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
+                <div style={{ marginBottom: 12 }}>
                   <DenomLabel style={{ marginBottom: 6 }}>IP de la PC de Caja:</DenomLabel>
-                  <DenomInput
-                    type="text"
-                    value={targetIpInput}
-                    onChange={(e) => setTargetIpInput(e.target.value)}
-                    placeholder="Ej: 192.168.1.50"
-                    style={{ width: '100%', boxSizing: 'border-box' }}
-                  />
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <DenomInput
+                      type="text"
+                      value={targetIpInput}
+                      onChange={(e) => setTargetIpInput(e.target.value)}
+                      placeholder="Ej: 192.168.123.34"
+                      style={{ flex: 1, boxSizing: 'border-box' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleScanLan}
+                      disabled={isScanningLan || testResult?.loading}
+                      style={{
+                        padding: '10px 12px',
+                        borderRadius: 10,
+                        border: '1px solid rgba(255,255,255,0.15)',
+                        background: '#334155',
+                        color: '#38bdf8',
+                        fontSize: '0.82rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                      title="Buscar automáticamente la PC en el Wi-Fi"
+                    >
+                      <Search size={14} />
+                      {isScanningLan ? 'Buscando...' : 'Auto-detectar'}
+                    </button>
+                  </div>
                 </div>
 
                 <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
                   <button
                     onClick={handleTestLan}
-                    disabled={testResult?.loading}
+                    disabled={testResult?.loading || isScanningLan}
                     style={{
                       flex: 1,
                       padding: '10px 14px',
@@ -1864,7 +1993,7 @@ const Config = () => {
                       cursor: 'pointer',
                     }}
                   >
-                    {testResult?.loading ? 'Probando...' : 'Probar Conexión'}
+                    {testResult?.loading && !isScanningLan ? 'Probando...' : 'Probar Conexión'}
                   </button>
                   <button
                     onClick={handleSaveLan}

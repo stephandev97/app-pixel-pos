@@ -49,13 +49,13 @@ export function saveLanServerIp(ip) {
 export async function testLanConnection(targetIp) {
   const host = (targetIp || getSavedLanServerIp() || '').trim().replace(/^https?:\/\//i, '').replace(/^ws:\/\//i, '').replace(/:\d+$/, '');
   if (!host) {
-    return { ok: false, error: 'Dirección IP no especificada' };
+    return { ok: false, error: 'Ingresá la dirección IP de la PC de Caja' };
   }
 
   const url = `http://${host}:${DEFAULT_PORT}/api/status`;
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3500);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
     const res = await fetch(url, { signal: controller.signal });
     clearTimeout(timeoutId);
 
@@ -63,10 +63,87 @@ export async function testLanConnection(targetIp) {
       const data = await res.json();
       return { ok: true, data };
     }
-    return { ok: false, error: `Servidor respondió con código ${res.status}` };
+    return { ok: false, error: `El servidor respondió con código ${res.status}` };
   } catch (err) {
-    return { ok: false, error: err.name === 'AbortError' ? 'Tiempo de espera agotado' : 'No se pudo conectar con la IP' };
+    if (err.name === 'AbortError') {
+      return {
+        ok: false,
+        error: 'Tiempo de espera agotado (5s). Asegurate de que la PC de Caja esté abierta y que el Firewall permita el puerto 8085.',
+      };
+    }
+    return {
+      ok: false,
+      error: `No se pudo conectar a ${host}:8085. Verificá que ambos dispositivos estén en el mismo Wi-Fi y que en la PC hayas habilitado el Firewall.`,
+    };
   }
+}
+
+// -------------------------------------------------------------
+// Auto-detección de la PC de Caja en la red local
+// -------------------------------------------------------------
+export async function scanLanForServer(subnetPrefix = null) {
+  let baseSubnet = subnetPrefix;
+  if (!baseSubnet) {
+    const saved = getSavedLanServerIp();
+    if (saved && saved.includes('.')) {
+      baseSubnet = saved.substring(0, saved.lastIndexOf('.'));
+    } else {
+      baseSubnet = '192.168.123';
+    }
+  }
+
+  const candidateSubnets = [baseSubnet];
+  if (!candidateSubnets.includes('192.168.123')) candidateSubnets.push('192.168.123');
+  if (!candidateSubnets.includes('192.168.1')) candidateSubnets.push('192.168.1');
+  if (!candidateSubnets.includes('192.168.0')) candidateSubnets.push('192.168.0');
+
+  for (const subnet of candidateSubnets) {
+    const batchSize = 25;
+    for (let start = 1; start <= 254; start += batchSize) {
+      const end = Math.min(start + batchSize - 1, 254);
+      const promises = [];
+
+      for (let i = start; i <= end; i++) {
+        const testIp = `${subnet}.${i}`;
+        const p = (async () => {
+          try {
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 1200);
+            const r = await fetch(`http://${testIp}:${DEFAULT_PORT}/api/status`, { signal: ctrl.signal });
+            clearTimeout(timer);
+            if (r.ok) {
+              const d = await r.json();
+              if (d?.status === 'ok' && d?.name === 'pixel-pos-lan-server') {
+                return testIp;
+              }
+            }
+          } catch {}
+          return null;
+        })();
+        promises.push(p);
+      }
+
+      const results = await Promise.all(promises);
+      const found = results.find(Boolean);
+      if (found) {
+        return { ok: true, ip: found };
+      }
+    }
+  }
+
+  return { ok: false, error: 'No se encontró la PC de Caja en la red local' };
+}
+
+export async function requestOpenFirewall() {
+  if (isElectronHost()) {
+    try {
+      const res = await window.electron.ipcRenderer.invoke('open-firewall-port');
+      return res;
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+  return { ok: false, error: 'Función solo disponible en la PC de Caja' };
 }
 
 // -------------------------------------------------------------
@@ -287,6 +364,8 @@ export function useLanSync() {
     serverIp: getSavedLanServerIp(),
     setServerIp: saveLanServerIp,
     testConnection: testLanConnection,
+    scanForServer: scanLanForServer,
+    openFirewall: requestOpenFirewall,
     reconnect: connectLanClient,
   };
 }
