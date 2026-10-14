@@ -304,46 +304,37 @@ export const subscribeOrdersRealtime = createAsyncThunk(
 export const syncPendingOrders = createAsyncThunk(
   'orders/syncPendingOrders',
   async (_, { getState, dispatch }) => {
-    if (!navigator.onLine) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     const state = getState();
     const pendings = state?.orders?.orders?.filter((o) => o.pending) || [];
 
     for (const p of pendings) {
       try {
         let existingOrder = null;
-        try {
-          existingOrder = await pb.collection('orders').getFirstListItem(`number="${p.number}"`);
-          dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
-          continue;
-        } catch (e) {
-          if (e.status !== 404) {
-            console.error('Error checking for existing order:', e);
-            continue;
+        if (p.clientCreatedAt) {
+          try {
+            existingOrder = await pb
+              .collection('orders')
+              .getFirstListItem(`clientCreatedAt="${p.clientCreatedAt}"`);
+          } catch (e) {
+            if (e.status !== 404) {
+              console.warn('Error checking for existing order:', e);
+            }
           }
         }
 
+        if (existingOrder) {
+          dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(existingOrder) }));
+          continue;
+        }
+
         const { pagoEfectivo, pagoMp } = normalizePaymentFields(p);
+        const { id, pending, ...restOfOrder } = p;
         const created = await pb.collection('orders').create({
-          number: p.number,
-          direccion: p.direccion,
-          total: p.total,
-          pago: p.pago,
-          cambio: p.cambio,
-          check: p.check,
-          items: p.items,
-          hora: p.hora,
-          clientCreatedAt: p.clientCreatedAt ?? Date.now(),
+          ...restOfOrder,
           pagoEfectivo,
           pagoMp,
-          pagoDetalle: p.pagoDetalle ?? null,
-          method: p.method ?? null,
-          paidAmount: p.paidAmount ?? null,
-          revenueAmount: p.revenueAmount ?? null,
-          businessDate: p.businessDate ?? null,
-          mode: p.mode ?? null,
-          address: p.address ?? null,
-          phone: p.phone ?? null,
-          name: p.name ?? null,
+          clientCreatedAt: p.clientCreatedAt ?? Date.now(),
         });
         dispatch(markOrderSynced({ localId: p.id, serverOrder: pbToOrder(created) }));
       } catch (e) {

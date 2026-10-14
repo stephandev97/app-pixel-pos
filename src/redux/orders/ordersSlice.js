@@ -1,6 +1,7 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { pb } from '../../lib/pb';
+import { broadcastLanOrder, sendLanBaristaStatus } from '../../utils/lanSyncClient';
 import {
   computeBusinessDate,
   detectFulfillment,
@@ -294,6 +295,7 @@ export const addOrderOnBoth = createAsyncThunk(
     // Si estamos en Modo Prueba, retornamos la orden de prueba local sin tocar PocketBase
     if (isTestMode) {
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: false, isTestOrder: true };
+      broadcastLanOrder(localOrder, 'new');
       return localOrder;
     }
 
@@ -301,6 +303,7 @@ export const addOrderOnBoth = createAsyncThunk(
     if (!navigator.onLine) {
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
       dispatch(ordersSlice.actions.addLocalOrder(localOrder));
+      broadcastLanOrder(localOrder, 'new');
       return localOrder;
     }
 
@@ -313,11 +316,15 @@ export const addOrderOnBoth = createAsyncThunk(
         pagoMp,
         pagoDebito,
       });
-      return pbToOrder(created);
+      const order = pbToOrder(created);
+      broadcastLanOrder(order, 'new');
+      return order;
     } catch (err) {
       // Si falla, guardamos localmente y retornamos la orden local.
       console.error('Error creando orden en servidor, guardando localmente:', err);
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: true };
+      dispatch(ordersSlice.actions.addLocalOrder(localOrder));
+      broadcastLanOrder(localOrder, 'new');
       return localOrder;
     }
   }
@@ -334,6 +341,7 @@ export const removeOrderFromBoth = createAsyncThunk(
         testOrders.find((o) => (id && o.id === id) || (number && o.number === number));
 
       if (!target && id && id.startsWith('local-test-')) {
+        broadcastLanOrder({ id }, 'delete');
         return { id };
       }
 
@@ -348,10 +356,12 @@ export const removeOrderFromBoth = createAsyncThunk(
 
       // Si es una orden de prueba o local (pending), solo la borramos del estado y retornamos.
       if (target.isTestOrder || (typeof target.id === 'string' && target.id.startsWith('local-test-')) || target.pending) {
+        broadcastLanOrder({ id: target.id }, 'delete');
         return { id: target.id };
       }
 
       await pb.collection('orders').delete(target.id);
+      broadcastLanOrder({ id: target.id }, 'delete');
 
       try {
         const deletedAtIso = new Date().toISOString();
@@ -502,15 +512,40 @@ export const subscribeOrdersRealtime = createAsyncThunk(
 export const syncPendingOrders = createAsyncThunk(
   'orders/syncPendingOrders',
   async (_, { getState, dispatch }) => {
-    if (!navigator.onLine) return;
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+
     const state = getState();
-    const pendings = state?.orders?.orders?.filter((o) => o.pending && !o.isTestOrder) || [];
+    const statePendings = state?.orders?.orders?.filter((o) => o.pending && !o.isTestOrder) || [];
+    const storagePendings = loadPendingFromStorage().filter((o) => o.pending && !o.isTestOrder);
+
+    // Unir sin duplicados por id
+    const pendingMap = new Map();
+    for (const o of storagePendings) {
+      if (o?.id) pendingMap.set(o.id, o);
+    }
+    for (const o of statePendings) {
+      if (o?.id) pendingMap.set(o.id, o);
+    }
+    const pendings = Array.from(pendingMap.values());
+    if (pendings.length === 0) return;
 
     for (const p of pendings) {
       try {
         let existingOrder = null;
-        try {
-          existingOrder = await pb.collection('orders').getFirstListItem(`number="${p.number}"`);
+        if (p.clientCreatedAt) {
+          try {
+            existingOrder = await pb
+              .collection('orders')
+              .getFirstListItem(`clientCreatedAt="${p.clientCreatedAt}"`);
+          } catch (e) {
+            // 404 significa que la orden no existe en el servidor aún (caso esperado)
+            if (e.status !== 404) {
+              console.warn('Error verificando pedido existente por clientCreatedAt:', e);
+            }
+          }
+        }
+
+        if (existingOrder) {
           dispatch(
             ordersSlice.actions.markOrderSynced({
               localId: p.id,
@@ -518,24 +553,18 @@ export const syncPendingOrders = createAsyncThunk(
             })
           );
           continue;
-        } catch (e) {
-          if (e.status !== 404) {
-            console.error('Error checking for existing order:', e);
-            continue;
-          }
         }
 
         const { pagoEfectivo, pagoMp, pagoDebito } = normalizePaymentFields(p);
 
-        // Excluimos id y pending para que PB genere su ID
-        const { id, pending, ...restOfOrder } = p;
+        // Excluimos id, pending, isTestOrder, clientId para que PB genere su ID
+        const { id, pending, isTestOrder, clientId, ...restOfOrder } = p;
 
         const payload = {
           ...restOfOrder,
           pagoEfectivo,
           pagoMp,
           pagoDebito,
-          // Aseguramos que clientCreatedAt exista
           clientCreatedAt: p.clientCreatedAt ?? Date.now(),
         };
 
@@ -546,6 +575,39 @@ export const syncPendingOrders = createAsyncThunk(
             serverOrder: pbToOrder(created),
           })
         );
+
+        // Sincronizar estadísticas diarias en daily_stats (no bloqueante)
+        try {
+          const statsDay =
+            p.businessDate ||
+            computeBusinessDate(new Date(payload.clientCreatedAt), 3);
+          const revAmount = Number(p.revenueAmount ?? p.total ?? 0);
+          const pAmount =
+            p.paidAmount && Object.keys(p.paidAmount).length > 0
+              ? p.paidAmount
+              : pagoEfectivo
+                ? { efectivo: pagoEfectivo }
+                : pagoMp
+                  ? { transferencia: pagoMp }
+                  : pagoDebito
+                    ? { debito: pagoDebito }
+                    : {};
+          await upsertDailyStatsJsonSmart({
+            day: statsDay,
+            addRevenue: revAmount,
+            addOrders: 1,
+            addItems: itemsCountFrom(p.items || []),
+            paidAmount: pAmount,
+            method: Object.keys(pAmount).length ? null : p.method,
+            mode: p.mode,
+            address: p.address,
+            sign: +1,
+            pruneZero: true,
+            deleteIfEmpty: false,
+          });
+        } catch (statsErr) {
+          console.warn('Error actualizando daily_stats para orden sincronizada (non-blocking):', statsErr);
+        }
       } catch (e) {
         console.error('Failed to sync pending order:', e);
       }
@@ -661,15 +723,21 @@ export const setOrderBaristaStatus = createAsyncThunk(
     // 1) Actualización inmediata en Redux local para respuesta visual instantánea
     dispatch(ordersSlice.actions.upsertOrder({ id, baristaDone: !!baristaDone }));
 
+    // 2) Sincronización LAN instantánea (Tablet -> PC o PC -> Tablets)
+    sendLanBaristaStatus(id, baristaDone);
+    broadcastLanOrder({ id, baristaDone: !!baristaDone }, 'update');
+
     // Si es un pedido de prueba o local, no enviamos a PocketBase
     if (!id || String(id).startsWith('local-test-') || String(id).startsWith('mock-')) {
       return { id, baristaDone: !!baristaDone };
     }
 
-    // 2) Actualizar PocketBase para que replique a todos los dispositivos por realtime
+    // 3) Actualizar PocketBase para que replique a todos los dispositivos por realtime
     try {
       const updated = await pb.collection('orders').update(id, { baristaDone: !!baristaDone });
-      dispatch(ordersSlice.actions.upsertOrder(pbToOrder(updated)));
+      const order = pbToOrder(updated);
+      dispatch(ordersSlice.actions.upsertOrder(order));
+      broadcastLanOrder(order, 'update');
       return { id, baristaDone: !!updated.baristaDone };
     } catch (err) {
       console.warn('Error al actualizar baristaDone en PocketBase:', err);
@@ -786,25 +854,33 @@ const ordersSlice = createSlice({
       const { localId, serverOrder } = payload;
       const idx = state.orders.findIndex((o) => o.id === localId);
       if (idx >= 0) {
-        state.orders[idx] = { ...serverOrder };
+        state.orders[idx] = { ...serverOrder, pending: false };
+      } else {
+        state.orders.unshift({ ...serverOrder, pending: false });
+      }
 
-        // Migrar estado de impresión (local -> server)
-        try {
-          const printedKey = `order-printed-${localId}`;
-          if (localStorage.getItem(printedKey) === 'true') {
-            localStorage.setItem(`order-printed-${serverOrder.id}`, 'true');
-            localStorage.removeItem(printedKey);
-          }
-          // Migrar estado oculto
-          const hiddenKey = `order-hidden-${localId}`;
-          const hiddenVal = localStorage.getItem(hiddenKey);
-          if (hiddenVal !== null) {
-            localStorage.setItem(`order-hidden-${serverOrder.id}`, hiddenVal);
-            localStorage.removeItem(hiddenKey);
-          }
-        } catch (e) {
-          console.warn('Error migrando localStorage keys', e);
+      // Remover explícitamente de localStorage PENDING_KEY
+      try {
+        const stored = loadPendingFromStorage().filter((o) => o.id !== localId);
+        localStorage.setItem(PENDING_KEY, JSON.stringify(stored));
+      } catch (e) {}
+
+      // Migrar estado de impresión (local -> server)
+      try {
+        const printedKey = `order-printed-${localId}`;
+        if (localStorage.getItem(printedKey) === 'true') {
+          localStorage.setItem(`order-printed-${serverOrder.id}`, 'true');
+          localStorage.removeItem(printedKey);
         }
+        // Migrar estado oculto
+        const hiddenKey = `order-hidden-${localId}`;
+        const hiddenVal = localStorage.getItem(hiddenKey);
+        if (hiddenVal !== null) {
+          localStorage.setItem(`order-hidden-${serverOrder.id}`, hiddenVal);
+          localStorage.removeItem(hiddenKey);
+        }
+      } catch (e) {
+        console.warn('Error migrando localStorage keys', e);
       }
       savePendingToStorage(state.orders);
     },
@@ -981,4 +1057,5 @@ export const {
   clearLastCreatedOrder,
 } = ordersSlice.actions;
 
+export { ordersSlice };
 export default ordersSlice.reducer;

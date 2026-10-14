@@ -6,8 +6,10 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Settings } from 'react-feather';
-import { BookOpen, Calculator, ClipboardList, Coffee, EyeOff, FlaskConical, Heart, Lock, QrCode, ShoppingBag, Tv } from 'lucide-react';
+import { BookOpen, Calculator, Check, ClipboardList, Coffee, Copy, EyeOff, FlaskConical, Heart, Lock, QrCode, Server, ShoppingBag, Tv, Wifi } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
+
+import { useLanSync } from '../../utils/lanSyncClient';
 
 import pkg from '../../../package.json';
 import LoginModal from '../../components/LoginModal/LoginModal';
@@ -249,6 +251,36 @@ const Config = () => {
   const [selectedPrinter, setSelectedPrinter] = useState(() => {
     return localStorage.getItem('bt_printer_name') || '';
   });
+
+  const {
+    isServer: isLanServer,
+    serverInfo: lanServerInfo,
+    isConnected: isLanConnected,
+    clientCount: lanClientCount,
+    serverIp: lanServerIp,
+    setServerIp: setLanServerIp,
+    testConnection: testLanConnection,
+  } = useLanSync();
+
+  const [lanDialogOpen, setLanDialogOpen] = useState(false);
+  const [targetIpInput, setTargetIpInput] = useState(lanServerIp || '');
+  const [testResult, setTestResult] = useState(null);
+  const [copiedIp, setCopiedIp] = useState(false);
+
+  useEffect(() => {
+    if (lanServerIp) setTargetIpInput(lanServerIp);
+  }, [lanServerIp]);
+
+  const handleTestLan = async () => {
+    setTestResult({ loading: true });
+    const res = await testLanConnection(targetIpInput);
+    setTestResult(res);
+  };
+
+  const handleSaveLan = () => {
+    setLanServerIp(targetIpInput);
+    setLanDialogOpen(false);
+  };
 
   useEffect(() => {
     if (isAndroidApp && selectedPrinter) {
@@ -795,6 +827,43 @@ const Config = () => {
             </span>
           </ButtonPage>
 
+          <ButtonPage
+            onClick={() => {
+              setTestResult(null);
+              setLanDialogOpen(true);
+            }}
+          >
+            <IconButton>
+              <Wifi size={16} />
+            </IconButton>
+            <a>Sincronización LAN (Caja ↔ Barista)</a>
+            <span
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                fontSize: '0.85em',
+                color: isLanConnected ? '#10b981' : '#f59e0b',
+                fontWeight: 600,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  backgroundColor: isLanConnected ? '#10b981' : '#ef4444',
+                  display: 'inline-block',
+                }}
+              />
+              {isLanServer
+                ? `Servidor (${lanClientCount} conectados)`
+                : isLanConnected
+                  ? 'Conectado'
+                  : 'Desconectado'}
+              <ChevronRight />
+            </span>
+          </ButtonPage>
 
           {isAndroidApp && (
             <>
@@ -1615,6 +1684,244 @@ const Config = () => {
             </button>
           </div>
         </form>
+      </Dialog>
+
+      {/* Diálogo de Sincronización LAN */}
+      <Dialog
+        open={lanDialogOpen}
+        onClose={() => setLanDialogOpen(false)}
+        PaperProps={{ sx: { background: '#141624', width: 440, maxWidth: '95%' } }}
+      >
+        <DialogContent>
+          <ModalSection>
+            <ModalTitle style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Wifi size={22} color="#10b981" />
+              Sincronización de Red Local (LAN)
+            </ModalTitle>
+
+            {isLanServer ? (
+              <div>
+                <div
+                  style={{
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    padding: '12px 16px',
+                    borderRadius: '12px',
+                    marginBottom: 16,
+                  }}
+                >
+                  <div style={{ color: '#10b981', fontWeight: 700, fontSize: '0.95rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Server size={18} />
+                    Esta PC es el Servidor de Caja
+                  </div>
+                  <div style={{ fontSize: '0.82rem', color: '#cbd5e1', marginTop: 4 }}>
+                    Escuchando en el puerto <strong>8085</strong>. Los pedidos se transmitirán a las tablets en tiempo real incluso sin internet.
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 16 }}>
+                  <DenomLabel style={{ marginBottom: 8 }}>Dirección IP para conectar la Tablet:</DenomLabel>
+                  {lanServerInfo?.ips && lanServerInfo.ips.length > 0 ? (
+                    lanServerInfo.ips.map((iface, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          background: '#1e2238',
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          marginBottom: 8,
+                          border: '1px solid rgba(255, 255, 255, 0.08)',
+                        }}
+                      >
+                        <div>
+                          <div style={{ fontSize: '1.05rem', fontWeight: 700, color: '#38bdf8', letterSpacing: '0.5px' }}>
+                            {iface.address}
+                          </div>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                            {iface.name}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => {
+                            navigator.clipboard.writeText(iface.address);
+                            setCopiedIp(iface.address);
+                            setTimeout(() => setCopiedIp(false), 2000);
+                          }}
+                          style={{
+                            background: copiedIp === iface.address ? '#10b981' : '#334155',
+                            border: 'none',
+                            color: '#fff',
+                            padding: '6px 12px',
+                            borderRadius: 8,
+                            fontSize: '0.8rem',
+                            fontWeight: 600,
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                        >
+                          {copiedIp === iface.address ? <Check size={14} /> : <Copy size={14} />}
+                          {copiedIp === iface.address ? 'Copiado' : 'Copiar'}
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: '#94a3b8', fontSize: '0.88rem' }}>Detectando interfaces de red...</div>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    background: '#1e2238',
+                    padding: '12px 14px',
+                    borderRadius: 10,
+                    marginBottom: 20,
+                    fontSize: '0.88rem',
+                    color: '#e2e8f0',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}
+                >
+                  <span>Tablets conectadas actualmente:</span>
+                  <span
+                    style={{
+                      background: lanClientCount > 0 ? '#10b981' : '#64748b',
+                      color: '#fff',
+                      padding: '2px 10px',
+                      borderRadius: 12,
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                    }}
+                  >
+                    {lanClientCount}
+                  </span>
+                </div>
+
+                <ActionsRow>
+                  <PrimaryButton onClick={() => setLanDialogOpen(false)} style={{ width: '100%' }}>
+                    Cerrar
+                  </PrimaryButton>
+                </ActionsRow>
+              </div>
+            ) : (
+              <div>
+                <div style={{ fontSize: '0.85rem', color: '#cbd5e1', marginBottom: 16 }}>
+                  Ingresa la IP de la <strong>PC de Caja</strong> (la que figura en su menú de Configuración). Debe estar en el mismo Wi-Fi.
+                </div>
+
+                <div style={{ marginBottom: 14 }}>
+                  <DenomLabel style={{ marginBottom: 6 }}>IP de la PC de Caja:</DenomLabel>
+                  <DenomInput
+                    type="text"
+                    value={targetIpInput}
+                    onChange={(e) => setTargetIpInput(e.target.value)}
+                    placeholder="Ej: 192.168.1.50"
+                    style={{ width: '100%', boxSizing: 'border-box' }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                  <button
+                    onClick={handleTestLan}
+                    disabled={testResult?.loading}
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      background: '#334155',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {testResult?.loading ? 'Probando...' : 'Probar Conexión'}
+                  </button>
+                  <button
+                    onClick={handleSaveLan}
+                    style={{
+                      flex: 1,
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      border: 'none',
+                      background: '#10b981',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    Guardar y Conectar
+                  </button>
+                </div>
+
+                {testResult && (
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: 10,
+                      marginBottom: 16,
+                      fontSize: '0.85rem',
+                      background: testResult.ok ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                      border: `1px solid ${testResult.ok ? '#10b981' : '#ef4444'}`,
+                      color: testResult.ok ? '#34d399' : '#f87171',
+                    }}
+                  >
+                    {testResult.ok
+                      ? `✓ Conexión exitosa con ${testResult.data?.name || 'Servidor'} (v${testResult.data?.version || ''})`
+                      : `✕ Error: ${testResult.error || 'No se pudo conectar'}`}
+                  </div>
+                )}
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    borderRadius: 10,
+                    background: '#1e2238',
+                    marginBottom: 16,
+                  }}
+                >
+                  <span style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>Estado de Conexión:</span>
+                  <span
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 6,
+                      fontSize: '0.85rem',
+                      fontWeight: 700,
+                      color: isLanConnected ? '#10b981' : '#f87171',
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 8,
+                        height: 8,
+                        borderRadius: '50%',
+                        backgroundColor: isLanConnected ? '#10b981' : '#ef4444',
+                      }}
+                    />
+                    {isLanConnected ? 'Conectado a Caja' : 'Desconectado'}
+                  </span>
+                </div>
+
+                <ActionsRow>
+                  <SecondaryButton onClick={() => setLanDialogOpen(false)} style={{ width: '100%' }}>
+                    Salir
+                  </SecondaryButton>
+                </ActionsRow>
+              </div>
+            )}
+          </ModalSection>
+        </DialogContent>
       </Dialog>
 
       <HiddenProductsModal

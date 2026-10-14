@@ -1,40 +1,47 @@
-// src/hooks/useNetworkSync.js
 import { useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { syncPendingOrders } from '../redux/orders/ordersSlice';
+import { initLanSync, syncLanOrdersCache } from '../utils/lanSyncClient';
 
 /**
- * Global listener that dispatches syncPendingOrders whenever the browser goes online.
- * This hook should be used at the top‑level of the application (e.g., in App.js).
+ * Global listener that dispatches syncPendingOrders whenever the browser goes online or has pending orders,
+ * and maintains the local LAN server/client synchronization.
  */
 export const useNetworkSync = () => {
     const dispatch = useDispatch();
     const orders = useSelector((state) => state.orders.orders);
     const hasPending = orders.some((o) => o.pending);
 
+    // Inicializar sincronización LAN una sola vez
     useEffect(() => {
-        const handleOnline = () => {
+        initLanSync(dispatch);
+    }, [dispatch]);
+
+    // Mantener el cache de órdenes en memoria en Electron actualizado para clientes LAN
+    useEffect(() => {
+        syncLanOrdersCache(orders);
+    }, [orders]);
+
+    useEffect(() => {
+        const triggerSync = () => {
+            if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
             dispatch(syncPendingOrders());
         };
-        window.addEventListener('online', handleOnline);
-        // If already online on mount, trigger sync immediately.
-        if (navigator.onLine) {
-            dispatch(syncPendingOrders());
-        }
 
-        let intervalId;
-        if (hasPending) {
-            // Intentar sincronizar cada 15 segundos si hay pendientes
-            intervalId = setInterval(() => {
-                if (navigator.onLine) {
-                    dispatch(syncPendingOrders());
-                }
-            }, 15000);
-        }
+        window.addEventListener('online', triggerSync);
+        window.addEventListener('focus', triggerSync);
+
+        // Al montar o reconectar, intentar sincronizar de inmediato
+        triggerSync();
+
+        // Reintentar periódicamente cada 15s si hay pendientes, o cada 60s como heartbeat
+        const intervalTime = hasPending ? 15000 : 60000;
+        const intervalId = setInterval(triggerSync, intervalTime);
 
         return () => {
-            window.removeEventListener('online', handleOnline);
-            if (intervalId) clearInterval(intervalId);
+            window.removeEventListener('online', triggerSync);
+            window.removeEventListener('focus', triggerSync);
+            clearInterval(intervalId);
         };
     }, [dispatch, hasPending]);
 };

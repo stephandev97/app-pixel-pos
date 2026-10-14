@@ -22,6 +22,7 @@ import {
 } from '../../redux/orders/ordersSlice';
 import { computeBusinessDate } from '../../utils/stats';
 import { isBaristaOrder } from '../../utils/cafeStockSync';
+import { useLanSync } from '../../utils/lanSyncClient';
 
 import {
   ContainerOrders,
@@ -60,6 +61,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   const { orders, testOrders = [], pagination, status } = useSelector((s) => s.orders);
   const isAdmin = useSelector((s) => s.actions?.isAdmin);
   const simulatedPendingOrder = useSelector((s) => s.actions?.simulatedPendingOrder);
+  const { isConnected: isLanConnected, isServer: isLanServer } = useLanSync();
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -1333,6 +1335,60 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                   >
                     Barista KDS
                   </span>
+                  <div
+                    title={
+                      isLanServer
+                        ? 'Servidor LAN activo en esta PC'
+                        : isLanConnected
+                          ? 'Sincronizado por Red Local (LAN)'
+                          : navigator.onLine
+                            ? 'Conectado a la Nube (PocketBase)'
+                            : 'Sin conexión (Revisa el Wi-Fi o la IP de caja)'
+                    }
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      padding: '2px 8px',
+                      borderRadius: 999,
+                      fontSize: '0.72rem',
+                      fontWeight: 700,
+                      background:
+                        isLanConnected || isLanServer
+                          ? 'rgba(16, 185, 129, 0.12)'
+                          : navigator.onLine
+                            ? 'rgba(59, 130, 246, 0.12)'
+                            : 'rgba(239, 68, 68, 0.12)',
+                      color:
+                        isLanConnected || isLanServer
+                          ? '#059669'
+                          : navigator.onLine
+                            ? '#2563eb'
+                            : '#dc2626',
+                      border: `1px solid ${
+                        isLanConnected || isLanServer
+                          ? 'rgba(16, 185, 129, 0.3)'
+                          : navigator.onLine
+                            ? 'rgba(59, 130, 246, 0.3)'
+                            : 'rgba(239, 68, 68, 0.3)'
+                      }`,
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: '50%',
+                        backgroundColor:
+                          isLanConnected || isLanServer
+                            ? '#10b981'
+                            : navigator.onLine
+                              ? '#3b82f6'
+                              : '#ef4444',
+                      }}
+                    />
+                    {isLanServer ? 'LAN Servidor' : isLanConnected ? 'LAN' : navigator.onLine ? 'Nube' : 'Offline'}
+                  </div>
                 </div>
 
                 {/* Segmented Control & Dev Tools */}

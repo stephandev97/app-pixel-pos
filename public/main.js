@@ -2,6 +2,10 @@
 const { app, BrowserWindow, dialog, ipcMain, globalShortcut } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
+const os = require('os');
+const WebSocket = require('ws');
+const WebSocketServer = WebSocket.Server || WebSocket.WebSocketServer;
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
@@ -311,12 +315,238 @@ ipcMain.handle('quit-and-install', () => {
 });
 
 // ======================================================
+// Servidor de Sincronización LAN (Caja PC -> Tablet Barista)
+// ======================================================
+const LAN_PORT = 8085;
+let lanHttpServer = null;
+let lanWss = null;
+let lanOrdersCache = [];
+
+function getLanIps() {
+  const interfaces = os.networkInterfaces();
+  const ips = [];
+  for (const name of Object.keys(interfaces)) {
+    for (const iface of interfaces[name] || []) {
+      if (iface.family === 'IPv4' && !iface.internal) {
+        ips.push({ name, address: iface.address });
+      }
+    }
+  }
+  return ips;
+}
+
+function broadcastLan(data, excludeWs = null) {
+  if (!lanWss) return;
+  const payload = JSON.stringify(data);
+  lanWss.clients.forEach((client) => {
+    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+      try {
+        client.send(payload);
+      } catch (err) {
+        log.warn('Error enviando mensaje a cliente LAN:', err);
+      }
+    }
+  });
+}
+
+function startLanServer() {
+  try {
+    lanHttpServer = http.createServer((req, res) => {
+      // CORS headers para permitir peticiones desde la WebView de Android / Navegador
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
+      if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+      }
+
+      const parsedUrl = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
+      const pathname = parsedUrl.pathname;
+
+      if (pathname === '/api/status' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            status: 'ok',
+            name: 'pixel-pos-lan-server',
+            port: LAN_PORT,
+            ips: getLanIps(),
+            version: app.getVersion(),
+            connectedClients: lanWss ? lanWss.clients.size : 0,
+          })
+        );
+        return;
+      }
+
+      if (pathname === '/api/orders/today' && req.method === 'GET') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            ok: true,
+            orders: lanOrdersCache,
+          })
+        );
+        return;
+      }
+
+      if (pathname === '/api/orders/barista-status' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk;
+        });
+        req.on('end', () => {
+          try {
+            const data = JSON.parse(body);
+            const { id, baristaDone } = data;
+            if (id) {
+              const existing = lanOrdersCache.find((o) => o.id === id);
+              if (existing) {
+                existing.baristaDone = Boolean(baristaDone);
+              }
+              win?.webContents?.send('lan-barista-status', { id, baristaDone: Boolean(baristaDone) });
+              broadcastLan({ type: 'BARISTA_STATUS', id, baristaDone: Boolean(baristaDone) });
+            }
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: true }));
+          } catch {
+            res.writeHead(400, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ ok: false, error: 'Invalid JSON' }));
+          }
+        });
+        return;
+      }
+
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Not found' }));
+    });
+
+    lanWss = new WebSocketServer({ server: lanHttpServer });
+
+    lanWss.on('connection', (ws, req) => {
+      const clientIp = req.socket.remoteAddress;
+      log.info(`[LAN Server] Cliente conectado desde: ${clientIp}`);
+
+      // Enviar bienvenida y órdenes actuales al nuevo cliente conectado
+      try {
+        ws.send(
+          JSON.stringify({
+            type: 'CONNECTED',
+            orders: lanOrdersCache,
+            ips: getLanIps(),
+          })
+        );
+      } catch (e) {
+        log.warn('[LAN Server] Error al enviar saludo inicial:', e);
+      }
+
+      // Notificar al renderer de Electron sobre el cambio en cantidad de clientes
+      win?.webContents?.send('lan-clients-updated', lanWss.clients.size);
+
+      ws.on('message', (msgStr) => {
+        try {
+          const data = JSON.parse(msgStr.toString());
+          if (data.type === 'PING') {
+            ws.send(JSON.stringify({ type: 'PONG' }));
+            return;
+          }
+
+          if (data.type === 'BARISTA_STATUS') {
+            const { id, baristaDone } = data;
+            if (id) {
+              const existing = lanOrdersCache.find((o) => o.id === id);
+              if (existing) {
+                existing.baristaDone = Boolean(baristaDone);
+              }
+              win?.webContents?.send('lan-barista-status', { id, baristaDone: Boolean(baristaDone) });
+              broadcastLan({ type: 'BARISTA_STATUS', id, baristaDone: Boolean(baristaDone) }, ws);
+            }
+          }
+        } catch (err) {
+          log.warn('[LAN Server] Error procesando mensaje de cliente:', err);
+        }
+      });
+
+      ws.on('close', () => {
+        log.info(`[LAN Server] Cliente desconectado: ${clientIp}`);
+        win?.webContents?.send('lan-clients-updated', lanWss ? lanWss.clients.size : 0);
+      });
+
+      ws.on('error', (err) => {
+        log.warn('[LAN Server] Error en socket de cliente:', err);
+      });
+    });
+
+    lanHttpServer.listen(LAN_PORT, '0.0.0.0', () => {
+      log.info(`[LAN Server] Servidor local iniciado en puerto ${LAN_PORT}`);
+    });
+
+    lanHttpServer.on('error', (err) => {
+      log.error('[LAN Server] Error en servidor HTTP/WS:', err);
+    });
+  } catch (err) {
+    log.error('[LAN Server] No se pudo inicializar servidor LAN:', err);
+  }
+}
+
+// IPC Handlers para Sincronización LAN
+ipcMain.handle('get-lan-server-info', () => {
+  return {
+    running: Boolean(lanHttpServer && lanHttpServer.listening),
+    port: LAN_PORT,
+    ips: getLanIps(),
+    clientCount: lanWss ? lanWss.clients.size : 0,
+  };
+});
+
+ipcMain.on('lan-sync-orders-cache', (_e, orders) => {
+  if (Array.isArray(orders)) {
+    lanOrdersCache = orders;
+  }
+});
+
+ipcMain.on('lan-broadcast-new-order', (_e, order) => {
+  if (!order) return;
+  const idx = lanOrdersCache.findIndex(
+    (o) => (o.id && o.id === order.id) || (order.clientCreatedAt && o.clientCreatedAt === order.clientCreatedAt)
+  );
+  if (idx >= 0) {
+    lanOrdersCache[idx] = { ...lanOrdersCache[idx], ...order };
+  } else {
+    lanOrdersCache.unshift(order);
+  }
+  broadcastLan({ type: 'NEW_ORDER', order });
+});
+
+ipcMain.on('lan-broadcast-update-order', (_e, order) => {
+  if (!order) return;
+  const idx = lanOrdersCache.findIndex(
+    (o) => (o.id && o.id === order.id) || (order.clientCreatedAt && o.clientCreatedAt === order.clientCreatedAt)
+  );
+  if (idx >= 0) {
+    lanOrdersCache[idx] = { ...lanOrdersCache[idx], ...order };
+  } else {
+    lanOrdersCache.unshift(order);
+  }
+  broadcastLan({ type: 'UPDATE_ORDER', order });
+});
+
+ipcMain.on('lan-broadcast-delete-order', (_e, { id }) => {
+  if (!id) return;
+  lanOrdersCache = lanOrdersCache.filter((o) => o.id !== id);
+  broadcastLan({ type: 'DELETE_ORDER', id });
+});
+
+// ======================================================
 // App ready
 // ======================================================
 app.whenReady().then(() => {
   log.info('🚀 App iniciada', app.getVersion());
 
   createWindow();
+  startLanServer();
 
   // Chequear actualizaciones cada 10 minutos
   setInterval(
