@@ -1,6 +1,7 @@
-// src/utils/lanSyncClient.js
 import { useEffect, useState } from 'react';
 import { removeOrderById, upsertOrder } from '../redux/orders/ordersSlice';
+import { isBaristaOrder } from './cafeStockSync';
+import { playBaristaNotificationSound } from './soundNotifications';
 
 const LAN_IP_KEY = 'pixel_lan_server_ip';
 const DEFAULT_PORT = 8085;
@@ -162,6 +163,9 @@ export function connectLanClient() {
         } else if (msg.type === 'NEW_ORDER' || msg.type === 'UPDATE_ORDER') {
           if (msg.order) {
             reduxDispatch(upsertOrder(msg.order));
+            if (msg.type === 'NEW_ORDER' && isBaristaOrder(msg.order)) {
+              playBaristaNotificationSound(msg.order.id);
+            }
           }
         } else if (msg.type === 'DELETE_ORDER') {
           if (msg.id) {

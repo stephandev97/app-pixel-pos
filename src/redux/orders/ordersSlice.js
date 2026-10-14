@@ -1,7 +1,9 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { pb } from '../../lib/pb';
+import { isBaristaOrder } from '../../utils/cafeStockSync';
 import { broadcastLanOrder, sendLanBaristaStatus } from '../../utils/lanSyncClient';
+import { playBaristaNotificationSound } from '../../utils/soundNotifications';
 import {
   computeBusinessDate,
   detectFulfillment,
@@ -496,7 +498,11 @@ export const subscribeOrdersRealtime = createAsyncThunk(
     try {
       const unsub = await pb.collection('orders').subscribe('*', (e) => {
         if (e.action === 'create' || e.action === 'update') {
-          dispatch(ordersSlice.actions.upsertOrder(pbToOrder(e.record)));
+          const ord = pbToOrder(e.record);
+          dispatch(ordersSlice.actions.upsertOrder(ord));
+          if (e.action === 'create' && isBaristaOrder(ord)) {
+            playBaristaNotificationSound(ord.id);
+          }
         } else if (e.action === 'delete') {
           dispatch(ordersSlice.actions.removeOrderById(e.record.id));
         }

@@ -6,10 +6,15 @@ import List from '@mui/material/List';
 import ListItemButton from '@mui/material/ListItemButton';
 import { useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Settings } from 'react-feather';
-import { BookOpen, Calculator, Check, ClipboardList, Coffee, Copy, EyeOff, FlaskConical, Heart, Lock, QrCode, Server, ShoppingBag, Tv, Wifi } from 'lucide-react';
+import { Bell, BookOpen, Calculator, Check, ClipboardList, Coffee, Copy, EyeOff, FlaskConical, Heart, Lock, QrCode, Server, ShoppingBag, Tv, Wifi } from 'lucide-react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import { useLanSync } from '../../utils/lanSyncClient';
+import {
+  isBaristaSoundEnabled,
+  playBaristaNotificationSound,
+  setBaristaSoundEnabled,
+} from '../../utils/soundNotifications';
 
 import pkg from '../../../package.json';
 import LoginModal from '../../components/LoginModal/LoginModal';
@@ -266,6 +271,7 @@ const Config = () => {
   const [targetIpInput, setTargetIpInput] = useState(lanServerIp || '');
   const [testResult, setTestResult] = useState(null);
   const [copiedIp, setCopiedIp] = useState(false);
+  const [baristaSound, setBaristaSound] = useState(() => isBaristaSoundEnabled());
 
   useEffect(() => {
     if (lanServerIp) setTargetIpInput(lanServerIp);
@@ -863,6 +869,23 @@ const Config = () => {
                   : 'Desconectado'}
               <ChevronRight />
             </span>
+          </ButtonPage>
+
+          <ButtonPage
+            onClick={() => {
+              const next = !baristaSound;
+              setBaristaSound(next);
+              setBaristaSoundEnabled(next);
+              if (next) playBaristaNotificationSound(null, true);
+            }}
+          >
+            <IconButton>
+              <Bell size={16} />
+            </IconButton>
+            <a>Sonido de Pedido Barista</a>
+            <SwitchToggle $checked={baristaSound}>
+              <div className="thumb" />
+            </SwitchToggle>
           </ButtonPage>
 
           {isAndroidApp && (

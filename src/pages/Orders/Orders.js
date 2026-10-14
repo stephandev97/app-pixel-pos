@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { ArrowUp, Coffee, FlaskConical, Search, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowUp, Bell, BellOff, Coffee, FlaskConical, Search, Sparkles, Trash2 } from 'lucide-react';
 import { FaXmark } from 'react-icons/fa6';
 import { MdSort } from 'react-icons/md';
 import PrintIcon from '@mui/icons-material/Print';
@@ -23,6 +23,11 @@ import {
 import { computeBusinessDate } from '../../utils/stats';
 import { isBaristaOrder } from '../../utils/cafeStockSync';
 import { useLanSync } from '../../utils/lanSyncClient';
+import {
+  isBaristaSoundEnabled,
+  playBaristaNotificationSound,
+  setBaristaSoundEnabled,
+} from '../../utils/soundNotifications';
 
 import {
   ContainerOrders,
@@ -62,6 +67,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   const isAdmin = useSelector((s) => s.actions?.isAdmin);
   const simulatedPendingOrder = useSelector((s) => s.actions?.simulatedPendingOrder);
   const { isConnected: isLanConnected, isServer: isLanServer } = useLanSync();
+  const [soundActive, setSoundActive] = useState(() => isBaristaSoundEnabled());
 
   const [isInitialLoading, setIsInitialLoading] = useState(true);
 
@@ -1481,6 +1487,43 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                       </span>
                     </button>
                   </div>
+
+                  {/* Botón de Sonido Barista */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = !soundActive;
+                      setSoundActive(next);
+                      setBaristaSoundEnabled(next);
+                      if (next) {
+                        playBaristaNotificationSound(null, true);
+                      }
+                    }}
+                    style={{
+                      border: '1px solid #e4e4e7',
+                      background: soundActive ? '#f0fdf4' : '#f4f4f5',
+                      color: soundActive ? '#16a34a' : '#71717a',
+                      borderRadius: 7,
+                      padding: '5px 8px',
+                      cursor: 'pointer',
+                      fontWeight: 600,
+                      fontSize: '0.74rem',
+                      fontFamily: "'Inter', sans-serif",
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      whiteSpace: 'nowrap',
+                      transition: 'all 0.15s ease',
+                    }}
+                    title={
+                      soundActive
+                        ? 'Sonido de comanda activado (clic para silenciar o probar)'
+                        : 'Sonido silenciado (clic para activar)'
+                    }
+                  >
+                    {soundActive ? <Bell size={12} color="#16a34a" /> : <BellOff size={12} color="#71717a" />}
+                    <span>{soundActive ? 'Sonido' : 'Mudo'}</span>
+                  </button>
 
                   {/* Botón Simular pedidos (Modo Dev) */}
                   {isDev && !isAndroidApp && (
