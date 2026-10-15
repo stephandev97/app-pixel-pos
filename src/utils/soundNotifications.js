@@ -1,8 +1,10 @@
 // src/utils/soundNotifications.js
-import { notificationAudioDataUri } from '../assets/notificationBase64';
+import { notificationAudioDataUri } from '../assets/notificationBase64.js';
 
 let audioInstance = null;
 let audioContextInstance = null;
+let decodedAudioBuffer = null;
+let isDecodingPromise = null;
 let lastPlayedOrderId = null;
 let lastPlayedTime = 0;
 let isBaristaScreenActiveFlag = false;
@@ -50,8 +52,100 @@ function getAudioContext() {
 }
 
 /**
- * Sintetizador de campana / chime armónico de doble tono como respaldo infalible
- * (Tono D5 a 587.33 Hz seguido de A5 a 880.00 Hz)
+ * Convierte el Data URI en Base64 a ArrayBuffer para la Web Audio API
+ */
+function dataUriToArrayBuffer(dataUri) {
+  const base64 = dataUri.split(',')[1];
+  const binaryString = window.atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+/**
+ * Decodifica y cachea el buffer PCM del archivo MP3 para reproducción instantánea con ganancia
+ */
+function getDecodedAudioBuffer(ctx) {
+  if (decodedAudioBuffer) {
+    return Promise.resolve(decodedAudioBuffer);
+  }
+  if (isDecodingPromise) {
+    return isDecodingPromise;
+  }
+
+  isDecodingPromise = new Promise((resolve) => {
+    try {
+      const arrayBuffer = dataUriToArrayBuffer(notificationAudioDataUri);
+      ctx.decodeAudioData(
+        arrayBuffer.slice(0),
+        (decoded) => {
+          decodedAudioBuffer = decoded;
+          resolve(decoded);
+        },
+        (err) => {
+          console.warn('[Sound] decodeAudioData falló con callback:', err);
+          resolve(null);
+        }
+      );
+    } catch (e) {
+      console.warn('[Sound] Error decodificando audio buffer:', e);
+      resolve(null);
+    }
+  });
+
+  return isDecodingPromise;
+}
+
+/**
+ * Reproduce el audio MP3 decodificado con Amplificador de Ganancia (Loudness Booster 3.0x / +9.5 dB)
+ * y Compresor Dinámico de Estudio para máxima presencia sin distorsión.
+ */
+async function playBoostedAudioBuffer() {
+  const ctx = getAudioContext();
+  if (!ctx) return false;
+
+  try {
+    if (ctx.state === 'suspended') {
+      await ctx.resume().catch(() => {});
+    }
+
+    const buffer = await getDecodedAudioBuffer(ctx);
+    if (!buffer) return false;
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    // 1) Refuerzo de Ganancia (Loudness Booster: 3.0x de volumen)
+    const gainNode = ctx.createGain();
+    gainNode.gain.setValueAtTime(3.0, ctx.currentTime);
+
+    // 2) Compresor Dinámico (Mastering Limiter):
+    // Maximiza el volumen percibido ("punch") y previene saturación en parlantes de tablet
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-14, ctx.currentTime);
+    compressor.knee.setValueAtTime(8, ctx.currentTime);
+    compressor.ratio.setValueAtTime(12, ctx.currentTime);
+    compressor.attack.setValueAtTime(0.002, ctx.currentTime);
+    compressor.release.setValueAtTime(0.2, ctx.currentTime);
+
+    source.connect(gainNode);
+    gainNode.connect(compressor);
+    compressor.connect(ctx.destination);
+
+    source.start(0);
+    return true;
+  } catch (err) {
+    console.warn('[Sound] Falló reproducción Web Audio buffer:', err);
+    return false;
+  }
+}
+
+/**
+ * Sintetizador de campana armónico potente de alta presencia (D5 a 587Hz -> A5 a 880Hz -> D6 a 1175Hz)
+ * Optimizado para cortar el ruido de molinillos, cafeteras y licuadoras.
  */
 export function playSynthesizedChime() {
   try {
@@ -63,10 +157,19 @@ export function playSynthesizedChime() {
     }
 
     const now = ctx.currentTime;
-    const playTone = (freq, start, duration, gainVal = 0.4) => {
+
+    const compressor = ctx.createDynamicsCompressor();
+    compressor.threshold.setValueAtTime(-10, now);
+    compressor.knee.setValueAtTime(6, now);
+    compressor.ratio.setValueAtTime(10, now);
+    compressor.attack.setValueAtTime(0.002, now);
+    compressor.release.setValueAtTime(0.25, now);
+    compressor.connect(ctx.destination);
+
+    const playTone = (freq, start, duration, gainVal = 0.9, type = 'sine') => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
-      osc.type = 'sine';
+      osc.type = type;
       osc.frequency.setValueAtTime(freq, start);
 
       gain.gain.setValueAtTime(0.001, start);
@@ -74,15 +177,21 @@ export function playSynthesizedChime() {
       gain.gain.exponentialRampToValueAtTime(0.0001, start + duration);
 
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(compressor);
       osc.start(start);
       osc.stop(start + duration);
     };
 
-    // Tono 1: agudo claro
-    playTone(587.33, now, 0.4, 0.35);
-    // Tono 2: campana resonante
-    playTone(880.0, now + 0.12, 0.65, 0.4);
+    // Tono 1: Cuerpo cálido y armónico (D5)
+    playTone(587.33, now, 0.45, 0.95, 'sine');
+    playTone(587.33 * 2, now, 0.35, 0.45, 'triangle'); // brillo armónico
+
+    // Tono 2: Campana resonante (A5)
+    playTone(880.0, now + 0.12, 0.75, 0.95, 'sine');
+    playTone(880.0 * 2, now + 0.12, 0.5, 0.4, 'triangle');
+
+    // Tono 3: Destello agudo final (D6)
+    playTone(1174.66, now + 0.22, 0.6, 0.6, 'sine');
   } catch (err) {
     console.warn('[Sound] Error en sintetizador Web Audio API:', err);
   }
@@ -90,19 +199,22 @@ export function playSynthesizedChime() {
 
 /**
  * Desbloquea el audio en la primera interacción del usuario (tap, touch, click, tecla)
- * para cumplir la política de Autoplay en Android WebView y navegadores modernos.
+ * y precarga el buffer decodificado en memoria RAM para reproducción instantánea.
  */
 if (typeof window !== 'undefined') {
   const unlockAudio = () => {
     try {
       const ctx = getAudioContext();
-      if (ctx && ctx.state === 'suspended') {
-        ctx.resume().catch(() => {});
+      if (ctx) {
+        if (ctx.state === 'suspended') {
+          ctx.resume().catch(() => {});
+        }
+        // Precargar el buffer decodificado en segundo plano
+        getDecodedAudioBuffer(ctx).catch(() => {});
       }
 
       const a = getAudio();
       if (a) {
-        // Ejecución breve y silenciosa para autorizar el elemento en el WebView
         a.volume = 0.01;
         const p = a.play();
         if (p && typeof p.then === 'function') {
@@ -161,11 +273,11 @@ export function isBaristaScreenActive() {
 }
 
 /**
- * Reproduce el sonido de notificación barista
+ * Reproduce el sonido de notificación barista con amplificación de volumen (Loudness Booster)
  * @param {string} [orderId] - ID del pedido para evitar repeticiones múltiples
  * @param {boolean} [force=false] - Forzar reproducción sin chequear pantalla (ej: botón de prueba)
  */
-export function playBaristaNotificationSound(orderId = null, force = false) {
+export async function playBaristaNotificationSound(orderId = null, force = false) {
   if (!force && !isBaristaSoundEnabled()) {
     return;
   }
@@ -189,8 +301,18 @@ export function playBaristaNotificationSound(orderId = null, force = false) {
     lastPlayedTime = now;
   }
 
-  // 1) Intentar reproducir el MP3 en Base64
-  let playSuccess = false;
+  // 1) Intentar reproducción amplificada con Web Audio API (Ganancia 3.0x + Compresor)
+  try {
+    const success = await playBoostedAudioBuffer();
+    if (success) {
+      return;
+    }
+  } catch (err) {
+    console.warn('[Sound] Error en playBoostedAudioBuffer:', err);
+  }
+
+  // 2) Si falló Web Audio buffer, intentar reproducir a través del elemento HTML5 Audio
+  let htmlAudioSuccess = false;
   try {
     const audio = getAudio();
     if (audio) {
@@ -198,24 +320,16 @@ export function playBaristaNotificationSound(orderId = null, force = false) {
       audio.volume = 1.0;
       const playPromise = audio.play();
       if (playPromise && typeof playPromise.then === 'function') {
-        playPromise
-          .then(() => {
-            playSuccess = true;
-          })
-          .catch((err) => {
-            console.warn('[Sound] Reproducción HTML5 bloqueada, ejecutando sintetizador fallback:', err);
-            playSynthesizedChime();
-          });
-        return;
+        await playPromise;
+        htmlAudioSuccess = true;
       }
-      playSuccess = true;
     }
   } catch (err) {
-    console.warn('[Sound] Error al reproducir audio HTML5:', err);
+    console.warn('[Sound] Error en HTML5 audio play:', err);
   }
 
-  // 2) Fallback inmediato si HTML5 no estuvo disponible
-  if (!playSuccess) {
+  // 3) Fallback infalible: Sintetizador de campana de alta potencia
+  if (!htmlAudioSuccess) {
     playSynthesizedChime();
   }
 }
@@ -224,6 +338,6 @@ export function playBaristaNotificationSound(orderId = null, force = false) {
  * Helper para botón de prueba explícito
  */
 export function testBaristaSound() {
-  console.log('[Sound] Probando sonido de notificación Barista...');
+  console.log('[Sound] Probando sonido de notificación Barista con refuerzo de volumen...');
   playBaristaNotificationSound(null, true);
 }

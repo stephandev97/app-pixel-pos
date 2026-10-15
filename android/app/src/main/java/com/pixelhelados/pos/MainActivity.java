@@ -9,6 +9,9 @@ public class MainActivity extends BridgeActivity {
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         try {
+            // Asegurar que los botones físicos de volumen controlen el volumen multimedia
+            setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
+
             if (this.bridge != null && this.bridge.getWebView() != null) {
                 WebSettings settings = this.bridge.getWebView().getSettings();
                 settings.setMediaPlaybackRequiresUserGesture(false);
