@@ -60,6 +60,7 @@ import {
 import { isExtraInStock, isCupInStock, isDrinkCold } from '../../utils/cafeStockSync';
 import { getCleanSizeLabel } from '../Orders/baristaRecipesData';
 import ProductInfoIcon from './ProductInfoIcon';
+import { isProductAvailable, isProductOptionAvailable, isProductOptionFlagAvailable } from '../../utils/productStock';
 
 const isElectron = !!window.electron;
 
@@ -100,6 +101,8 @@ export default function CardProduct({
   recipe12oz = '',
   recipe16oz = '',
   recipes = null,
+  stock = null,
+  onUpdateStock = null,
   ...restProps
 }) {
   const dispatch = useDispatch();
@@ -332,6 +335,7 @@ export default function CardProduct({
 
   // --- Estados de selección ---
   const [open, setOpen] = useState(false);
+  const [stockPanelOpen, setStockPanelOpen] = useState(false);
   const [selectedTemperature, setSelectedTemperature] = useState('Caliente');
   const [selectedSize, setSelectedSize] = useState('');
   const [selectedExtraIds, setSelectedExtraIds] = useState([]);
@@ -346,6 +350,131 @@ export default function CardProduct({
   const [isHoveredSubmit, setIsHoveredSubmit] = useState(false);
   const { cartItems } = useSelector((state) => state.cart);
   const [flavorCounts, setFlavorCounts] = useState({});
+  const productAvailable = isProductAvailable(stock);
+
+  const renderStockControl = () => onUpdateStock ? (
+    <button
+      type="button"
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        setStockPanelOpen(true);
+      }}
+      style={{
+        position: 'absolute',
+        top: 7,
+        right: 7,
+        zIndex: 4,
+        border: `1px solid ${productAvailable ? '#bbf7d0' : '#fecaca'}`,
+        borderRadius: 999,
+        padding: '3px 7px',
+        background: productAvailable ? '#f0fdf4' : '#fef2f2',
+        color: productAvailable ? '#166534' : '#b91c1c',
+        fontSize: 9,
+        lineHeight: 1.2,
+        fontWeight: 800,
+        cursor: 'pointer',
+      }}
+      title="Administrar disponibilidad"
+    >
+      {productAvailable ? 'Stock' : 'Agotado'}
+    </button>
+  ) : null;
+
+  const renderStockPanel = () => stockPanelOpen && createPortal(
+    <>
+      <div
+        onClick={() => setStockPanelOpen(false)}
+        style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(15, 23, 42, .48)', backdropFilter: 'blur(3px)' }}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Stock de ${name}`}
+        style={{
+          position: 'fixed',
+          zIndex: 12001,
+          left: '50%',
+          top: '50%',
+          transform: 'translate(-50%, -50%)',
+          width: 'min(390px, calc(100vw - 32px))',
+          maxHeight: 'min(620px, calc(100vh - 40px))',
+          overflowY: 'auto',
+          borderRadius: 18,
+          padding: 18,
+          background: '#fff',
+          boxShadow: '0 24px 70px rgba(15, 23, 42, .28)',
+          fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+          <div>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>Disponibilidad</div>
+            <div style={{ fontSize: 18, color: '#1e293b', fontWeight: 850 }}>{name}</div>
+          </div>
+          <button type="button" onClick={() => setStockPanelOpen(false)} style={{ border: 0, background: '#f1f5f9', width: 32, height: 32, borderRadius: 9, cursor: 'pointer' }}>
+            <X size={16} />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onUpdateStock?.('')}
+          style={{
+            width: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            border: `1px solid ${productAvailable ? '#bbf7d0' : '#fecaca'}`,
+            borderRadius: 12,
+            padding: '11px 12px',
+            background: productAvailable ? '#f0fdf4' : '#fef2f2',
+            color: productAvailable ? '#166534' : '#b91c1c',
+            fontWeight: 800,
+            cursor: 'pointer',
+          }}
+        >
+          <span>Producto completo</span>
+          <span>{productAvailable ? 'Disponible' : 'Agotado'}</span>
+        </button>
+
+        {parsedDirectOptions.length > 0 && (
+          <div style={{ marginTop: 14, display: 'grid', gap: 8 }}>
+            <div style={{ fontSize: 11, color: '#64748b', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.05em' }}>Opciones</div>
+            {parsedDirectOptions.map((option) => {
+              const available = isProductOptionFlagAvailable(stock, option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => onUpdateStock?.(option.value)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 10,
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 11,
+                    padding: '9px 11px',
+                    background: '#fff',
+                    color: '#334155',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <span style={{ textAlign: 'left' }}>{option.label}</span>
+                  <span style={{ color: available ? '#15803d' : '#b91c1c', fontSize: 11 }}>
+                    {available ? 'Disponible' : 'Agotado'}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </>,
+    document.body
+  );
 
   const handleFlavorClick = (label) => {
     const nextCounts = {
@@ -1457,6 +1586,7 @@ export default function CardProduct({
         <CardProductStyled
           $accent="#4d0012"
           onClick={() => {
+            if (!productAvailable) return;
             if (isOutOfCupStock) {
               setWithCinnamon(isCappuccino);
               setWithCoffee(true);
@@ -1479,11 +1609,12 @@ export default function CardProduct({
             }
           }}
           style={{
-            opacity: isOutOfCupStock ? 0.65 : 1,
+            opacity: isOutOfCupStock || !productAvailable ? 0.65 : 1,
             position: 'relative',
           }}
           $isElectron={isElectron}
         >
+          {renderStockControl()}
           <div className="left">
             <span className="name">{name?.trim()}</span>
             <ProductInfoIcon product={productInfoData} size="small" />
@@ -1926,11 +2057,13 @@ export default function CardProduct({
                         >
                           {cafeteriaProductOptions.map((opt) => {
                             const isSelected = selectedVariety === opt.value;
+                            const optionAvailable = isProductOptionAvailable(stock, opt.value);
                             return (
                               <button
                                 key={opt.value}
                                 type="button"
-                                onClick={() => setSelectedVariety(opt.value)}
+                                disabled={!optionAvailable}
+                                onClick={() => optionAvailable && setSelectedVariety(opt.value)}
                                 style={{
                                   padding: isSmoothie ? '10px 12px' : '6px 10px',
                                   borderRadius: isSmoothie ? 10 : 8,
@@ -1951,7 +2084,8 @@ export default function CardProduct({
                                       ? '#be185d'
                                       : '#4d0012'
                                     : '#333',
-                                  cursor: 'pointer',
+                                  cursor: optionAvailable ? 'pointer' : 'not-allowed',
+                                  opacity: optionAvailable ? 1 : 0.46,
                                   textAlign: 'center',
                                   fontSize: isSmoothie ? 13 : 12,
                                   fontFamily: 'Inter, sans-serif',
@@ -1964,7 +2098,7 @@ export default function CardProduct({
                                     : 'none',
                                 }}
                               >
-                                {opt.label}
+                                {opt.label}{!optionAvailable ? ' · Agotado' : ''}
                               </button>
                             );
                           })}
@@ -1972,7 +2106,9 @@ export default function CardProduct({
                       ) : (
                         <SelectStyles
                           placeholder="Buscá o elegí la variedad..."
-                          options={cafeteriaProductOptions}
+                          options={cafeteriaProductOptions.filter((option) =>
+                            isProductOptionAvailable(stock, option.value)
+                          )}
                           value={
                             selectedVariety
                               ? { value: selectedVariety, label: selectedVariety }
@@ -2344,33 +2480,78 @@ export default function CardProduct({
 
                   {/* Nombre en vaso (para cafés clásicos, fríos y smoothies, no para pastelería) */}
                   {(isSmoothie || (category !== 'pasteleria' && category !== 'Pastelería')) && (
-                    <div style={{ marginBottom: 18 }}>
-                      <span
+                    <div
+                      style={{
+                        marginBottom: 18,
+                        padding: '14px',
+                        borderRadius: 12,
+                        border: '1px solid #e7caca',
+                        background: 'linear-gradient(135deg, #fff8f8 0%, #fff 100%)',
+                        boxShadow: '0 3px 10px rgba(120, 0, 0, 0.06)',
+                      }}
+                    >
+                      <label
+                        htmlFor={`cup-name-${id}`}
                         style={{
-                          fontSize: 12.5,
-                          fontWeight: 700,
-                          color: '#1e293b',
-                          display: 'block',
-                          marginBottom: 8,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 9,
+                          marginBottom: 10,
+                          cursor: 'text',
                         }}
                       >
-                        Nombre en el vaso (opcional)
-                      </span>
+                        <span
+                          style={{
+                            width: 34,
+                            height: 34,
+                            display: 'grid',
+                            placeItems: 'center',
+                            flexShrink: 0,
+                            borderRadius: 10,
+                            background: '#780000',
+                            color: '#fff',
+                            boxShadow: '0 3px 8px rgba(120, 0, 0, 0.2)',
+                          }}
+                        >
+                          <CupSoda size={18} strokeWidth={2.2} />
+                        </span>
+                        <span style={{ display: 'grid', gap: 2 }}>
+                          <span style={{ fontSize: 13.5, fontWeight: 800, color: '#3f1010' }}>
+                            Nombre en el vaso
+                          </span>
+                          <span style={{ fontSize: 11.5, color: '#806b6b', fontWeight: 500 }}>
+                            Opcional · para identificar la bebida
+                          </span>
+                        </span>
+                      </label>
                       <input
+                        id={`cup-name-${id}`}
                         type="text"
                         placeholder="Ej: Juan, Sofi..."
                         value={vasoName}
                         onChange={(e) => setVasoName(e.target.value)}
                         style={{
                           width: '100%',
-                          height: 36,
-                          padding: '6px 12px',
-                          borderRadius: 8,
-                          border: '1.5px solid #e4e4e7',
-                          fontSize: 13,
+                          height: 44,
+                          padding: '0 13px',
+                          borderRadius: 9,
+                          border: '1.5px solid #d8b4b4',
+                          background: '#fff',
+                          color: '#1f2937',
+                          fontSize: 14,
+                          fontWeight: 600,
                           outline: 'none',
                           boxSizing: 'border-box',
                           fontFamily: 'Inter, sans-serif',
+                          transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
+                        }}
+                        onFocus={(e) => {
+                          e.currentTarget.style.borderColor = '#780000';
+                          e.currentTarget.style.boxShadow = '0 0 0 3px rgba(120, 0, 0, 0.1)';
+                        }}
+                        onBlur={(e) => {
+                          e.currentTarget.style.borderColor = '#d8b4b4';
+                          e.currentTarget.style.boxShadow = 'none';
                         }}
                       />
                     </div>
@@ -2492,6 +2673,7 @@ export default function CardProduct({
             </>,
             document.body
           )}
+        {renderStockPanel()}
       </>
     );
   }
@@ -2501,15 +2683,23 @@ export default function CardProduct({
       {!shouldOpenModal ? (
         <CardProductStyled
           $accent={ACCENTS[category]}
-          onClick={() => dispatch(addToCart({ name, price, id, category }))}
+          onClick={() => productAvailable && dispatch(addToCart({ name, price, id, category }))}
+          style={{ position: 'relative', opacity: productAvailable ? 1 : 0.62 }}
           $isElectron={isElectron}
         >
+          {renderStockControl()}
           <div className="left">
             <span className="name">{isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name?.trim()}` : name?.trim()}</span>
           </div>
         </CardProductStyled>
       ) : (
-        <CardProductStyled $accent={ACCENTS[category]} onClick={openModal} $isElectron={isElectron}>
+        <CardProductStyled
+          $accent={ACCENTS[category]}
+          onClick={() => productAvailable && openModal()}
+          style={{ position: 'relative', opacity: productAvailable ? 1 : 0.62 }}
+          $isElectron={isElectron}
+        >
+          {renderStockControl()}
           <div className="left">
             <span className="name">{isFrappe && !/frapp[eé]/i.test(name) ? `Frappe ${name?.trim()}` : name?.trim()}</span>
           </div>
@@ -2597,15 +2787,18 @@ export default function CardProduct({
                         {getOptions().map((opt) => {
                           const label = typeof opt === 'string' ? opt : opt.label;
                           const count = flavorCounts[label] || 0;
+                          const optionAvailable = isProductOptionAvailable(stock, label);
 
                           return (
                             <OptionBtn
                               type="button"
                               key={label}
                               $isSelected={count > 0}
-                              onClick={() => handleFlavorClick(label)}
+                              disabled={!optionAvailable}
+                              onClick={() => optionAvailable && handleFlavorClick(label)}
+                              style={{ opacity: optionAvailable ? 1 : 0.42, cursor: optionAvailable ? 'pointer' : 'not-allowed' }}
                             >
-                              <span className="label-text">{label}</span>
+                              <span className="label-text">{label}{!optionAvailable ? ' · Agotado' : ''}</span>
                               <div className="btn-actions">
                                 {count > 0 ? (
                                   <>
@@ -2919,6 +3112,7 @@ export default function CardProduct({
           </>,
           document.body
         )}
+      {renderStockPanel()}
     </>
   );
 }

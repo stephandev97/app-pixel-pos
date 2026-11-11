@@ -1,15 +1,34 @@
 import React, { useCallback, useEffect, useMemo, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { ArrowUp, Bell, BellOff, Coffee, FlaskConical, Search, Sparkles, Trash2 } from 'lucide-react';
+import {
+  ArrowUp,
+  BellRing,
+  Bike,
+  CheckCircle2,
+  ChefHat,
+  ChevronDown,
+  Clock,
+  Coffee,
+  Eye,
+  FlaskConical,
+  LoaderCircle,
+  PackageCheck,
+  Search,
+  Smartphone,
+  Sparkles,
+  Trash2,
+} from 'lucide-react';
+import { Menu, MenuItem } from '@mui/material';
 import { FaXmark } from 'react-icons/fa6';
-import { MdSort } from 'react-icons/md';
 import PrintIcon from '@mui/icons-material/Print';
-import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import TimerOutlinedIcon from '@mui/icons-material/TimerOutlined';
 
 import logoPixel from '../../assets/logoprint.png';
 import { pb } from '../../lib/pb';
+import { isScheduledOpen, isWaitingSchedule } from '../../utils/scheduledOrders';
+import { getOrdersCollectionName } from '../../lib/ordersCollection';
 import {
+  addTestOrder,
   clearTestOrders,
   deleteTestOrder,
   fetchMoreOrders,
@@ -19,6 +38,7 @@ import {
   setOrderBaristaStatus,
   subscribeOrdersRealtime,
   syncPendingOrders,
+  upsertOrder,
 } from '../../redux/orders/ordersSlice';
 import { computeBusinessDate } from '../../utils/stats';
 import { isBaristaOrder } from '../../utils/cafeStockSync';
@@ -27,9 +47,8 @@ import {
   isBaristaSoundEnabled,
   playBaristaNotificationSound,
   setBaristaScreenActive,
-  setBaristaSoundEnabled,
-  testBaristaSound,
 } from '../../utils/soundNotifications';
+import { notifyWindowsOfAppOrder } from '../../utils/windowsNotifications';
 
 import {
   ContainerOrders,
@@ -62,14 +81,247 @@ const MOCK_PENDING_DELIVERY_ORDER = {
 
 const SHOW_TOP_PENDING_BANNER = false; // Deshabilitado temporalmente por solicitud del usuario
 
+const SIMULATE_APP_OPTIONS = [
+  { progress: 'pending', type: 'delivery', label: 'Pendiente (Delivery)', icon: Clock, color: '#b45309' },
+  { progress: 'pending', type: 'take_away', label: 'Pendiente (Take Away)', icon: Clock, color: '#b45309' },
+  { progress: 'received', type: 'delivery', label: 'Recibido', icon: Eye, color: '#0284c7' },
+  { progress: 'preparing', type: 'delivery', label: 'En preparación', icon: ChefHat, color: '#7c3aed' },
+  { progress: 'dispatched', type: 'delivery', label: 'Despachado (Delivery)', icon: Bike, color: '#4338ca' },
+  { progress: 'ready', type: 'take_away', label: 'Listo para retirar (Take Away)', icon: PackageCheck, color: '#059669' },
+  { progress: 'delivered', type: 'delivery', label: 'Entregado', icon: CheckCircle2, color: '#15803d' },
+  { progress: 'pickedup', type: 'take_away', label: 'Entregado (Take Away)', icon: CheckCircle2, color: '#15803d' },
+];
+
 export default function Orders({ isBarista = false, isTestOrders = false }) {
   const dispatch = useDispatch();
   const unsubRef = useRef(null);
   const { orders, testOrders = [], pagination, status } = useSelector((s) => s.orders);
   const isAdmin = useSelector((s) => s.actions?.isAdmin);
+  const isTestMode = useSelector((s) => s.actions?.isTestMode);
+  const [scheduledRecords, setScheduledRecords] = useState([]);
+  const [scheduleError, setScheduleError] = useState('');
+  const [scheduleNow, setScheduleNow] = useState(Date.now());
+  useEffect(() => {
+    let active = true;
+    let refreshingSchedule = false;
+    const collection = isTestOrders || isTestMode ? 'orders_test' : getOrdersCollectionName();
+    setScheduledRecords([]);
+    const refresh = async () => {
+      if (!active || refreshingSchedule || document.visibilityState !== 'visible') return;
+      refreshingSchedule = true;
+      try {
+        const records = await pb.collection(collection).getFullList({
+          filter: 'scheduledStart != "" && progress != "delivered" && progress != "pickedup" && entregado = ""',
+          sort: 'scheduledStart', requestKey: null,
+        });
+        if (active) {
+          records.forEach((record) => dispatch(upsertOrder(record)));
+          setScheduledRecords(records); setScheduleError(''); setScheduleNow(Date.now());
+        }
+      } catch (error) { if (active) setScheduleError('No se pudieron actualizar los pedidos programados.'); }
+      finally { refreshingSchedule = false; }
+    };
+    refresh();
+    const clock = setInterval(() => setScheduleNow(Date.now()), 30000);
+    const interval = setInterval(refresh, 300000);
+    const onVisible = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onVisible);
+    let stop;
+    pb.collection(collection).subscribe('*', ({ action, record }) => {
+      if (!active || !record) return;
+      const openSchedule = record.scheduledStart && !['delivered', 'pickedup'].includes(record.progress) && !record.entregado;
+      if (openSchedule && action !== 'delete') dispatch(upsertOrder(record));
+      setScheduledRecords((current) => {
+        const rest = current.filter((item) => item.id !== record.id);
+        if (!openSchedule || action === 'delete') return rest.length === current.length ? current : rest;
+        return [...rest, record].sort((a, b) => String(a.scheduledStart).localeCompare(String(b.scheduledStart)));
+      });
+    }).then((unsubscribe) => {
+      if (active) stop = unsubscribe; else unsubscribe();
+    }).catch(() => {});
+    return () => { active = false; clearInterval(clock); clearInterval(interval); stop?.(); document.removeEventListener('visibilitychange', onVisible); };
+  }, [dispatch, isTestOrders, isTestMode]);
   const simulatedPendingOrder = useSelector((s) => s.actions?.simulatedPendingOrder);
+  const [addressQuery, setAddressQuery] = useState('');
+  const [orderTypeFilter, setOrderTypeFilter] = useState('pending');
+  const [visibleOrderLimit, setVisibleOrderLimit] = useState(10);
   const { isConnected: isLanConnected, isServer: isLanServer } = useLanSync();
-  const [soundActive, setSoundActive] = useState(() => isBaristaSoundEnabled());
+  const [simMenuAnchor, setSimMenuAnchor] = useState(null);
+
+  const handleSimulateAppOrder = useCallback(
+    (targetProgress = 'pending', type = 'delivery') => {
+      const testId = `local-test-app-${Date.now()}`;
+      const now = new Date();
+      const horaStr = now.toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' });
+      const isDeliv = type === 'delivery';
+
+      const mockAppOrder = {
+        id: testId,
+        number: Math.floor(100 + Math.random() * 900),
+        numeracion: Math.floor(100 + Math.random() * 900),
+        source: 'app',
+        mode: isDeliv ? 'delivery' : 'retiro',
+        progress: targetProgress,
+        name: 'Cliente App Web (Prueba)',
+        phone: '11 4567-8901',
+        direccion: isDeliv ? 'Av. Corrientes 2450, 5° A' : 'Retiro',
+        total: 9200,
+        pago: 'Mercado Pago (App)',
+        method: 'transferencia',
+        pagoMp: 9200,
+        pagoEfectivo: 0,
+        pagoDebito: 0,
+        cambio: 0,
+        check: false,
+        copied: targetProgress === 'dispatched',
+        baristaDone:
+          targetProgress === 'ready' ||
+          targetProgress === 'dispatched' ||
+          targetProgress === 'delivered' ||
+          targetProgress === 'pickedup',
+        isTestOrder: true,
+        clientCreatedAt: Date.now(),
+        created: now.toISOString(),
+        hora: horaStr,
+        items: [
+          {
+            name: 'Latte Vainilla',
+            quantity: 1,
+            price: 4200,
+            category: 'Cafeteria',
+            size: '12oz',
+            extras: ['Leche de Almendras'],
+          },
+          {
+            name: '1/2 Kg Helado',
+            quantity: 1,
+            price: 5000,
+            category: 'Helados',
+            sabores: ['Dulce de Leche Pixel', 'Chocolate Especial'],
+          },
+        ],
+      };
+
+      dispatch(addTestOrder(mockAppOrder));
+
+      if (isBarista && isBaristaSoundEnabled()) {
+        try {
+          playBaristaNotificationSound(testId);
+        } catch {}
+      }
+    },
+    [dispatch, isBarista]
+  );
+
+  const handleTestWindowsNotification = useCallback(() => {
+    notifyWindowsOfAppOrder({
+      id: 'app-test-4f8a2c',
+      direccion: 'Av. Corrientes 2450, 5° A',
+      total: 9200,
+    });
+  }, []);
+
+  const renderSimulateButton = (compact = false) => (
+    <div style={{ display: 'inline-flex', alignItems: 'center', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+      <button
+        type="button"
+        onClick={() => handleSimulateAppOrder('pending', 'delivery')}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          background: '#6d28d9',
+          color: '#fff',
+          border: 'none',
+          borderRadius: '8px 0 0 8px',
+          padding: compact ? '5px 8px' : '7px 12px',
+          fontSize: compact ? '0.74rem' : '0.8rem',
+          fontWeight: 800,
+          cursor: 'pointer',
+          boxShadow: '0 1px 3px rgba(109, 40, 217, 0.3)',
+          transition: 'filter 0.15s ease',
+          fontFamily: "'Inter', sans-serif",
+          whiteSpace: 'nowrap',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.12)')}
+        onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+        title="Crear pedido de prueba de la App Web (Pendiente)"
+      >
+        <Smartphone size={compact ? 12 : 14} />
+        {compact ? 'Simular App' : 'Simular pedido App'}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          setSimMenuAnchor(e.currentTarget);
+        }}
+        style={{
+          background: '#5b21b6',
+          color: '#fff',
+          border: 'none',
+          borderLeft: '1px solid rgba(255,255,255,0.25)',
+          borderRadius: '0 8px 8px 0',
+          padding: compact ? '5px 6px' : '7px 8px',
+          cursor: 'pointer',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 1px 3px rgba(109, 40, 217, 0.3)',
+          transition: 'filter 0.15s ease',
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.15)')}
+        onMouseLeave={(e) => (e.currentTarget.style.filter = 'brightness(1)')}
+        title="Elegir estado específico para simular"
+      >
+        <ChevronDown size={compact ? 12 : 14} />
+      </button>
+
+      <Menu
+        anchorEl={simMenuAnchor}
+        open={Boolean(simMenuAnchor)}
+        onClose={() => setSimMenuAnchor(null)}
+        onClick={(e) => e.stopPropagation()}
+        PaperProps={{
+          sx: {
+            borderRadius: '12px',
+            boxShadow: '0 10px 28px rgba(0,0,0,0.18)',
+            minWidth: 235,
+            py: 0.5,
+          },
+        }}
+      >
+        <div style={{ padding: '6px 14px 4px', fontSize: '0.72rem', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>
+          Simular pedido en estado:
+        </div>
+        {SIMULATE_APP_OPTIONS.map((opt, i) => {
+          const OptIcon = opt.icon;
+          return (
+            <MenuItem
+              key={i}
+              onClick={() => {
+                setSimMenuAnchor(null);
+                handleSimulateAppOrder(opt.progress, opt.type);
+              }}
+              sx={{
+                fontSize: '0.8rem',
+                fontWeight: 700,
+                color: opt.color,
+                py: 0.8,
+                gap: 1.2,
+                '&:hover': {
+                  backgroundColor: `${opt.color}14`,
+                },
+              }}
+            >
+              <OptIcon size={15} color={opt.color} strokeWidth={2.4} />
+              <span style={{ flex: 1 }}>{opt.label}</span>
+            </MenuItem>
+          );
+        })}
+      </Menu>
+    </div>
+  );
 
   useEffect(() => {
     if (isBarista) {
@@ -287,7 +539,11 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   }, []);
 
   const handleLoadMore = () => {
-    dispatch(fetchMoreOrders());
+    const hasMoreLoadedMatches = filteredTodayOrders.length > visibleOrderLimit;
+    setVisibleOrderLimit((limit) => limit + 10);
+    if (!hasMoreLoadedMatches) {
+      dispatch(fetchMoreOrders());
+    }
   };
 
   useEffect(() => {
@@ -303,15 +559,27 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
       setIsInitialLoading(false)
     );
     dispatch(fetchTodayPendingOrders());
-  }, [dispatch, isTestOrders, isBarista]);
+    // isTestMode: al cambiar de modo se recarga desde `orders` u `orders_test`
+  }, [dispatch, isTestOrders, isBarista, isTestMode]);
 
   useEffect(() => {
     if (isTestOrders) return;
-    unsubRef.current = dispatch(subscribeOrdersRealtime());
+    let cancelled = false;
+    unsubRef.current = null;
+    dispatch(subscribeOrdersRealtime())
+      .then((action) => {
+        const unsub = action?.payload;
+        if (typeof unsub !== 'function') return;
+        if (cancelled) unsub();
+        else unsubRef.current = unsub;
+      })
+      .catch(() => {});
     return () => {
+      cancelled = true;
       if (typeof unsubRef.current === 'function') unsubRef.current();
+      unsubRef.current = null;
     };
-  }, [dispatch, isTestOrders]);
+  }, [dispatch, isTestOrders, isTestMode]);
 
   useEffect(() => {
     if (isTestOrders) return;
@@ -331,10 +599,10 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
   useEffect(() => {
     if (isTestOrders) return;
     const timer = setInterval(() => {
-      if (navigator.onLine && !isBarista) {
+      if (navigator.onLine && !isBarista && document.visibilityState === 'visible') {
         dispatch(fetchTodayPendingOrders());
       }
-    }, 30000);
+    }, 120000);
     return () => clearInterval(timer);
   }, [dispatch, isBarista, isTestOrders]);
 
@@ -410,10 +678,41 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
       return combined;
     }
 
+    if (isTestMode) {
+      // En modo prueba activo, mostramos pedidos normales + pedidos de prueba
+      const normalOrders = (orders || []).filter(
+        (o) => !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
+      );
+      const combined = [...normalOrders];
+      const seen = new Set(combined.map((o) => o.id));
+
+      const allTest = [...(testOrders || [])];
+      storedTest.forEach((st) => {
+        if (st && st.id && !allTest.some((x) => x.id === st.id)) {
+          allTest.push(st);
+        }
+      });
+
+      (orders || []).forEach((o) => {
+        if (o?.isTestOrder || (o?.id && String(o.id).startsWith('local-test-'))) {
+          allTest.push(o);
+        }
+      });
+
+      allTest.forEach((to) => {
+        if (to && to.id && !seen.has(to.id)) {
+          combined.push(to);
+          seen.add(to.id);
+        }
+      });
+
+      return combined;
+    }
+
     return (orders || []).filter(
       (o) => !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
     );
-  }, [isTestOrders, isBarista, testOrders, orders, storageTick]);
+  }, [isTestOrders, isBarista, isTestMode, testOrders, orders, storageTick]);
 
   const todayBusinessDate = computeBusinessDate(new Date(), 3);
   const todayOrders = useMemo(() => {
@@ -426,7 +725,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
         return true;
       }
       const bDate = order.businessDate || order.day;
-      return !bDate || bDate === todayBusinessDate;
+      return isScheduledOpen(order) || !bDate || bDate === todayBusinessDate;
     });
   }, [effectiveOrders, isTestOrders, todayBusinessDate]);
 
@@ -436,57 +735,32 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
       list.unshift(MOCK_PENDING_DELIVERY_ORDER);
     }
     return list.sort((a, b) => {
-      const ta = a.clientCreatedAt ?? new Date(a.created ?? 0).getTime();
-      const tb = b.clientCreatedAt ?? new Date(b.created ?? 0).getTime();
+      const ta = Number(a.clientCreatedAt) || new Date(a.created ?? 0).getTime();
+      const tb = Number(b.clientCreatedAt) || new Date(b.created ?? 0).getTime();
       return tb - ta;
     });
   }, [todayOrders, simulatedPendingOrder, isBarista, isTestOrders]);
 
-  const [addressQuery, setAddressQuery] = useState('');
-  const [orderTypeFilter, setOrderTypeFilter] = useState('all'); // 'all' | 'retiro' | 'delivery' | 'local' | 'pending'
-  const [orderSort, setOrderSort] = useState(() => {
-    return localStorage.getItem('pixel_orders_sort') || 'recent';
-  }); // 'recent' | 'pending'
-  const [sortDropdownOpen, setSortDropdownOpen] = useState(false);
-
-  useEffect(() => {
-    if (!sortDropdownOpen) return;
-    const handler = () => setSortDropdownOpen(false);
-    document.addEventListener('click', handler);
-    return () => document.removeEventListener('click', handler);
-  }, [sortDropdownOpen]);
-
-  const isDev = process.env.NODE_ENV === 'development' || Boolean(isAdmin);
+  const isDevelopmentBuild = process.env.NODE_ENV === 'development';
+  const isDev = isDevelopmentBuild || Boolean(isAdmin);
   const isAndroidApp = isAndroid();
   const [showDevTicketPreview, setShowDevTicketPreview] = useState(false);
-
-  const [allLoaded, setAllLoaded] = useState(false);
-
-  useEffect(() => {
-    if (isTestOrders) return;
-    if (addressQuery.trim() && !allLoaded) {
-      dispatch(hydrateAllTodayOrders()).then(() => setAllLoaded(true));
-    } else if (!addressQuery.trim() && allLoaded) {
-      setAllLoaded(false);
-      dispatch(hydrateOrdersFromPocket({ page: 1, perPage: 10 }));
-    }
-  }, [addressQuery, allLoaded, dispatch, isTestOrders]);
 
   const allOrdersList = useMemo(() => {
     if (isBarista && showMockOrders && !isAndroidApp) {
       return [...MOCK_BARISTA_ORDERS, ...sortedTodayOrders];
     }
-    return sortedTodayOrders;
-  }, [sortedTodayOrders, isBarista, showMockOrders, isAndroidApp]);
+    const merged = new Map(sortedTodayOrders.map((order) => [order.id, order]));
+    scheduledRecords.forEach((order) => merged.set(order.id, order));
+    return [...merged.values()];
+  }, [sortedTodayOrders, scheduledRecords, isBarista, showMockOrders, isAndroidApp]);
 
   const [localChangeTick, setLocalChangeTick] = useState(0);
 
   useEffect(() => {
     const handler = () => setLocalChangeTick((t) => t + 1);
-    window.addEventListener('order-hidden-changed', handler);
     window.addEventListener('order-copied-changed', handler);
     return () => {
-      window.removeEventListener('order-hidden-changed', handler);
       window.removeEventListener('order-copied-changed', handler);
     };
   }, []);
@@ -506,62 +780,58 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     return set;
   }, [allOrdersList, localChangeTick]);
 
-  const hiddenIdsSet = useMemo(() => {
-    void localChangeTick;
-    void allOrdersList;
-    const set = new Set();
-    try {
-      for (let i = 0; i < localStorage.length; i++) {
-        const k = localStorage.key(i);
-        if (k && k.startsWith('order-hidden-') && localStorage.getItem(k) === 'true') {
-          set.add(k.replace('order-hidden-', ''));
-        }
-      }
-    } catch (e) {}
-    return set;
-  }, [allOrdersList, localChangeTick]);
+  const { rankById } = useMemo(() => {
+    const pendingCount = sortedTodayOrders.filter((o) => o?.pending).length;
 
-  const pendingDeliveryCount = useMemo(() => {
-    let delCount = 0;
+    const serverCount =
+      !isTestOrders &&
+      typeof pagination?.totalItems === 'number' &&
+      Number.isFinite(pagination.totalItems)
+        ? pagination.totalItems
+        : sortedTodayOrders.filter((o) => !o?.pending).length;
 
-    for (let i = 0; i < sortedTodayOrders.length; i++) {
-      const o = sortedTodayOrders[i];
-      const dirTrim = String(o?.direccion ?? '').trim().toLowerCase();
-      const isLocal =
-        dirTrim === 'comer en el local' ||
-        dirTrim.includes('local') ||
-        dirTrim.includes('salon') ||
-        dirTrim.includes('salón') ||
-        dirTrim.includes('comer') ||
-        dirTrim.includes('mesa');
-      const isRetiro =
-        !isLocal &&
-        (dirTrim === 'retiro' ||
-          dirTrim.includes('take away') ||
-          dirTrim.includes('llevar'));
-      const isDelivery = Boolean(dirTrim) && !isRetiro && !isLocal;
-      if (!isDelivery) continue; // Ni retiro ni comer en el local cuentan para pendientes
+    const total = serverCount + pendingCount;
 
-      const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
-      const isHidden = hiddenIdsSet.has(o?.id);
+    const map = new Map();
+    sortedTodayOrders.forEach((o, idx) => {
+      map.set(o.id, total - idx);
+    });
 
-      if (o?.pending) {
-        delCount++;
-      } else if (!isCopied && !isHidden) {
-        delCount++;
-      }
-    }
+    return { rankById: map };
+  }, [sortedTodayOrders, pagination?.totalItems, isTestOrders]);
 
-    return delCount;
-  }, [sortedTodayOrders, copiedIdsSet, hiddenIdsSet]);
-
-  const totalPendingCount = pendingDeliveryCount;
-
-  useEffect(() => {
-    if (orderTypeFilter === 'pending' && totalPendingCount === 0) {
-      setOrderTypeFilter('all');
-    }
-  }, [orderTypeFilter, totalPendingCount]);
+  const totalPendingCount = useMemo(
+    () =>
+      sortedTodayOrders.filter((o) => {
+        if (isWaitingSchedule(o, scheduleNow)) return false;
+        const dir = String(o?.direccion ?? '').trim().toLowerCase();
+        const isLocal =
+          dir.includes('local') ||
+          dir.includes('salon') ||
+          dir.includes('salón') ||
+          dir.includes('comer') ||
+          dir.includes('mesa');
+        const isRetiro =
+          !isLocal &&
+          (dir === 'retiro' ||
+            dir.includes('take away') ||
+            dir.includes('llevar'));
+        // Los pedidos para comer en el local se muestran en Take Away, no en
+        // Pendientes. Los retiros hechos directamente en mostrador tampoco.
+        const isCounterPickup =
+          isLocal ||
+          (isRetiro && String(o?.source || '').trim().toLowerCase() !== 'app');
+        const isPreparing = String(o?.progress || '').trim().toLowerCase() === 'preparing';
+        const isSent =
+          Boolean(o?.copied) ||
+          copiedIdsSet.has(o?.id) ||
+          ['dispatched', 'delivered', 'pickedup'].includes(
+            String(o?.progress || '').trim().toLowerCase()
+          );
+        return !isCounterPickup && (!isSent || isPreparing);
+      }).length,
+    [sortedTodayOrders, copiedIdsSet, scheduleNow]
+  );
 
   const completedCount = useMemo(() => {
     if (!isBarista) return 0;
@@ -581,6 +851,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     const q = addressQuery.trim().toLowerCase();
 
     const filtered = allOrdersList.filter((o) => {
+      if (isWaitingSchedule(o, scheduleNow)) return false;
       // Filtros del Barista
       if (isBarista) {
         // Solo mostrar si es orden de barista (contiene cafetería o es pedido de prueba)
@@ -611,112 +882,156 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
       const isDelivery = Boolean(dir.trim()) && !isRetiro && !isLocal;
 
       // filtro por tipo
-      if (orderTypeFilter === 'local' && !isLocal) return false;
-      if (orderTypeFilter === 'retiro' && !isRetiro) return false;
+      if (
+        orderTypeFilter === 'app' &&
+        String(o?.source || '').trim().toLowerCase() !== 'app'
+      ) {
+        return false;
+      }
+      if (orderTypeFilter === 'take_away' && !isRetiro && !isLocal) return false;
       if (orderTypeFilter === 'delivery' && !isDelivery) return false;
       if (orderTypeFilter === 'pending') {
-        if (!isDelivery) return false; // Ni retiro ni comer en el local entran en pendientes
-        const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
-        const isHidden = hiddenIdsSet.has(o?.id);
-        let isPend = false;
-        if (o?.pending) {
-          isPend = true;
-        } else if (isBarista) {
-          isPend = !isOrderPrepared(o);
-        } else {
-          isPend = !isCopied && !isHidden;
-        }
-        if (!isPend) return false;
+        const isCounterPickup =
+          isLocal ||
+          (isRetiro && String(o?.source || '').trim().toLowerCase() !== 'app');
+        const isPreparing = String(o?.progress || '').trim().toLowerCase() === 'preparing';
+        const isSent =
+          Boolean(o?.copied) ||
+          copiedIdsSet.has(o?.id) ||
+          ['dispatched', 'delivered', 'pickedup'].includes(
+            String(o?.progress || '').trim().toLowerCase()
+          );
+        if (isCounterPickup || (isSent && !isPreparing)) return false;
       }
 
-      // filtro por búsqueda (dirección, #número o nombre)
+      // filtro por búsqueda (dirección, #número, nombre, teléfono, productos)
       if (!q) return true;
-      const cleanQ = q.replace(/^#/, '').trim();
-      const numMatch = cleanQ && String(o?.numeracion ?? o?.number ?? '').toLowerCase().includes(cleanQ);
-      const nameMatch = String(o?.name ?? '').toLowerCase().includes(q);
-      return dir.includes(q) || Boolean(numMatch) || Boolean(nameMatch);
+
+      const dispNum = String(
+        isBarista
+          ? (o?.numeracion ?? rankById?.get(o?.id) ?? o?.number ?? '')
+          : (rankById?.get(o?.id) ?? o?.numeracion ?? o?.number ?? '')
+      ).toLowerCase();
+      const oNum = String(o?.numeracion ?? '').toLowerCase();
+      const oNumber = String(o?.number ?? '').toLowerCase();
+      const oId = String(o?.id ?? '').toLowerCase();
+
+      // Si el usuario escribe '#' o '#1' o '#563' -> coincidencia EXACTA del número de orden (100%)
+      if (q.startsWith('#')) {
+        const cleanNum = q.replace(/^#\s*/, '').trim();
+        if (!cleanNum) return true; // Si solo escribe '#', no filtra nada
+
+        const isNumeric = /^\d+$/.test(cleanNum);
+        const targetNumber = isNumeric ? Number(cleanNum) : null;
+
+        const checkExact = (val) => {
+          if (val === undefined || val === null || val === '') return false;
+          const s = String(val).trim().replace(/^#/, '');
+          if (s.toLowerCase() === cleanNum) return true;
+          if (isNumeric && /^\d+$/.test(s) && Number(s) === targetNumber) return true;
+          return false;
+        };
+
+        const rawDisp = isBarista
+          ? (o?.numeracion ?? rankById?.get(o?.id) ?? o?.number)
+          : (rankById?.get(o?.id) ?? o?.numeracion ?? o?.number);
+
+        return (
+          checkExact(rawDisp) ||
+          checkExact(o?.numeracion) ||
+          checkExact(o?.number) ||
+          (o?.id && String(o.id).toLowerCase() === cleanNum) ||
+          (o?.id && String(o.id).slice(-6).toLowerCase() === cleanNum)
+        );
+      }
+
+      // Búsqueda general
+      const name = String(o?.name ?? '').toLowerCase();
+      const phone = String(o?.phone ?? '').toLowerCase();
+      const itemsMatch = (o?.items || []).some((it) =>
+        String(it?.name || '').toLowerCase().includes(q)
+      );
+
+      return (
+        dir.includes(q) ||
+        dispNum.includes(q) ||
+        oNum.includes(q) ||
+        oNumber.includes(q) ||
+        name.includes(q) ||
+        phone.includes(q) ||
+        oId.includes(q) ||
+        itemsMatch
+      );
     });
 
-    const getTime = (o) => o.clientCreatedAt ?? (o._t || (o._t = new Date(o.created ?? 0).getTime()));
-
-    if (orderSort === 'pending') {
-      const pendingList = [];
-      const completedList = [];
-
-      for (let i = 0; i < filtered.length; i++) {
-        const o = filtered[i];
-        const dir = String(o?.direccion ?? '').trim().toLowerCase();
-        const isLocal =
-          dir.includes('local') ||
-          dir.includes('salon') ||
-          dir.includes('salón') ||
-          dir.includes('comer') ||
-          dir.includes('mesa');
-        const isRetiro =
-          !isLocal &&
-          (dir === 'retiro' ||
-            dir.includes('take away') ||
-            dir.includes('llevar'));
-        const isDelivery = Boolean(dir) && !isRetiro && !isLocal;
-        const isCopied = Boolean(o?.copied) || copiedIdsSet.has(o?.id);
-        const isHidden = hiddenIdsSet.has(o?.id);
-
-        let isPend = false;
-        if (!isDelivery) {
-          isPend = false; // Ni retiro ni comer en el local entran en pendientes
-        } else if (o?.pending) {
-          isPend = true;
-        } else if (isBarista) {
-          isPend = !isOrderPrepared(o);
-        } else {
-          isPend = !isCopied && !isHidden;
-        }
-
-        if (isPend) {
-          pendingList.push(o);
-        } else {
-          completedList.push(o);
-        }
-      }
-
-      pendingList.sort((a, b) => getTime(b) - getTime(a));
-      completedList.sort((a, b) => getTime(b) - getTime(a));
-
-      return [...pendingList, ...completedList];
-    }
-
+    const getTime = (o) => Number(o.clientCreatedAt) || new Date(o.created ?? 0).getTime();
     return [...filtered].sort((a, b) => getTime(b) - getTime(a));
   }, [
     allOrdersList,
+    scheduleNow,
     addressQuery,
     orderTypeFilter,
-    orderSort,
     isBarista,
     isOrderPrepared,
     showCompletedBarista,
     copiedIdsSet,
-    hiddenIdsSet,
+    rankById,
   ]);
 
-  const { rankById } = useMemo(() => {
-    const pendingCount = sortedTodayOrders.filter((o) => o?.pending).length;
+  const loadedServerCount = useMemo(
+    () =>
+      sortedTodayOrders.filter(
+        (order) =>
+          !order?.pending &&
+          !order?.isTestOrder &&
+          !String(order?.id || '').startsWith('local-test-') &&
+          !String(order?.id || '').startsWith('mock-')
+      ).length,
+    [sortedTodayOrders]
+  );
+  const hasMoreServerOrders =
+    Boolean(pagination?.hasMore) &&
+    Number(pagination?.totalItems) > loadedServerCount;
 
-    const serverCount =
-      !isTestOrders &&
-      typeof pagination?.totalItems === 'number' &&
-      Number.isFinite(pagination.totalItems)
-        ? pagination.totalItems
-        : sortedTodayOrders.filter((o) => !o?.pending).length;
+  useEffect(() => {
+    setVisibleOrderLimit(10);
+  }, [orderTypeFilter, addressQuery]);
 
-    const total = serverCount + pendingCount;
+  useEffect(() => {
+    if (
+      isTestOrders ||
+      isBarista ||
+      isInitialLoading ||
+      isLoadingMore ||
+      !pagination?.hasMore ||
+      filteredTodayOrders.length >= visibleOrderLimit
+    ) {
+      return;
+    }
 
-    const map = new Map();
-    sortedTodayOrders.forEach((o, idx) => {
-      map.set(o.id, total - idx);
-    });
+    if (hasMoreServerOrders) {
+      dispatch(fetchMoreOrders());
+    }
+  }, [
+    dispatch,
+    isTestOrders,
+    isBarista,
+    isInitialLoading,
+    isLoadingMore,
+    pagination?.hasMore,
+    pagination?.page,
+    hasMoreServerOrders,
+    filteredTodayOrders.length,
+    visibleOrderLimit,
+  ]);
 
-    return { rankById: map };
-  }, [sortedTodayOrders, pagination?.totalItems, isTestOrders]);
+  const visibleTodayOrders = useMemo(
+    () =>
+      isBarista || isTestOrders
+        ? filteredTodayOrders
+        : filteredTodayOrders.slice(0, visibleOrderLimit),
+    [filteredTodayOrders, isBarista, isTestOrders, visibleOrderLimit]
+  );
 
   const canLoadMore = useMemo(() => {
     // 1. En pedidos de prueba nunca se pagina (todos están en memoria)
@@ -725,40 +1040,103 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
     // 2. En barista siempre se cargan todos los pedidos del día y no se pagina la comanda
     if (isBarista) return false;
 
-    // 3. Mientras carga inicialmente o si no hay pedidos mostrados
-    if (isInitialLoading || filteredTodayOrders.length === 0) return false;
+    // 3. Mientras carga inicialmente
+    if (isInitialLoading) return false;
 
-    // 4. Si se cargaron todos los pedidos para búsqueda o filtro
-    if (allLoaded) return false;
+    // Ocultar mientras se buscan coincidencias para completar la página visible.
+    if (isLoadingMore || filteredTodayOrders.length < visibleOrderLimit) return false;
 
-    // 5. Si la paginación indica que no hay más
+    // Si la paginación indica que no hay más y no quedan coincidencias en memoria
+    if (filteredTodayOrders.length > visibleOrderLimit) return true;
     if (!pagination?.hasMore) return false;
 
-    // 6. Conteo de pedidos del servidor en la base de datos hoy
-    const totalServerItems =
-      typeof pagination?.totalItems === 'number' && Number.isFinite(pagination.totalItems)
-        ? pagination.totalItems
-        : 0;
-
-    // Cantidad de pedidos del servidor cargados en memoria
-    const loadedServerCount = sortedTodayOrders.filter(
-      (o) => !o?.pending && !o?.isTestOrder && !String(o?.id || '').startsWith('local-test-')
-    ).length;
-
-    // Si ya cargamos todos los pedidos del servidor en memoria, no hay más para pedir
-    if (totalServerItems <= loadedServerCount) return false;
-
-    // Únicamente si el total disponible es mayor a los mostrados en pantalla
-    return totalServerItems > filteredTodayOrders.length;
+    return hasMoreServerOrders;
   }, [
     isTestOrders,
     isBarista,
     isInitialLoading,
-    filteredTodayOrders.length,
-    allLoaded,
+    isLoadingMore,
     pagination?.hasMore,
-    pagination?.totalItems,
-    sortedTodayOrders,
+    hasMoreServerOrders,
+    filteredTodayOrders.length,
+    visibleOrderLimit,
+  ]);
+
+  const emptyOrdersState = useMemo(() => {
+    if (
+      !isBarista &&
+      !isTestOrders &&
+      filteredTodayOrders.length === 0 &&
+      hasMoreServerOrders &&
+      !isInitialLoading
+    ) {
+      return {
+        Icon: LoaderCircle,
+        title: 'Buscando pedidos',
+        description: 'Cargando los pedidos más recientes de esta categoría.',
+        color: '#2563eb',
+        background: '#dbeafe',
+        loading: true,
+      };
+    }
+
+    if (addressQuery.trim()) {
+      return {
+        Icon: Search,
+        title: 'No encontramos pedidos',
+        description: `No hay resultados para “${addressQuery.trim()}”. Probá con otro número, dirección o producto.`,
+        color: '#64748b',
+        background: '#f1f5f9',
+      };
+    }
+
+    const states = {
+      pending: {
+        Icon: Clock,
+        title: 'No hay pedidos pendientes',
+        description: 'Los nuevos pedidos pendientes aparecerán acá automáticamente.',
+        color: '#b45309',
+        background: '#fef3c7',
+      },
+      take_away: {
+        Icon: PackageCheck,
+        title: 'No hay pedidos para retirar',
+        description: 'Cuando haya pedidos de Take Away o retiro, los vas a encontrar acá.',
+        color: '#2563eb',
+        background: '#dbeafe',
+      },
+      delivery: {
+        Icon: Bike,
+        title: 'No hay pedidos de Delivery',
+        description: 'Los pedidos con entrega a domicilio aparecerán en esta categoría.',
+        color: '#7c3aed',
+        background: '#ede9fe',
+      },
+      app: {
+        Icon: Smartphone,
+        title: 'No hay pedidos de la App',
+        description: 'Los pedidos realizados desde la App aparecerán acá al ingresar.',
+        color: '#6d28d9',
+        background: '#ede9fe',
+      },
+      all: {
+        Icon: PackageCheck,
+        title: 'No hay pedidos para mostrar',
+        description: 'Los nuevos pedidos aparecerán acá automáticamente.',
+        color: '#475569',
+        background: '#f1f5f9',
+      },
+    };
+
+    return states[orderTypeFilter] || states.all;
+  }, [
+    addressQuery,
+    orderTypeFilter,
+    isBarista,
+    isTestOrders,
+    filteredTodayOrders.length,
+    hasMoreServerOrders,
+    isInitialLoading,
   ]);
 
   return (
@@ -830,6 +1208,35 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                 ? 'Los pedidos que realices con el Modo Prueba activo aparecerán acá.'
                 : 'Cuando lleguen, aparecerán acá automáticamente.'}
             </p>
+            {(isTestOrders || isTestMode) && (
+              <div style={{ marginTop: 20, display: 'flex', justifyContent: 'center', gap: 8 }}>
+                {renderSimulateButton()}
+                {isDevelopmentBuild && isTestMode && !isAndroidApp && (
+                  <button
+                    type="button"
+                    onClick={handleTestWindowsNotification}
+                    title="Mostrar una notificación nativa de Windows de prueba"
+                    style={{
+                      border: '1px solid #bfdbfe',
+                      background: '#eff6ff',
+                      color: '#1d4ed8',
+                      borderRadius: 8,
+                      padding: '7px 10px',
+                      cursor: 'pointer',
+                      fontWeight: 700,
+                      fontSize: '0.8rem',
+                      fontFamily: "'Inter', sans-serif",
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 5,
+                    }}
+                  >
+                    <BellRing size={15} />
+                    Probar aviso Windows
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -923,7 +1330,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                 }}
               >
                 {/* Banner de Pedidos de Prueba */}
-                {isTestOrders && (
+                {(isTestOrders || isTestMode) && (
                   <div style={{ padding: '6px 10px 4px' }}>
                     <div
                       style={{
@@ -936,6 +1343,7 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                         borderRadius: 14,
                         padding: '10px 14px',
                         boxShadow: '0 2px 8px rgba(245, 158, 11, 0.1)',
+                        flexWrap: 'wrap',
                       }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -956,44 +1364,48 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                         </div>
                         <div>
                           <div style={{ fontWeight: 800, fontSize: '0.95rem', color: '#92400e' }}>
-                            Pedidos de Prueba
+                            {isTestOrders ? 'Pedidos de Prueba' : 'Modo Prueba Activo'}
                           </div>
                           <div style={{ fontSize: '0.78rem', color: '#b45309', fontWeight: 600 }}>
-                            {filteredTodayOrders.length === 1
+                            {visibleTodayOrders.length === 1
                               ? '1 pedido registrado localmente'
-                              : `${filteredTodayOrders.length} pedidos registrados localmente`}
+                              : `${visibleTodayOrders.length} pedidos registrados localmente`}
                           </div>
                         </div>
                       </div>
 
-                      {todayOrders.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (window.confirm('¿Deseas vaciar todos los pedidos de prueba?')) {
-                              dispatch(clearTestOrders());
-                            }
-                          }}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            background: '#fff',
-                            border: '1px solid #fde68a',
-                            color: '#b45309',
-                            borderRadius: 8,
-                            padding: '6px 12px',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                          }}
-                          title="Eliminar todos los pedidos de prueba"
-                        >
-                          <Trash2 size={14} />
-                          Limpiar pruebas
-                        </button>
-                      )}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        {renderSimulateButton()}
+
+                        {todayOrders.some((o) => o?.isTestOrder || String(o?.id || '').startsWith('local-test-')) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm('¿Deseas vaciar todos los pedidos de prueba?')) {
+                                dispatch(clearTestOrders());
+                              }
+                            }}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              background: '#fff',
+                              border: '1px solid #fde68a',
+                              color: '#b45309',
+                              borderRadius: 8,
+                              padding: '6px 12px',
+                              fontSize: '0.8rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                            }}
+                            title="Eliminar todos los pedidos de prueba"
+                          >
+                            <Trash2 size={14} />
+                            Limpiar pruebas
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1049,256 +1461,278 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                 )}
 
                 {/* Barra de búsqueda */}
-                <div style={{ background: '#f6f6f6', padding: '6px 10px 4px' }}>
+                <div style={{ padding: '6px 10px 4px' }}>
                   <div
                     style={{
                       display: 'flex',
                       gap: 8,
                       alignItems: 'center',
-                      background: '#fff',
-                      border: '1px solid #e5e5e5',
-                      borderRadius: 12,
-                      padding: '6px 10px',
-                      boxShadow: '0 6px 16px rgba(0,0,0,0.06)',
+                      background: '#ffffff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: '6px 12px',
+                      boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease',
                     }}
                   >
                     <span
-                      style={{ fontSize: 16, opacity: 0.75, display: 'flex', alignItems: 'center' }}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        color: addressQuery.trim().startsWith('#') ? '#6d28d9' : '#64748b',
+                        flexShrink: 0,
+                      }}
                     >
-                      <Search size={18} />
+                      <Search size={15} strokeWidth={2.4} />
                     </span>
 
                     <input
                       value={addressQuery}
                       onChange={(e) => setAddressQuery(e.target.value)}
-                      placeholder="Buscar por dirección"
+                      placeholder="Buscar por # orden, dirección o cliente..."
                       style={{
                         flex: 1,
                         border: 'none',
                         outline: 'none',
-                        fontSize: '0.9rem',
+                        fontSize: '0.86rem',
                         background: 'transparent',
                         fontFamily: "'Inter', sans-serif",
                         fontWeight: 600,
+                        color: '#0f172a',
                       }}
                     />
 
                     {addressQuery.trim() && (
                       <button
+                        type="button"
                         onClick={() => setAddressQuery('')}
                         style={{
-                          border: 'none',
-                          background: '#111',
-                          color: '#fff',
-                          borderRadius: 8,
-                          padding: '4px 6px',
+                          border: '1px solid #e2e8f0',
+                          background: '#f8fafc',
+                          color: '#64748b',
+                          borderRadius: 6,
+                          width: 22,
+                          height: 22,
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
                           cursor: 'pointer',
-                          fontWeight: 700,
+                          padding: 0,
+                          flexShrink: 0,
+                          transition: 'all 0.15s ease',
                         }}
-                        title="Limpiar"
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#f1f5f9';
+                          e.currentTarget.style.color = '#0f172a';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = '#f8fafc';
+                          e.currentTarget.style.color = '#64748b';
+                        }}
+                        title="Limpiar búsqueda"
                       >
-                        <FaXmark size={12} />
+                        <FaXmark size={11} />
                       </button>
                     )}
 
                     {isDev && !isAndroidApp && (
                       <button
+                        type="button"
                         onClick={() => setShowDevTicketPreview((v) => !v)}
                         style={{
-                          border: 'none',
-                          background: showDevTicketPreview ? '#23a76d' : '#eaeaea',
-                          color: showDevTicketPreview ? '#fff' : '#111',
-                          borderRadius: 10,
-                          padding: '8px 10px',
+                          border: `1px solid ${showDevTicketPreview ? '#86efac' : '#e2e8f0'}`,
+                          background: showDevTicketPreview ? '#dcfce7' : '#f8fafc',
+                          color: showDevTicketPreview ? '#15803d' : '#475569',
+                          borderRadius: 6,
+                          padding: '3px 8px',
                           cursor: 'pointer',
                           fontWeight: 800,
+                          fontSize: '0.72rem',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 6,
+                          gap: 4,
+                          flexShrink: 0,
+                          transition: 'all 0.15s ease',
                         }}
                         title="Mostrar/ocultar vista ticket"
                       >
-                        <PrintIcon style={{ fontSize: 18 }} />
+                        <PrintIcon sx={{ fontSize: 14 }} />
                         {showDevTicketPreview ? 'Ticket' : 'Normal'}
                       </button>
                     )}
                   </div>
 
                   {!!addressQuery.trim() && (
-                    <div style={{ fontSize: 12, marginTop: 6, opacity: 0.75 }}>
-                      Mostrando {filteredTodayOrders.length} de {sortedTodayOrders.length}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        marginTop: 5,
+                        padding: '0 2px',
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          color: '#64748b',
+                          background: '#ffffff',
+                          border: '1px solid #e2e8f0',
+                          borderRadius: 6,
+                          padding: '2px 8px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: 5,
+                        }}
+                      >
+                        {addressQuery.trim().startsWith('#') && (
+                          <span
+                            style={{
+                              background: '#ede9fe',
+                              color: '#6d28d9',
+                              border: '1px solid #ddd6fe',
+                              borderRadius: 4,
+                              padding: '0.5px 5px',
+                              fontSize: '0.68rem',
+                              fontWeight: 800,
+                            }}
+                          >
+                            # Orden
+                          </span>
+                        )}
+                        Mostrando {visibleTodayOrders.length} pedidos
+                      </span>
                     </div>
                   )}
                 </div>
 
-                {/* Filtros y Ordenamiento (En la misma línea) */}
+                {/* Filtros de Categorías y Ordenamiento */}
                 <div
                   style={{
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'space-between',
-                    padding: '10px 10px 0',
+                    padding: '6px 10px 0',
                     gap: 8,
                   }}
                 >
-                  {/* Filtros */}
+                  {/* Selector de categorías / Segmented chips */}
                   <div
                     style={{
-                      background: '#e9edf5',
-                      borderRadius: 999,
-                      padding: 4,
+                      background: '#f1f5f9',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: 8,
+                      padding: 3,
                       display: 'flex',
-                      gap: 6,
-                      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.7)',
+                      gap: 4,
                       flex: 1,
+                      overflowX: 'auto',
                     }}
                   >
                     {[
-                      ['all', 'Todo'],
-                      ['retiro', 'Retiro'],
+                      ['pending', 'Pendientes'],
+                      ['take_away', 'Take Away'],
                       ['delivery', 'Delivery'],
-                      ['local', 'En el local'],
-                      ...(totalPendingCount > 0
-                        ? [['pending', `Pendientes (${totalPendingCount})`]]
-                        : []),
+                      ['app', 'App'],
                     ].map(([key, label]) => {
                       const active = orderTypeFilter === key;
                       const isPendingKey = key === 'pending';
+                      const isAppKey = key === 'app';
                       return (
                         <button
                           key={key}
-                          onClick={() => setOrderTypeFilter(key)}
+                          type="button"
+                          onClick={() =>
+                            setOrderTypeFilter((currentFilter) =>
+                              currentFilter === key ? 'all' : key
+                            )
+                          }
                           style={{
                             flex: 1,
                             border: active
                               ? isPendingKey
-                                ? '2px solid #ea580c'
-                                : '2px solid black'
-                              : 'transparent',
+                                ? '1px solid #fde68a'
+                                : isAppKey
+                                  ? '1px solid #ddd6fe'
+                                : '1px solid #cbd5e1'
+                              : '1px solid transparent',
                             cursor: 'pointer',
-                            borderRadius: 999,
-                            padding: totalPendingCount > 0 ? '6px 8px' : '6px 12px',
-                            fontWeight: 800,
-                            fontSize: totalPendingCount > 0 ? 13 : 14,
+                            borderRadius: 6,
+                            padding: '5px 10px',
+                            fontWeight: active ? 800 : 600,
+                            fontSize: '0.78rem',
                             background: active
                               ? isPendingKey
-                                ? '#ea580c'
-                                : 'white'
+                                ? '#fef3c7'
+                                : isAppKey
+                                  ? '#ede9fe'
+                                : '#ffffff'
                               : 'transparent',
                             color: active
                               ? isPendingKey
-                                ? '#fff'
-                                : 'black'
-                              : isPendingKey && totalPendingCount > 0
-                                ? '#c2410c'
-                                : '#111',
-                            boxShadow: active ? '0 6px 16px rgba(0,0,0,0.18)' : 'none',
-                            transition: 'all 150ms ease',
-                            fontFamily: "'Inter'",
+                                ? '#b45309'
+                                : isAppKey
+                                  ? '#6d28d9'
+                                : '#0f172a'
+                              : isPendingKey
+                                ? '#b45309'
+                                : isAppKey
+                                  ? '#6d28d9'
+                                  : '#64748b',
+                            boxShadow: active
+                              ? isPendingKey
+                                ? '0 1px 2px rgba(180, 83, 9, 0.12)'
+                                : isAppKey
+                                  ? '0 1px 2px rgba(109, 40, 217, 0.12)'
+                                : '0 1px 2px rgba(0, 0, 0, 0.05)'
+                              : 'none',
+                            transition: 'all 0.15s ease',
+                            fontFamily: "'Inter', sans-serif",
                             whiteSpace: 'nowrap',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 4,
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!active) {
+                              e.currentTarget.style.color = isAppKey ? '#6d28d9' : '#0f172a';
+                              e.currentTarget.style.background = isAppKey
+                                ? 'rgba(237, 233, 254, 0.65)'
+                                : 'rgba(255,255,255,0.6)';
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (!active) {
+                              e.currentTarget.style.color = isPendingKey
+                                ? '#b45309'
+                                : isAppKey
+                                  ? '#6d28d9'
+                                  : '#64748b';
+                              e.currentTarget.style.background = 'transparent';
+                            }
                           }}
                         >
-                          {label}
+                          <span>{label}</span>
+                          {isPendingKey && totalPendingCount > 0 && (
+                            <span
+                              style={{
+                                padding: '1px 5px',
+                                borderRadius: 999,
+                                fontSize: '0.68rem',
+                                fontWeight: 800,
+                                background: active ? '#b45309' : '#fde68a',
+                                color: active ? '#ffffff' : '#92400e',
+                                lineHeight: 1.2,
+                              }}
+                            >
+                              {totalPendingCount}
+                            </span>
+                          )}
                         </button>
                       );
                     })}
-                  </div>
-
-                  {/* Ordenamiento */}
-                  <div
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'flex-end',
-                    }}
-                  >
-                    <div style={{ position: 'relative' }} onClick={(e) => e.stopPropagation()}>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSortDropdownOpen(!sortDropdownOpen);
-                        }}
-                        title={orderSort === 'pending' ? 'Ordenando por Pendientes primero' : 'Ordenar pedidos'}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: 34,
-                          height: 34,
-                          borderRadius: '50%',
-                          border: orderSort === 'pending' ? '1.5px solid #6528f7' : '1px solid #e1e4e8',
-                          background: orderSort === 'pending' ? '#f0f4ff' : '#fff',
-                          color: orderSort === 'pending' ? '#6528f7' : '#111',
-                          cursor: 'pointer',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                          transition: 'all 150ms ease',
-                          flexShrink: 0,
-                        }}
-                        onMouseEnter={(e) => (e.currentTarget.style.background = orderSort === 'pending' ? '#e5edff' : '#f3f4f6')}
-                        onMouseLeave={(e) => (e.currentTarget.style.background = orderSort === 'pending' ? '#f0f4ff' : '#fff')}
-                      >
-                        <MdSort size={18} />
-                      </button>
-                      {sortDropdownOpen && (
-                        <div
-                          onClick={(e) => e.stopPropagation()}
-                          style={{
-                            position: 'absolute',
-                            top: '100%',
-                            right: 0,
-                            marginTop: 4,
-                            background: '#fff',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 10,
-                            boxShadow: '0 8px 20px rgba(0,0,0,0.12)',
-                            overflow: 'hidden',
-                            zIndex: 100,
-                            minWidth: 140,
-                          }}
-                        >
-                          {[
-                            ['recent', 'Más reciente'],
-                            ['pending', 'Pendientes'],
-                          ].map(([key, label]) => (
-                            <button
-                              key={key}
-                              onClick={() => {
-                                setOrderSort(key);
-                                localStorage.setItem('pixel_orders_sort', key);
-                                setSortDropdownOpen(false);
-                              }}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 8,
-                                width: '100%',
-                                padding: '8px 12px',
-                                border: 'none',
-                                background: orderSort === key ? '#f0f4ff' : 'transparent',
-                                color: '#111',
-                                fontSize: 12,
-                                fontWeight: orderSort === key ? 700 : 500,
-                                fontFamily: "'Inter', sans-serif",
-                                cursor: 'pointer',
-                                textAlign: 'left',
-                              }}
-                              onMouseEnter={(e) => {
-                                if (orderSort !== key) e.target.style.background = '#f6f8fa';
-                              }}
-                              onMouseLeave={(e) => {
-                                if (orderSort !== key) e.target.style.background = 'transparent';
-                              }}
-                            >
-                              {orderSort === key && (
-                                <CheckCircleOutlineIcon sx={{ fontSize: 14, color: '#6528f7' }} />
-                              )}
-                              {orderSort !== key && <div style={{ width: 14 }} />}
-                              {label}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
                   </div>
                 </div>
               </div>
@@ -1350,60 +1784,62 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                   >
                     Barista KDS
                   </span>
-                  <div
-                    title={
-                      isLanServer
-                        ? 'Servidor LAN activo en esta PC'
-                        : isLanConnected
-                          ? 'Sincronizado por Red Local (LAN)'
-                          : navigator.onLine
-                            ? 'Conectado a la Nube (PocketBase)'
-                            : 'Sin conexión (Revisa el Wi-Fi o la IP de caja)'
-                    }
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      padding: '2px 8px',
-                      borderRadius: 999,
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      background:
-                        isLanConnected || isLanServer
-                          ? 'rgba(16, 185, 129, 0.12)'
-                          : navigator.onLine
-                            ? 'rgba(59, 130, 246, 0.12)'
-                            : 'rgba(239, 68, 68, 0.12)',
-                      color:
-                        isLanConnected || isLanServer
-                          ? '#059669'
-                          : navigator.onLine
-                            ? '#2563eb'
-                            : '#dc2626',
-                      border: `1px solid ${
-                        isLanConnected || isLanServer
-                          ? 'rgba(16, 185, 129, 0.3)'
-                          : navigator.onLine
-                            ? 'rgba(59, 130, 246, 0.3)'
-                            : 'rgba(239, 68, 68, 0.3)'
-                      }`,
-                    }}
-                  >
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        backgroundColor:
-                          isLanConnected || isLanServer
-                            ? '#10b981'
+                  {!isBarista && (
+                    <div
+                      title={
+                        isLanServer
+                          ? 'Servidor LAN activo en esta PC'
+                          : isLanConnected
+                            ? 'Sincronizado por Red Local (LAN)'
                             : navigator.onLine
-                              ? '#3b82f6'
-                              : '#ef4444',
+                              ? 'Conectado a la Nube (PocketBase)'
+                              : 'Sin conexión (Revisa el Wi-Fi o la IP de caja)'
+                      }
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        background:
+                          isLanConnected || isLanServer
+                            ? 'rgba(16, 185, 129, 0.12)'
+                            : navigator.onLine
+                              ? 'rgba(59, 130, 246, 0.12)'
+                              : 'rgba(239, 68, 68, 0.12)',
+                        color:
+                          isLanConnected || isLanServer
+                            ? '#059669'
+                            : navigator.onLine
+                              ? '#2563eb'
+                              : '#dc2626',
+                        border: `1px solid ${
+                          isLanConnected || isLanServer
+                            ? 'rgba(16, 185, 129, 0.3)'
+                            : navigator.onLine
+                              ? 'rgba(59, 130, 246, 0.3)'
+                              : 'rgba(239, 68, 68, 0.3)'
+                        }`,
                       }}
-                    />
-                    {isLanServer ? 'LAN Servidor' : isLanConnected ? 'LAN' : navigator.onLine ? 'Nube' : 'Offline'}
-                  </div>
+                    >
+                      <span
+                        style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: '50%',
+                          backgroundColor:
+                            isLanConnected || isLanServer
+                              ? '#10b981'
+                              : navigator.onLine
+                                ? '#3b82f6'
+                                : '#ef4444',
+                        }}
+                      />
+                      {isLanServer ? 'LAN Servidor' : isLanConnected ? 'LAN' : navigator.onLine ? 'Nube' : 'Offline'}
+                    </div>
+                  )}
                 </div>
 
                 {/* Segmented Control & Dev Tools */}
@@ -1497,111 +1933,80 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                     </button>
                   </div>
 
-                  {/* Botón de Sonido Barista */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const next = !soundActive;
-                        setSoundActive(next);
-                        setBaristaSoundEnabled(next);
-                        if (next) {
-                          testBaristaSound();
-                        }
-                      }}
-                      style={{
-                        border: '1px solid #e4e4e7',
-                        background: soundActive ? '#f0fdf4' : '#f4f4f5',
-                        color: soundActive ? '#16a34a' : '#71717a',
-                        borderRadius: 7,
-                        padding: '5px 8px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: '0.74rem',
-                        fontFamily: "'Inter', sans-serif",
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.15s ease',
-                      }}
-                      title={
-                        soundActive
-                          ? 'Sonido activado (clic para silenciar)'
-                          : 'Sonido silenciado (clic para activar)'
-                      }
-                    >
-                      {soundActive ? <Bell size={12} color="#16a34a" /> : <BellOff size={12} color="#71717a" />}
-                      <span>{soundActive ? 'Sonido' : 'Mudo'}</span>
-                    </button>
-
-                    {soundActive && (
+                  {/* Botón Simular pedidos (Modo Dev / Test) */}
+                  {(isDev || isTestMode) && !isAndroidApp && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {!isBarista && renderSimulateButton(true)}
+                      {isDevelopmentBuild && isTestMode && !isBarista && (
+                        <button
+                          type="button"
+                          onClick={handleTestWindowsNotification}
+                          title="Mostrar una notificación nativa de Windows de prueba"
+                          style={{
+                            border: '1px solid #bfdbfe',
+                            background: '#eff6ff',
+                            color: '#1d4ed8',
+                            borderRadius: 7,
+                            padding: '5px 8px',
+                            cursor: 'pointer',
+                            fontWeight: 700,
+                            fontSize: '0.74rem',
+                            fontFamily: "'Inter', sans-serif",
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 4,
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          <BellRing size={14} />
+                          Probar aviso Windows
+                        </button>
+                      )}
                       <button
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          testBaristaSound();
-                        }}
+                        onClick={handleToggleMockOrders}
+                        aria-label={showMockOrders ? 'Quitar pedidos simulados' : 'Mostrar pedidos simulados'}
                         style={{
-                          border: '1px solid #bbf7d0',
-                          background: '#dcfce7',
-                          color: '#15803d',
+                          border: showMockOrders ? '1px solid #fecdd3' : '1px solid #e4e4e7',
+                          background: showMockOrders ? '#fff1f2' : '#ffffff',
+                          color: showMockOrders ? '#e11d48' : '#71717a',
                           borderRadius: 7,
-                          padding: '5px 7px',
+                          padding: isBarista ? '6px' : '5px 8px',
+                          width: isBarista ? 30 : undefined,
+                          height: isBarista ? 30 : undefined,
                           cursor: 'pointer',
-                          fontWeight: 700,
-                          fontSize: '0.72rem',
+                          fontWeight: 600,
+                          fontSize: '0.74rem',
                           fontFamily: "'Inter', sans-serif",
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
                           whiteSpace: 'nowrap',
                           transition: 'all 0.15s ease',
                         }}
-                        title="Probar sonido ahora"
+                        title="Alternar pedidos simulados para prueba en vivo"
                       >
-                        Probar
+                        <Sparkles size={14} />
+                        {!isBarista && (showMockOrders ? 'Quitar mocks' : 'Mocks')}
                       </button>
-                    )}
-                  </div>
-
-                  {/* Botón Simular pedidos (Modo Dev) */}
-                  {isDev && !isAndroidApp && (
-                    <button
-                      type="button"
-                      onClick={handleToggleMockOrders}
-                      style={{
-                        border: showMockOrders ? '1px solid #fecdd3' : '1px solid #e4e4e7',
-                        background: showMockOrders ? '#fff1f2' : '#ffffff',
-                        color: showMockOrders ? '#e11d48' : '#71717a',
-                        borderRadius: 7,
-                        padding: '5px 8px',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: '0.74rem',
-                        fontFamily: "'Inter', sans-serif",
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        whiteSpace: 'nowrap',
-                        transition: 'all 0.15s ease',
-                      }}
-                      title="Alternar pedidos simulados para prueba en vivo"
-                    >
-                      <Sparkles size={11} />
-                      {showMockOrders ? 'Quitar mocks' : 'Mocks'}
-                    </button>
+                    </div>
                   )}
                 </div>
               </div>
             )}
 
-            {isBarista && filteredTodayOrders.length === 0 && (
+            {isBarista && visibleTodayOrders.length === 0 && (
               <div
                 style={{
+                  width: '100%',
+                  minHeight: 'calc(100vh - 300px)',
                   flex: 1,
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '70px 20px',
+                  boxSizing: 'border-box',
+                  padding: '32px 20px',
                   textAlign: 'center',
                 }}
               >
@@ -1641,48 +2046,85 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
               </div>
             )}
 
-            {!isBarista && filteredTodayOrders.length === 0 && (
+            {!isBarista && visibleTodayOrders.length === 0 && !allOrdersList.some((order) => isWaitingSchedule(order, scheduleNow)) && (
               <div
                 style={{
+                  width: '100%',
+                  minHeight: 'calc(100vh - 300px)',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  padding: '50px 20px',
+                  boxSizing: 'border-box',
+                  padding: '32px 20px',
                   textAlign: 'center',
-                  color: '#71717a',
+                  background:
+                    'radial-gradient(circle at 50% 35%, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%)',
                 }}
               >
                 <div
                   style={{
-                    fontSize: '1.05rem',
-                    fontWeight: 700,
-                    color: '#333',
-                    marginBottom: 4,
+                    width: 76,
+                    height: 76,
+                    display: 'grid',
+                    placeItems: 'center',
+                    marginBottom: 18,
+                    borderRadius: 24,
+                    color: emptyOrdersState.color,
+                    background: emptyOrdersState.background,
+                    boxShadow: '0 8px 22px rgba(15, 23, 42, 0.08)',
                   }}
                 >
-                  {orderTypeFilter === 'pending'
-                    ? 'No hay pedidos pendientes'
-                    : addressQuery.trim()
-                      ? `No se encontraron pedidos con "${addressQuery}"`
-                      : 'No hay pedidos'}
+                  <emptyOrdersState.Icon
+                    size={34}
+                    strokeWidth={1.8}
+                    style={emptyOrdersState.loading ? { animation: 'ordersSpin 0.9s linear infinite' } : undefined}
+                  />
                 </div>
-                {orderTypeFilter !== 'all' && (
+                <div
+                  style={{
+                    fontSize: '1.2rem',
+                    fontWeight: 800,
+                    color: '#0f172a',
+                    letterSpacing: '-0.025em',
+                    marginBottom: 7,
+                  }}
+                >
+                  {emptyOrdersState.title}
+                </div>
+                <div
+                  style={{
+                    maxWidth: 360,
+                    fontSize: '0.88rem',
+                    lineHeight: 1.55,
+                    color: '#64748b',
+                  }}
+                >
+                  {emptyOrdersState.description}
+                </div>
+                {(addressQuery.trim() || orderTypeFilter !== 'all') && (
                   <button
-                    onClick={() => setOrderTypeFilter('all')}
+                    onClick={() => {
+                      if (addressQuery.trim()) {
+                        setAddressQuery('');
+                      } else {
+                        setOrderTypeFilter('all');
+                      }
+                    }}
                     style={{
-                      marginTop: 12,
-                      padding: '6px 14px',
-                      background: '#111',
+                      marginTop: 18,
+                      padding: '9px 16px',
+                      background: '#0f172a',
                       color: '#fff',
-                      borderRadius: 999,
+                      borderRadius: 9,
                       border: 'none',
-                      fontSize: '0.8rem',
+                      fontSize: '0.82rem',
                       fontWeight: 700,
                       cursor: 'pointer',
+                      boxShadow: '0 4px 10px rgba(15, 23, 42, 0.15)',
                     }}
                   >
-                    Ver todos
+                    {addressQuery.trim() ? 'Limpiar búsqueda' : 'Ver todos los pedidos'}
                   </button>
                 )}
               </div>
@@ -1701,7 +2143,23 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                   : undefined
               }
             >
-              {filteredTodayOrders.map((o) => {
+              {scheduleError && <p role="alert" style={{ padding: 12, color: '#b45309' }}>{scheduleError}</p>}
+              {!isBarista && allOrdersList.some((order) => isWaitingSchedule(order, scheduleNow)) && (
+                <section style={{ margin: '12px 0 24px', padding: 14, border: '1px solid #cbd5e1', borderRadius: 16, background: '#f8fafc' }}>
+                  <h2 style={{ fontSize: 18, margin: '0 0 12px', color: '#334155' }}>Programados</h2>
+                  {[...allOrdersList].filter((order) => isWaitingSchedule(order, scheduleNow)).sort((a, b) => new Date(a.scheduledStart) - new Date(b.scheduledStart)).map((order) => (
+                    <CardOrders
+                      key={`scheduled-${order.id}`}
+                      {...order}
+                      numeracion={order.numeracion || order.number || String(order.id).slice(-6)}
+                      isBarista={false}
+                      isTestOrder={Boolean(isTestOrders || isTestMode || order?.isTestOrder)}
+                    />
+                  ))}
+                </section>
+              )}
+              {!isBarista && scheduledRecords.some((order) => !isWaitingSchedule(order, scheduleNow)) && <h2 style={{ fontSize: 18, margin: '12px 0' }}>Para preparar / en curso</h2>}
+              {visibleTodayOrders.map((o) => {
                 const displayNum = isBarista ? (o.numeracion ?? rankById.get(o.id) ?? '') : (rankById.get(o.id) ?? o.numeracion ?? '');
 
                 return (
@@ -1710,7 +2168,12 @@ export default function Orders({ isBarista = false, isTestOrders = false }) {
                     numeracion={displayNum}
                     {...o}
                     isBarista={isBarista}
-                    isTestOrder={Boolean(o?.isTestOrder || String(o?.id || '').startsWith('local-test-'))}
+                    isTestOrder={Boolean(
+                      isTestOrders ||
+                      isTestMode ||
+                      o?.isTestOrder ||
+                      String(o?.id || '').startsWith('local-test-')
+                    )}
                     isPrepared={isOrderPrepared(o)}
                     baristaDone={Boolean(o?.baristaDone)}
                     onMarkPrepared={handleMarkPrepared}

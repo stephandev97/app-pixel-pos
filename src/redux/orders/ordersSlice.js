@@ -1,9 +1,11 @@
 import { createAsyncThunk, createSlice } from '@reduxjs/toolkit';
 
 import { pb } from '../../lib/pb';
+import { getOrdersCollectionName, isTestOrdersCollection } from '../../lib/ordersCollection';
 import { isBaristaOrder } from '../../utils/cafeStockSync';
 import { broadcastLanOrder, sendLanBaristaStatus } from '../../utils/lanSyncClient';
 import { playBaristaNotificationSound } from '../../utils/soundNotifications';
+import { notifyWindowsOfAppOrder } from '../../utils/windowsNotifications';
 import {
   computeBusinessDate,
   detectFulfillment,
@@ -145,19 +147,27 @@ const pbToOrder = (rec) => ({
   paidAmount: rec.paidAmount ?? null,
   revenueAmount: rec.revenueAmount ?? null,
   businessDate: rec.businessDate ?? rec.day ?? null,
+  scheduledStart: rec.scheduledStart || '',
+  scheduledEnd: rec.scheduledEnd || '',
+  prepareAt: rec.prepareAt || '',
   mode: rec.mode ?? null,
   address: rec.address ?? null,
   phone: rec.phone ?? null,
   name: rec.name ?? null,
 
-  // cliente y puntos
+  // cliente y monedas
   client: rec.client ?? rec.clientId ?? null,
   points: Number(rec.points ?? 0),
   pointsClaimed: !!rec.pointsClaimed,
   copied: !!rec.copied,
+  enviado: rec.enviado ?? null,
+  entregado: rec.entregado ?? null,
 
   pagoDebito: Number(rec.pagoDebito ?? 0),
   baristaDone: !!rec.baristaDone,
+  source: rec.source ?? null,
+  deliveryId: rec.deliveryId ?? null,
+  progress: rec.progress ?? (String(rec.source || '').trim().toLowerCase() === 'app' ? 'pending' : null),
 });
 
 export const hydrateOrdersFromPocket = createAsyncThunk(
@@ -166,13 +176,14 @@ export const hydrateOrdersFromPocket = createAsyncThunk(
     try {
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
+      const collection = getOrdersCollectionName();
 
-      const list = await pb.collection('orders').getList(page, perPage, {
+      const list = await pb.collection(collection).getList(page, perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
 
-      return list;
+      return { ...list, collection };
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al hidratar pedidos');
     }
@@ -187,7 +198,7 @@ export const fetchTotalOrdersCount = createAsyncThunk(
       const filter = `businessDate = "${startOfBusinessDay}"`;
 
       const totalCount = await pb
-        .collection('orders')
+        .collection(getOrdersCollectionName())
         .getList(1, 1, { filter })
         .then((res) => res.totalItems);
       return totalCount;
@@ -208,12 +219,13 @@ export const fetchMoreOrders = createAsyncThunk(
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}"`;
 
-      const list = await pb.collection('orders').getList(nextPage, 10, {
+      const collection = getOrdersCollectionName();
+      const list = await pb.collection(collection).getList(nextPage, 10, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
 
-      return list;
+      return { ...list, collection };
     } catch (err) {
       return rejectWithValue(err?.message || 'Error al obtener más pedidos');
     }
@@ -229,8 +241,9 @@ export const hydrateAllTodayOrders = createAsyncThunk(
       const perPage = 20;
       let page = 1;
       let allItems = [];
+      const collection = getOrdersCollectionName();
 
-      const first = await pb.collection('orders').getList(page, perPage, {
+      const first = await pb.collection(collection).getList(page, perPage, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
@@ -241,7 +254,7 @@ export const hydrateAllTodayOrders = createAsyncThunk(
 
       while (page < totalPages) {
         page += 1;
-        const next = await pb.collection('orders').getList(page, perPage, {
+        const next = await pb.collection(collection).getList(page, perPage, {
           filter,
           sort: '-clientCreatedAt,-created',
         });
@@ -249,6 +262,7 @@ export const hydrateAllTodayOrders = createAsyncThunk(
       }
 
       return {
+        collection,
         items: allItems,
         page,
         perPage,
@@ -268,12 +282,14 @@ export const fetchTodayPendingOrders = createAsyncThunk(
       const startOfBusinessDay = computeBusinessDate(new Date(), 3);
       const filter = `businessDate = "${startOfBusinessDay}" && direccion != "Retiro" && copied != true`;
 
-      const res = await pb.collection('orders').getList(1, 50, {
+      const collection = getOrdersCollectionName();
+      const res = await pb.collection(collection).getList(1, 50, {
         filter,
         sort: '-clientCreatedAt,-created',
       });
 
       return {
+        collection,
         totalItems: res.totalItems,
         items: res.items.map(pbToOrder),
       };
@@ -294,8 +310,27 @@ export const addOrderOnBoth = createAsyncThunk(
       clientCreatedAt: payload.clientCreatedAt ?? Date.now(),
     };
 
-    // Si estamos en Modo Prueba, retornamos la orden de prueba local sin tocar PocketBase
+    // Si estamos en Modo Prueba, guardamos la orden en la collection `orders_test` de PocketBase.
+    // Solo si no hay conexión o falla el servidor, queda como orden de prueba local (no se sincroniza a `orders`).
     if (isTestMode) {
+      const testCollection = getOrdersCollectionName();
+      if (navigator.onLine && isTestOrdersCollection(testCollection)) {
+        try {
+          const { isTestOrder: _isTestOrder, ...testData } = orderData;
+          const { pagoEfectivo, pagoMp, pagoDebito } = normalizePaymentFields(testData);
+          const created = await pb.collection(testCollection).create({
+            ...testData,
+            pagoEfectivo,
+            pagoMp,
+            pagoDebito,
+          });
+          const order = pbToOrder(created);
+          broadcastLanOrder(order, 'new');
+          return order;
+        } catch (err) {
+          console.error('Error creando orden en orders_test, guardando como prueba local:', err);
+        }
+      }
       const localOrder = { ...orderData, id: localId, clientId: localId, pending: false, isTestOrder: true };
       broadcastLanOrder(localOrder, 'new');
       return localOrder;
@@ -347,11 +382,13 @@ export const removeOrderFromBoth = createAsyncThunk(
         return { id };
       }
 
+      const collection = getOrdersCollectionName();
+
       if (!target) {
         if (id) {
-          target = await pb.collection('orders').getOne(id);
+          target = await pb.collection(collection).getOne(id);
         } else if (number) {
-          target = await pb.collection('orders').getFirstListItem(`number="${number}"`);
+          target = await pb.collection(collection).getFirstListItem(`number="${number}"`);
         }
       }
       if (!target) return rejectWithValue('Orden no encontrada');
@@ -362,7 +399,14 @@ export const removeOrderFromBoth = createAsyncThunk(
         return { id: target.id };
       }
 
-      await pb.collection('orders').delete(target.id);
+      // Modo Prueba: se borra de orders_test sin registrar eliminación ni tocar estadísticas
+      if (isTestOrdersCollection(collection)) {
+        await pb.collection(collection).delete(target.id);
+        broadcastLanOrder({ id: target.id }, 'delete');
+        return { id: target.id, number: target.number };
+      }
+
+      await pb.collection(collection).delete(target.id);
       broadcastLanOrder({ id: target.id }, 'delete');
 
       try {
@@ -496,10 +540,13 @@ export const subscribeOrdersRealtime = createAsyncThunk(
   'orders/subscribeRealtime',
   async (_, { dispatch }) => {
     try {
-      const unsub = await pb.collection('orders').subscribe('*', (e) => {
+      const unsub = await pb.collection(getOrdersCollectionName()).subscribe('*', (e) => {
         if (e.action === 'create' || e.action === 'update') {
           const ord = pbToOrder(e.record);
           dispatch(ordersSlice.actions.upsertOrder(ord));
+          if (e.action === 'create' && String(ord.source || '').trim().toLowerCase() === 'app') {
+            notifyWindowsOfAppOrder(ord);
+          }
           if (e.action === 'create' && isBaristaOrder(ord)) {
             playBaristaNotificationSound(ord.id);
           }
@@ -623,12 +670,24 @@ export const syncPendingOrders = createAsyncThunk(
 
 export const updateOrderPayment = createAsyncThunk(
   'orders/updatePayment',
-  async ({ id, payload }, { getState, rejectWithValue }) => {
+  async ({ id, payload }, { dispatch, getState, rejectWithValue }) => {
     try {
       const state = getState();
       const orders = state?.orders?.orders ?? [];
-      const target = orders.find((o) => o.id === id);
+      const testOrders = state?.orders?.testOrders ?? [];
+      const target = orders.find((o) => o.id === id) || testOrders.find((o) => o.id === id);
       if (!target) return rejectWithValue('Orden no encontrada en el estado local');
+
+      if (
+        target.isTestOrder ||
+        String(id).startsWith('local-test-') ||
+        String(id).startsWith('mock-')
+      ) {
+        const updatedTestOrder = { ...target, ...payload };
+        dispatch(ordersSlice.actions.upsertOrder(updatedTestOrder));
+        broadcastLanOrder(updatedTestOrder, 'update');
+        return updatedTestOrder;
+      }
 
       // 1) Obtener datos viejos para restar de stats
       const createdMs =
@@ -663,8 +722,14 @@ export const updateOrderPayment = createAsyncThunk(
               ? { [methodBefore]: revenueBefore }
               : {};
       // 2) Actualizar en PocketBase
-      const updatedRecord = await pb.collection('orders').update(id, payload);
+      const collection = getOrdersCollectionName();
+      const updatedRecord = await pb.collection(collection).update(id, payload);
       const updatedOrder = pbToOrder(updatedRecord);
+      dispatch(ordersSlice.actions.upsertOrder(updatedOrder));
+      broadcastLanOrder(updatedOrder, 'update');
+
+      // Modo Prueba (orders_test): no se tocan las estadísticas
+      if (isTestOrdersCollection(collection)) return updatedOrder;
 
       // 3) Obtener datos nuevos para sumar a stats
       const methodAfter = updatedOrder.method ?? null;
@@ -687,33 +752,37 @@ export const updateOrderPayment = createAsyncThunk(
               : {};
 
       // 4) Actualizar stats (restar viejo, sumar nuevo)
-      await upsertDailyStatsJsonSmart({
-        day,
-        addRevenue: revenueBefore,
-        addOrders: 0,
-        addItems: {},
-        paidAmount: paidBefore,
-        method: Object.keys(paidBefore).length ? null : methodBefore,
-        mode: null,
-        address: null,
-        sign: -1,
-        pruneZero: true,
-        deleteIfEmpty: false,
-      });
+      try {
+        await upsertDailyStatsJsonSmart({
+          day,
+          addRevenue: revenueBefore,
+          addOrders: 0,
+          addItems: {},
+          paidAmount: paidBefore,
+          method: Object.keys(paidBefore).length ? null : methodBefore,
+          mode: null,
+          address: null,
+          sign: -1,
+          pruneZero: true,
+          deleteIfEmpty: false,
+        });
 
-      await upsertDailyStatsJsonSmart({
-        day,
-        addRevenue: revenueAfter,
-        addOrders: 0,
-        addItems: {},
-        paidAmount: paidAfter,
-        method: Object.keys(paidAfter).length ? null : methodAfter,
-        mode: null,
-        address: null,
-        sign: 1,
-        pruneZero: true,
-        deleteIfEmpty: false,
-      });
+        await upsertDailyStatsJsonSmart({
+          day,
+          addRevenue: revenueAfter,
+          addOrders: 0,
+          addItems: {},
+          paidAmount: paidAfter,
+          method: Object.keys(paidAfter).length ? null : methodAfter,
+          mode: null,
+          address: null,
+          sign: 1,
+          pruneZero: true,
+          deleteIfEmpty: false,
+        });
+      } catch (statsErr) {
+        console.warn('Pago actualizado, pero no se pudieron actualizar las estadísticas:', statsErr);
+      }
 
       return updatedOrder;
     } catch (err) {
@@ -740,7 +809,9 @@ export const setOrderBaristaStatus = createAsyncThunk(
 
     // 3) Actualizar PocketBase para que replique a todos los dispositivos por realtime
     try {
-      const updated = await pb.collection('orders').update(id, { baristaDone: !!baristaDone });
+      const updated = await pb
+        .collection(getOrdersCollectionName())
+        .update(id, { baristaDone: !!baristaDone });
       const order = pbToOrder(updated);
       dispatch(ordersSlice.actions.upsertOrder(order));
       broadcastLanOrder(order, 'update');
@@ -748,6 +819,225 @@ export const setOrderBaristaStatus = createAsyncThunk(
     } catch (err) {
       console.warn('Error al actualizar baristaDone en PocketBase:', err);
       return { id, baristaDone: !!baristaDone, offline: true };
+    }
+  }
+);
+
+export const updateOrderProgress = createAsyncThunk(
+  'orders/updateProgress',
+  async ({ id, progress }, { dispatch, rejectWithValue }) => {
+    const timestamp = new Date().toISOString();
+    const enviado =
+      progress === 'dispatched' || progress === 'ready'
+        ? timestamp
+        : undefined;
+    const entregado =
+      progress === 'delivered' || progress === 'pickedup'
+        ? timestamp
+        : undefined;
+    const progressUpdate = {
+      id,
+      progress,
+      ...(enviado ? { enviado } : {}),
+      ...(entregado ? { entregado } : {}),
+    };
+
+    // 1) Actualización inmediata en Redux local para respuesta visual instantánea
+    dispatch(ordersSlice.actions.upsertOrder(progressUpdate));
+
+    // 2) Sincronización LAN instantánea (Tablet -> PC o PC -> Tablets)
+    broadcastLanOrder(progressUpdate, 'update');
+
+    // Si es un pedido de prueba o local, no enviamos a PocketBase
+    if (!id || String(id).startsWith('local-test-') || String(id).startsWith('mock-')) {
+      return progressUpdate;
+    }
+
+    // 3) Actualizar PocketBase para que replique a la app web y otros dispositivos por realtime
+    try {
+      const updated = await pb.collection(getOrdersCollectionName()).update(id, {
+        progress,
+        ...(enviado ? { enviado } : {}),
+        ...(entregado ? { entregado } : {}),
+      });
+      const order = pbToOrder(updated);
+      dispatch(ordersSlice.actions.upsertOrder(order));
+      broadcastLanOrder(order, 'update');
+      return {
+        id,
+        progress: updated.progress,
+        enviado: updated.enviado ?? null,
+        entregado: updated.entregado ?? null,
+      };
+    } catch (err) {
+      console.warn('Error al actualizar progress en PocketBase:', err);
+      return { ...progressUpdate, offline: true };
+    }
+  }
+);
+
+export const updateOrderItems = createAsyncThunk(
+  'orders/updateItems',
+  async ({ id, items, total, progress }, { dispatch, getState, rejectWithValue }) => {
+    try {
+      const state = getState();
+      const orders = state?.orders?.orders ?? [];
+      const testOrders = state?.orders?.testOrders ?? [];
+      const target =
+        orders.find((o) => o.id === id) ||
+        testOrders.find((o) => o.id === id) ||
+        {};
+      if (
+        target.enviado ||
+        target.copied ||
+        ['dispatched', 'ready', 'delivered', 'pickedup'].includes(
+          String(target.progress || '').toLowerCase()
+        )
+      ) {
+        return rejectWithValue('Este pedido ya fue enviado y no se puede editar.');
+      }
+
+      const newTotal = Number(total ?? target.total ?? 0);
+      const oldTotal = Number(target.total ?? 0);
+      const methodNorm = String(target.method || '').toLowerCase();
+
+      let nextPago = target.pago;
+      let nextEf = Number(target.pagoEfectivo || 0);
+      let nextMp = Number(target.pagoMp || 0);
+      let nextDb = Number(target.pagoDebito || 0);
+
+      if (methodNorm === 'transferencia' || (!methodNorm && nextMp > 0 && nextEf === 0)) {
+        nextMp = newTotal;
+        if (!Number.isNaN(Number(target.pago))) nextPago = String(newTotal);
+      } else if (methodNorm === 'debito' || nextDb > 0) {
+        nextDb = newTotal;
+        if (!Number.isNaN(Number(target.pago))) nextPago = String(newTotal);
+      } else if (methodNorm === 'efectivo' || nextEf > 0) {
+        // Si abonaba exacto con el total anterior, actualizamos al nuevo total;
+        // si abonaba con un billete mayor, mantenemos el billete si sigue alcanzando
+        if (nextEf === oldTotal || nextEf < newTotal) {
+          nextEf = newTotal;
+          nextPago = String(newTotal);
+        }
+      } else {
+        nextPago = String(newTotal);
+      }
+
+      const patch = {
+        items,
+        total: newTotal,
+        revenueAmount: newTotal,
+        pago: nextPago,
+        pagoEfectivo: nextEf,
+        pagoMp: nextMp,
+        pagoDebito: nextDb,
+        ...(progress ? { progress } : {}),
+      };
+
+      // 1) Actualización inmediata en Redux y LAN
+      dispatch(ordersSlice.actions.upsertOrder({ id, ...patch }));
+      broadcastLanOrder({ id, ...patch }, 'update');
+
+      if (
+        !id ||
+        target.isTestOrder ||
+        String(id).startsWith('local-test-') ||
+        String(id).startsWith('mock-') ||
+        target.pending
+      ) {
+        return { id, ...patch };
+      }
+
+      // 2) Actualizar en PocketBase
+      const pbPayload = {
+        ...patch,
+        total: String(newTotal),
+        pago: String(nextPago ?? newTotal),
+        pagoEfectivo: String(nextEf),
+        pagoMp: String(nextMp),
+        pagoDebito: String(nextDb),
+      };
+      const collection = getOrdersCollectionName();
+      const updatedRecord = await pb.collection(collection).update(id, pbPayload);
+      const updatedOrder = pbToOrder(updatedRecord);
+      dispatch(ordersSlice.actions.upsertOrder(updatedOrder));
+      broadcastLanOrder(updatedOrder, 'update');
+
+      // Modo Prueba (orders_test): no se tocan las estadísticas
+      if (isTestOrdersCollection(collection)) return updatedOrder;
+
+      // 3) Actualizar daily_stats (restar anterior, sumar nuevo) de forma no bloqueante
+      try {
+        const createdMs =
+          typeof target.clientCreatedAt === 'number'
+            ? target.clientCreatedAt
+            : target.created
+              ? new Date(target.created).getTime()
+              : Date.now();
+        const day = target.businessDate || computeBusinessDate(new Date(createdMs), 3);
+        const { method: oldMethod, revenueAmount: oldRev } = detectPayment(target.pago, oldTotal);
+        const methodBefore = target.method ?? oldMethod ?? null;
+        const revBefore = Number(target.revenueAmount ?? oldRev ?? oldTotal);
+        const efBefore = Number(target.pagoEfectivo ?? 0);
+        const mpBefore = Number(target.pagoMp ?? 0);
+        const dbBefore = Number(target.pagoDebito ?? 0);
+        const paidBefore =
+          efBefore || mpBefore || dbBefore
+            ? {
+                ...(efBefore ? { efectivo: efBefore } : {}),
+                ...(mpBefore ? { transferencia: mpBefore } : {}),
+                ...(dbBefore ? { debito: dbBefore } : {}),
+              }
+            : methodBefore
+              ? { [methodBefore]: revBefore }
+              : {};
+
+        const paidAfter =
+          nextEf || nextMp || nextDb
+            ? {
+                ...(nextEf ? { efectivo: nextEf } : {}),
+                ...(nextMp ? { transferencia: nextMp } : {}),
+                ...(nextDb ? { debito: nextDb } : {}),
+              }
+            : methodBefore
+              ? { [methodBefore]: newTotal }
+              : {};
+
+        await upsertDailyStatsJsonSmart({
+          day,
+          addRevenue: revBefore,
+          addOrders: 0,
+          addItems: itemsCountFrom(target.items || []),
+          paidAmount: paidBefore,
+          method: Object.keys(paidBefore).length ? null : methodBefore,
+          mode: null,
+          address: null,
+          sign: -1,
+          pruneZero: true,
+          deleteIfEmpty: false,
+        });
+
+        await upsertDailyStatsJsonSmart({
+          day,
+          addRevenue: newTotal,
+          addOrders: 0,
+          addItems: itemsCountFrom(items || []),
+          paidAmount: paidAfter,
+          method: Object.keys(paidAfter).length ? null : methodBefore,
+          mode: null,
+          address: null,
+          sign: 1,
+          pruneZero: true,
+          deleteIfEmpty: false,
+        });
+      } catch (statsErr) {
+        console.warn('Error actualizando daily_stats al editar items:', statsErr);
+      }
+
+      return updatedOrder;
+    } catch (err) {
+      console.error('Error al actualizar items del pedido:', err);
+      return rejectWithValue(err?.message || String(err));
     }
   }
 );
@@ -767,6 +1057,19 @@ const initialState = {
     hasMore: false,
   },
   lastCreatedOrder: null,
+  // Collection de PocketBase de la que provienen los pedidos cargados ('orders' | 'orders_test')
+  ordersCollection: null,
+};
+
+// Si cambió la collection de origen (al entrar/salir del Modo Prueba), descartamos los pedidos
+// del servidor cargados de la otra collection, conservando pendientes offline y pruebas locales.
+const resetOrdersIfCollectionChanged = (s, collection) => {
+  if (!collection || s.ordersCollection === collection) return;
+  s.orders = (s.orders || []).filter(
+    (o) =>
+      o?.pending || o?.isTestOrder || (typeof o?.id === 'string' && o.id.startsWith('local-test-'))
+  );
+  s.ordersCollection = collection;
 };
 
 const ordersSlice = createSlice({
@@ -784,6 +1087,14 @@ const ordersSlice = createSlice({
       } else {
         const idx = state.testOrders.findIndex((o) => o.id === payload.id);
         if (idx >= 0) state.testOrders[idx] = payload;
+      }
+      if (Array.isArray(state.orders)) {
+        const oIdx = state.orders.findIndex((o) => o.id === payload.id);
+        if (oIdx >= 0) {
+          state.orders[oIdx] = payload;
+        } else {
+          state.orders.unshift(payload);
+        }
       }
       saveTestOrdersToStorage(state.testOrders);
     },
@@ -898,6 +1209,7 @@ const ordersSlice = createSlice({
     });
     b.addCase(hydrateOrdersFromPocket.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
+      resetOrdersIfCollectionChanged(s, payload.collection);
       const pendings = s.orders.filter((o) => o.pending);
       // Mantener pedidos pendientes de delivery cargados previamente
       const pendingDeliveries = s.orders.filter((o) => {
@@ -925,6 +1237,8 @@ const ordersSlice = createSlice({
 
     b.addCase(fetchTodayPendingOrders.fulfilled, (s, { payload }) => {
       if (!payload?.items) return;
+      if (payload.collection !== getOrdersCollectionName()) return; // respuesta obsoleta
+      resetOrdersIfCollectionChanged(s, payload.collection);
       const existingIds = new Set(s.orders.map((o) => o.id));
       payload.items.forEach((pOrder) => {
         if (!existingIds.has(pOrder.id)) {
@@ -946,6 +1260,7 @@ const ordersSlice = createSlice({
     });
     b.addCase(hydrateAllTodayOrders.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
+      resetOrdersIfCollectionChanged(s, payload.collection);
       const pendings = s.orders.filter((o) => o.pending);
       s.orders = [...pendings, ...payload.items.map(pbToOrder)];
       s.pagination = {
@@ -968,6 +1283,7 @@ const ordersSlice = createSlice({
     b.addCase(fetchMoreOrders.fulfilled, (s, { payload }) => {
       s.status = 'succeeded';
       if (!payload) return;
+      if (s.ordersCollection && payload.collection !== s.ordersCollection) return; // respuesta obsoleta
       const existingIds = new Set(s.orders.map((o) => o.id));
       const newItems = payload.items.map(pbToOrder).filter((o) => !existingIds.has(o.id));
       s.orders = [...s.orders, ...newItems];
@@ -1039,6 +1355,11 @@ const ordersSlice = createSlice({
         s.orders[idx] = { ...payload };
       }
       savePendingToStorage(s.orders);
+    });
+
+    b.addCase(updateOrderProgress.fulfilled, (s, { payload }) => {
+      if (!payload?.id) return;
+      ordersSlice.caseReducers.upsertOrder(s, { payload });
     });
 
     b.addCase(syncPendingOrders.fulfilled, () => {

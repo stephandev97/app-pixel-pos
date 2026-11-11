@@ -11,4 +11,8 @@ contextBridge.exposeInMainWorld('electron', {
   process: {
     platform: typeof process !== 'undefined' ? process.platform : 'browser',
   },
+  posTerminal: {
+    saveCredentials: (credentials) => ipcRenderer.invoke('save-pos-terminal-credentials', credentials),
+    authenticate: (pbUrl) => ipcRenderer.invoke('authenticate-pos-terminal', { pbUrl }),
+  },
 });

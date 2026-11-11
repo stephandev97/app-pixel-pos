@@ -1,5 +1,6 @@
 // PrintTicket58.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { formatFlavorPortions } from '../../utils/flavorPortions';
 import { useReactToPrint } from 'react-to-print';
 
 import { Print, TotalPrint } from '../../pages/Orders/OrdersStyles'; // ajustá este path según tu proyecto :contentReference[oaicite:2]{index=2}
@@ -234,7 +235,7 @@ export default function PrintTicket58({
             const cantidad = Number(it?.quantity ?? it?.qty ?? 1);
             const rawNombre = it?.name || it?.title || it?.label || '';
             const nombre = getFormattedDrinkName(it) || rawNombre;
-            const sabores = Array.isArray(it?.sabores) ? it.sabores.filter(Boolean) : [];
+            const sabores = formatFlavorPortions(it?.sabores);
             return (
               <div key={idx} style={{ marginBottom: '1mm' }}>
                 <div style={{ display: 'flex', fontSize: '3.5mm' }}>

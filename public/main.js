@@ -1,9 +1,10 @@
 // public/main.js
-const { app, BrowserWindow, dialog, ipcMain, globalShortcut } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, globalShortcut, Notification, safeStorage, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
+const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server || WebSocket.WebSocketServer;
 const log = require('electron-log');
@@ -22,6 +23,43 @@ if (process.platform === 'linux') {
 
 const isDev = !app.isPackaged;
 let win = null;
+
+// Las credenciales de la terminal se guardan cifradas por Windows (DPAPI),
+// nunca en localStorage ni dentro del bundle de la aplicación.
+const POS_TERMINAL_CREDENTIALS_FILE = 'pos-terminal-credentials.dat';
+
+function getPosTerminalCredentialsPath() {
+  return path.join(app.getPath('userData'), POS_TERMINAL_CREDENTIALS_FILE);
+}
+
+function readPosTerminalCredentials() {
+  if (!safeStorage.isEncryptionAvailable()) return null;
+
+  try {
+    const encrypted = Buffer.from(fs.readFileSync(getPosTerminalCredentialsPath(), 'utf8'), 'base64');
+    const credentials = JSON.parse(safeStorage.decryptString(encrypted));
+    if (!credentials?.email || !credentials?.password) return null;
+    return credentials;
+  } catch {
+    return null;
+  }
+}
+
+function savePosTerminalCredentials({ email, password }) {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('Windows no pudo habilitar el almacenamiento cifrado.');
+  }
+
+  const value = JSON.stringify({ email: String(email).trim(), password: String(password) });
+  const encrypted = safeStorage.encryptString(value).toString('base64');
+  fs.writeFileSync(getPosTerminalCredentialsPath(), encrypted, { encoding: 'utf8', mode: 0o600 });
+}
+
+function getPocketBaseAuthUrl(pbUrl) {
+  const baseUrl = new URL(String(pbUrl || ''));
+  if (baseUrl.protocol !== 'https:') throw new Error('La conexi\u00f3n de la terminal debe usar HTTPS.');
+  return new URL('/api/collections/users/auth-with-password', baseUrl).toString();
+}
 
 const gotTheLock = app.requestSingleInstanceLock();
 if (!gotTheLock) {
@@ -94,6 +132,143 @@ ipcMain.handle('close-window', () => {
     win = null;
   }
   app.quit();
+});
+
+// ======================================================
+// Inicio automático de la terminal POS
+// ======================================================
+ipcMain.handle('save-pos-terminal-credentials', (_event, payload = {}) => {
+  try {
+    const email = String(payload.email || '').trim();
+    const password = String(payload.password || '');
+    if (!email || !password) throw new Error('Faltan las credenciales de la terminal.');
+    savePosTerminalCredentials({ email, password });
+    return { saved: true };
+  } catch (error) {
+    log.warn('No se pudieron guardar las credenciales cifradas de la terminal:', error.message);
+    return { saved: false, error: error.message };
+  }
+});
+
+ipcMain.handle('authenticate-pos-terminal', async (_event, payload = {}) => {
+  const credentials = readPosTerminalCredentials();
+  if (!credentials) return { authenticated: false, reason: 'not-configured' };
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const response = await fetch(getPocketBaseAuthUrl(payload.pbUrl), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identity: credentials.email, password: credentials.password }),
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.token || !data?.record) {
+      return { authenticated: false, reason: response.status === 400 ? 'invalid-credentials' : 'unavailable' };
+    }
+    return { authenticated: true, token: data.token, record: data.record };
+  } catch (error) {
+    log.warn('No se pudo iniciar automáticamente la terminal POS:', error.message);
+    return { authenticated: false, reason: 'unavailable' };
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
+// ======================================================
+// Abrir WhatsApp en un navegador externo de la PC
+// ======================================================
+const WINDOWS_BROWSERS = [
+  {
+    id: 'chrome',
+    label: 'Google Chrome',
+    paths: [
+      path.join(process.env.PROGRAMFILES || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(process.env.LOCALAPPDATA || '', 'Google', 'Chrome', 'Application', 'chrome.exe'),
+    ],
+  },
+  {
+    id: 'edge',
+    label: 'Microsoft Edge',
+    paths: [
+      path.join(process.env.PROGRAMFILES || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ],
+  },
+  {
+    id: 'firefox',
+    label: 'Mozilla Firefox',
+    paths: [
+      path.join(process.env.PROGRAMFILES || '', 'Mozilla Firefox', 'firefox.exe'),
+      path.join(process.env['PROGRAMFILES(X86)'] || '', 'Mozilla Firefox', 'firefox.exe'),
+    ],
+  },
+];
+
+function getInstalledExternalBrowsers() {
+  const options = [{ id: 'default', label: 'Navegador predeterminado de Windows' }];
+  if (process.platform !== 'win32') return options;
+
+  WINDOWS_BROWSERS.forEach((browser) => {
+    const executable = browser.paths.find((candidate) => candidate && fs.existsSync(candidate));
+    if (executable) options.push({ id: browser.id, label: browser.label });
+  });
+  return options;
+}
+
+ipcMain.handle('get-external-browsers', () => getInstalledExternalBrowsers());
+
+ipcMain.handle('open-external-url', async (_event, payload = {}) => {
+  try {
+    const target = new URL(String(payload.url || ''));
+    if (target.protocol !== 'https:' || target.hostname !== 'wa.me') {
+      throw new Error('Solo se permiten enlaces seguros de WhatsApp.');
+    }
+
+    const browser = WINDOWS_BROWSERS.find((item) => item.id === payload.browserId);
+    const executable = browser?.paths.find((candidate) => candidate && fs.existsSync(candidate));
+
+    if (executable) {
+      const processHandle = spawn(executable, [target.toString()], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      processHandle.unref();
+    } else {
+      await shell.openExternal(target.toString(), { activate: true });
+    }
+
+    return { opened: true };
+  } catch (error) {
+    log.warn('No se pudo abrir WhatsApp en un navegador externo:', error);
+    return { opened: false, error: error.message };
+  }
+});
+
+// ======================================================
+// Notificaciones nativas de Windows para pedidos de la app
+// ======================================================
+ipcMain.handle('show-app-order-notification', (_event, payload = {}) => {
+  // Las notificaciones nativas se usan únicamente en el POS de Windows.
+  if (process.platform !== 'win32' || !Notification.isSupported()) {
+    return { shown: false };
+  }
+
+  const title = String(payload.title || 'Nuevo pedido de la app').slice(0, 100);
+  const body = String(payload.body || 'Hay un pedido nuevo para preparar.').slice(0, 240);
+  const notification = new Notification({ title, body, silent: false });
+
+  notification.on('click', () => {
+    if (!win) return;
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  });
+
+  notification.show();
+  return { shown: true };
 });
 
 // ======================================================

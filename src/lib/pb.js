@@ -5,7 +5,7 @@ import { PB_CONFIG } from './pb-config.js';
 // Compatibilidad CRA (process.env.REACT_APP_*) y Vite (import.meta.env.VITE_*)
 const ENV = (typeof import.meta !== 'undefined' ? import.meta.env : {}) || {};
 
-const PB_URL = ENV.VITE_PB_URL || ENV.REACT_APP_PB_URL || PB_CONFIG.URL;
+export const PB_URL = ENV.VITE_PB_URL || ENV.REACT_APP_PB_URL || PB_CONFIG.URL;
 
 export const pb = new PocketBase(PB_URL);
 pb.autoCancellation(false);

@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 
 import CardProduct from '../../components/Products/CardProduct';
+import { buildNextProductStock, isProductAvailable, isProductOptionFlagAvailable } from '../../utils/productStock';
 import { pb } from '../../lib/pb';
 import { addToCart } from '../../redux/cart/cartSlice';
 import { setCupSizesStock, setExtrasStock, setHiddenProducts } from '../../redux/actions/actionsSlice';
@@ -88,7 +89,6 @@ function SearchBar({ q, setQ, onQuickAdd }) {
   const [qrLoading, setQrLoading] = useState(false);
   const [qrMsg, setQrMsg] = useState('');
   const [qrError, setQrError] = useState('');
-  const [pointsConnectionStatus, setPointsConnectionStatus] = useState('checking');
 
   const submit = () => {
     onQuickAdd?.({ name: name.trim(), price });
@@ -153,8 +153,8 @@ function SearchBar({ q, setQ, onQuickAdd }) {
       setQrLoading(true);
       setQrError('');
       if (qrClaim.type === 'claim') {
-        // Canjear cupón en sistema de puntos (con precio dinámico si la reward tiene productId)
-        console.log('🎫 Canjeando cupón en sistema de puntos...');
+        // Canjear cupón en sistema de monedas (con precio dinámico si la reward tiene productId)
+        console.log('🎫 Canjeando cupón en sistema de monedas...');
         console.log('📋 Claim ID a canjear:', qrClaim.data.id);
         console.log('📋 Claim completo:', qrClaim.data);
 
@@ -177,8 +177,8 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           setQrError(result.message);
         }
       } else if (qrClaim.type === 'reward') {
-        // Canjear premio directo en sistema de puntos
-        console.log('🎁 Canjeando premio directo en sistema de puntos...');
+        // Canjear premio directo en sistema de monedas
+        console.log('🎁 Canjeando premio directo en sistema de monedas...');
         console.log('📋 Reward ID a canjear:', qrClaim.rewardId);
 
         if (!qrClaim.data.id) {
@@ -200,9 +200,9 @@ function SearchBar({ q, setQ, onQuickAdd }) {
           setQrError(result.message);
         }
       } else if (qrClaim.type === 'client') {
-        // Mostrar info del cliente y agregar puntos
-        setQrMsg(`👤 Cliente: ${qrClaim.clientName} - Puntos: ${qrClaim.pointsBalance}`);
-        // Aquí podrías agregar botones para sumar puntos
+        // Mostrar info del cliente y agregar monedas
+        setQrMsg(`👤 Cliente: ${qrClaim.clientName} - Monedas: ${qrClaim.pointsBalance}`);
+        // Aquí podrías agregar botones para sumar monedas
       }
     } catch (err) {
       const reason = err?.data?.message || err?.message || '';
@@ -387,7 +387,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
                 <div style={{ fontWeight: 800, fontSize: '1.2rem' }}>
-                  Canjear cupón (Sistema de Puntos)
+                  Canjear cupón (Sistema de Monedas)
                 </div>
                 <button
                   onClick={resetQr}
@@ -444,7 +444,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                       {qrClaim.pointsCost && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Coins size={16} color="#0284c7" />
-                          <span>Costo: <strong>{qrClaim.pointsCost} pts</strong></span>
+                          <span>Costo: <strong>{qrClaim.pointsCost} monedas</strong></span>
                         </div>
                       )}
                     </>
@@ -458,7 +458,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         <CreditCard size={16} color="#0284c7" />
-                        <span>Puntos: <strong>{qrClaim.pointsBalance}</strong></span>
+                        <span>Monedas: <strong>{qrClaim.pointsBalance}</strong></span>
                       </div>
                     </>
                   )}
@@ -472,7 +472,7 @@ function SearchBar({ q, setQ, onQuickAdd }) {
                       {qrClaim.pointsCost && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                           <Coins size={16} color="#0284c7" />
-                          <span>Costo: <strong>{qrClaim.pointsCost} pts</strong></span>
+                          <span>Costo: <strong>{qrClaim.pointsCost} monedas</strong></span>
                         </div>
                       )}
                       {qrClaim.clientName && (
@@ -911,27 +911,6 @@ export default function Products() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Verificar conexión con sistema de puntos (optimizado sin spam)
-  useEffect(() => {
-    const checkPointsConnection = async () => {
-      if (!navigator.onLine) return;
-      try {
-        const test = await pointsApiClient.testConnection();
-        setPointsConnectionStatus(test?.success ? 'connected' : 'error');
-      } catch (error) {
-        setPointsConnectionStatus('error');
-      }
-    };
-
-    checkPointsConnection();
-    const interval = setInterval(checkPointsConnection, 60000);
-    window.addEventListener('online', checkPointsConnection);
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('online', checkPointsConnection);
-    };
-  }, []);
-
   const HELADOS_CATEGORIES = useMemo(
     () => ['Helado', 'Paletas', 'Varios', 'Consumir en el local', 'Extras', 'Otros'],
     []
@@ -1020,6 +999,26 @@ export default function Products() {
     dispatch(addToCart(temp)); // 👉 entra directo al carrito con quantity: 1
   }
 
+  const handleProductStockChange = async (item, optionName = '') => {
+    if (!item?.id) return;
+    const collectionName = item.isCafeteria ? 'products_cafeteria' : 'products';
+    const currentlyAvailable = optionName
+      ? isProductOptionFlagAvailable(item.stock, optionName)
+      : isProductAvailable(item.stock);
+    const nextStock = buildNextProductStock(
+      item.stock,
+      item.options ?? item.opciones,
+      optionName,
+      !currentlyAvailable
+    );
+    try {
+      await pb.collection(collectionName).update(item.id, { stock: nextStock });
+    } catch (error) {
+      console.error('Error actualizando stock del producto:', error);
+      alert(`No se pudo actualizar el stock: ${error?.message || 'error desconocido'}`);
+    }
+  };
+
   useEffect(() => {
     const ipc = window.electron?.ipcRenderer;
     if (!ipc) return;
@@ -1082,6 +1081,8 @@ export default function Products() {
   // Suscripción en vivo (Productos ordinarios)
   useEffect(() => {
     const coll = pb.collection('products');
+    let disposed = false;
+    let unsubscribe;
     const handler = (e) => {
       setProducts((prev) => {
         const next = applyRealtimeChange(prev, e);
@@ -1089,13 +1090,23 @@ export default function Products() {
         return next;
       });
     };
-    coll.subscribe('*', handler).catch(console.error);
-    return () => coll.unsubscribe('*');
+    coll.subscribe('*', handler)
+      .then((stop) => {
+        if (disposed) stop()?.catch(() => {});
+        else unsubscribe = stop;
+      })
+      .catch(console.error);
+    return () => {
+      disposed = true;
+      unsubscribe?.()?.catch(() => {});
+    };
   }, []);
 
   // Suscripción en vivo (Productos de Cafetería)
   useEffect(() => {
     const coll = pb.collection('products_cafeteria');
+    let disposed = false;
+    let unsubscribe;
     const handler = (e) => {
       setCafeteriaProducts((prev) => {
         const next = applyRealtimeChange(prev, e);
@@ -1103,13 +1114,23 @@ export default function Products() {
         return next;
       });
     };
-    coll.subscribe('*', handler).catch(console.error);
-    return () => coll.unsubscribe('*');
+    coll.subscribe('*', handler)
+      .then((stop) => {
+        if (disposed) stop()?.catch(() => {});
+        else unsubscribe = stop;
+      })
+      .catch(console.error);
+    return () => {
+      disposed = true;
+      unsubscribe?.()?.catch(() => {});
+    };
   }, []);
 
   // Suscripción en vivo (Configuración de stock de Cafetería: vasos y extras)
   useEffect(() => {
     const coll = pb.collection('cafe_config');
+    let disposed = false;
+    let unsubscribe;
     const handler = (e) => {
       if (e.record?.key === 'global_costs' && e.record?.data) {
         if (e.record.data.cupSizesStock) {
@@ -1123,8 +1144,16 @@ export default function Products() {
         }
       }
     };
-    coll.subscribe('*', handler).catch(console.error);
-    return () => coll.unsubscribe('*');
+    coll.subscribe('*', handler)
+      .then((stop) => {
+        if (disposed) stop()?.catch(() => {});
+        else unsubscribe = stop;
+      })
+      .catch(console.error);
+    return () => {
+      disposed = true;
+      unsubscribe?.()?.catch(() => {});
+    };
   }, [dispatch]);
 
   // Online/Offline + atajo Ctrl/⌘+K
@@ -1276,6 +1305,9 @@ export default function Products() {
                       flatOptions={flatOptions}
                       groupOptions={groupOptions}
                       loadingSabores={loadingSabores}
+                      onUpdateStock={(optionName = '') =>
+                        handleProductStockChange(item, optionName)
+                      }
                     />
                   ))}
                 </GridProducts>

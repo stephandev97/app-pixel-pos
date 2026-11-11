@@ -141,88 +141,40 @@ export const ContainerCard = styled.div`
 export const TitleCard = styled.div`
   width: 100%;
   display: flex;
-  align-items: center;
-
+  flex-direction: column;
   gap: 8px;
-  font-weight: 700;
-  color: #4d0012; /* Color bordo */
-  font-size: 1.1rem;
-  border-bottom: 1px solid #f5f6fa;
-  padding-bottom: 10px;
+  margin-bottom: 8px;
 `;
 
-/* Acciones visibles al hover (imprimir/copiar/etc.) */
+/* Acciones visibles en el header (imprimir/copiar/etc.) */
 export const ContentButtonsTitle = styled.div`
-  display: flex;
-  position: absolute;
-  right: 0;
+  display: inline-flex;
   align-items: center;
-  gap: 0; /* Remove gap to use borders/padding */
-
-  /* oculto "de verdad" (evita hover-renders raros) */
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-
-  /* PERF: animación barata (opacity + transform) */
-  transform: translateY(-2px);
-  will-change: opacity, transform;
-  transition:
-    opacity 140ms ease,
-    transform 140ms ease,
-    visibility 0ms linear 140ms;
-
-  /* Tip: mejor engancharlo al hover del header, no de toda la card */
-  ${TitleCard}:hover &,
-  ${ContainerCard}:hover & {
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-    transform: translateY(0);
-    transition:
-      opacity 140ms ease,
-      transform 140ms ease,
-      visibility 0ms;
-    z-index: 200;
-  }
+  gap: 5px;
+  flex-shrink: 0;
 `;
 
 /* Botón chip genérico para acciones en el header de la card */
 export const ButtonTitle = styled.span`
-  min-width: 28px;
-  min-height: 28px;
-  padding: 0 8px; /* Add horizontal padding for divider spacing */
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  position: relative; /* For Pseudo-element */
-
-  /* Divider straight line */
-  &::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 14px; /* Altura de la línea */
-    background-color: rgba(77, 0, 18, 0.15);
-  }
-
-  &:last-child::after {
-    display: none;
-  }
-
   border-radius: 6px;
-  color: #4d0012; /* Color bordo */
-  background: transparent;
-  font-size: 0.95rem; /* Slightly larger icon */
-  font-weight: 700;
+  color: #475569;
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
   cursor: pointer;
   user-select: none;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
 
   &:hover {
-    background: rgba(77, 0, 18, 0.08); /* Light bordo background on hover */
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #cbd5e1;
   }
 `;
 
@@ -267,18 +219,23 @@ export const EstadoChip = styled.span`
   }};
 `;
 
-/* Texto auxiliar (hora relativa, etc.) que aparece al hover */
+/* Texto auxiliar (hora) */
 export const Hora = styled.span`
-  color: #9ca3af;
-  opacity: 1;
-  font-size: 1.2rem;
-  will-change: opacity;
+  color: #64748b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  height: 24px;
+  padding: 0 7px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   flex-shrink: 0;
-  margin-right: 10px;
-  ${TitleCard}:hover &,
-  ${ContainerCard}:hover & {
-    opacity: 0;
-  }
 `;
 
 /* Línea de dirección / info principal */
@@ -288,15 +245,14 @@ export const DirCard = styled.div`
   justify-content: space-between;
   gap: 8px;
   width: 100%;
-  margin: 12px 0 16px 0;
+  margin: 4px 0 12px 0;
+  padding: 7px 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
   font-weight: 700;
-  font-size: 1.05rem;
-
-  & span {
-    display: flex;
-    align-items: center;
-    text-align: left;
-  }
+  font-size: 0.95rem;
+  box-sizing: border-box;
 `;
 
 /* Contenedor de lista de productos (dentro de la card) */
@@ -339,47 +295,36 @@ export const ButtonCheck = styled(ButtonTitle)`
   /* background: #41b06e; removed to be transparent */
 `;
 export const ButtonPrint = styled(ButtonTitle)`
-  /* background: black; removed to be transparent */
-
   &:hover {
-    background: rgba(77, 0, 18, 0.08) !important;
-    color: #4d0012;
+    background: #f1f5f9 !important;
+    color: #0f172a !important;
+    border-color: #cbd5e1 !important;
   }
 `;
 
 export const ButtonCopy = styled.span`
-  margin-right: 0; /* Remove margin to stick buttons */
-  padding: 6px 12px; /* Increased padding top/bottom */
-  border-radius: 10px;
-  position: relative;
-  border: 1px solid #4d0012;
-
-  /* Divider */
-  &::after {
-    content: '';
-    position: absolute;
-    right: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 1px;
-    height: 14px;
-    background-color: rgba(77, 0, 18, 0.15);
-  }
-  &:last-child::after {
-    display: none;
-  }
-  font-size: 0.8em;
-  background: transparent;
-  color: #4d0012;
-  display: flex;
+  height: 26px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  font-size: 0.72rem;
+  background: #ffffff;
+  color: #334155;
+  display: inline-flex;
   align-items: center;
-  gap: 6px; /* Space between icon and text */
+  gap: 4px;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+  font-weight: 800;
+  user-select: none;
+  font-family: inherit;
+  flex-shrink: 0;
+  white-space: nowrap;
 
   &:hover {
-    background: rgba(77, 0, 18, 0.08) !important;
-    color: #4d0012 !important;
+    background: #f8fafc;
+    border-color: #94a3b8;
   }
 `;
 
@@ -402,7 +347,13 @@ export const BtnFooter = styled.div`
 `;
 
 export const Direccion = styled.span`
-  width: 72%;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #1e293b;
 `;
 
 export const Print = styled.div`

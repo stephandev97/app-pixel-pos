@@ -319,6 +319,7 @@ const ContainerFinish = ({ cartItems, price }) => {
       direccion: dir,
       total: finalTotal,
       envio: shippingWatch,
+      deliveryCost: shippingWatch,
       envioOpcion: getValues('envioOpcion'),
       pago: 0,
       cambio: 0,

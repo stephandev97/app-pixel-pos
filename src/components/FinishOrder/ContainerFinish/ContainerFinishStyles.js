@@ -252,7 +252,7 @@ export const InputGroup = styled.div`
   width: 100%;
   max-width: 580px;
   margin: 10px auto;
-  overflow: hidden !important;
+  overflow: ${(p) => (p.$allowOverflow ? 'visible' : 'hidden')} !important;
 `;
 
 export const Icon = styled.span`
@@ -534,10 +534,12 @@ export const motionSafe = css`
 
 /* Sección que entra con fade/slide al montarse */
 export const AnimSection = styled.div`
+  position: relative;
+  z-index: ${(p) => (p.$allowOverflow ? 30 : 'auto')};
   animation: ${fadeSlideIn} 0.18s ease-out both;
   width: 100%;
   margin-bottom: 0 !important;
-  overflow: hidden;
+  overflow: ${(p) => (p.$allowOverflow ? 'visible' : 'hidden')};
   ${motionSafe};
   will-change: transform, opacity;
   transform: translateZ(0);

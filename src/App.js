@@ -11,11 +11,13 @@ import { createGlobalStyle } from 'styled-components';
 
 import AndroidUpdatePrompt from './components/common/AndroidUpdatePrompt';
 import Loader from './components/common/Loader';
+import PocketBaseAuthGate from './components/PocketBaseAuthGate/PocketBaseAuthGate';
 import Sidebar from './components/Sidebar/Sidebar';
 import { SIDEBAR_W } from './components/Sidebar/SidebarStyles';
 import SplashScreen from './components/Splash/SplashScreen';
 import { useNetworkSync } from './hooks/useNetworkSync';
 import useOptimizedAnimation from './hooks/useOptimizedAnimation';
+import { loadDeliveryConfig } from './lib/deliveryConfig';
 import Checkout from './pages/Checkout/Checkout';
 import FinishOrder from './pages/FinishOrder/FinishOrder';
 import OrderFinished from './pages/OrderFinished/OrderFinished';
@@ -32,6 +34,7 @@ const TvSaboresPanel = lazy(() => import('./pages/TVSaboresPanel/TVSaboresPanel'
 const CustomPrint = lazy(() => import('./pages/CustomPrint/CustomPrint'));
 const CafeCosts = lazy(() => import('./pages/CafeCosts/CafeCosts'));
 const BaristaRecipes = lazy(() => import('./pages/BaristaRecipes/BaristaRecipes'));
+const DeliveryTracking = lazy(() => import('./pages/DeliveryTracking/DeliveryTracking'));
 
 const GlobalNoDialogScroll = createGlobalStyle`
   .MuiDialogContent-root { overflow-y: clip !important; }
@@ -83,11 +86,13 @@ export default function App() {
   const activeBaristaRecipes = useSelector((s) => s.actions.toggleBaristaRecipes);
   const activeCustomPrint = useSelector((s) => s.actions.toggleCustomPrint);
   const activeCafeCosts = useSelector((s) => s.actions.toggleCafeCosts);
+  const activeDeliveryTracking = useSelector((s) => s.actions.toggleDeliveryTracking);
   const isTestMode = useSelector((s) => s.actions.isTestMode);
   const [showSplash, setShowSplash] = useState(true);
 
   useEffect(() => {
     fetchLatestPosPassword().catch(() => {});
+    loadDeliveryConfig().catch(() => {});
     const timer = setTimeout(() => {
       setShowSplash(false);
     }, 2200); // 2.2s splash
@@ -111,13 +116,16 @@ export default function App() {
                 ? 'custom_print'
                 : activeCafeCosts
                   ? 'cafe_costs'
-                  : activeConfig
-                    ? 'config'
-                    : activeDaily
-                      ? 'daily'
-                      : 'home';
+                  : activeDeliveryTracking
+                    ? 'delivery_tracking'
+                    : activeConfig
+                      ? 'config'
+                      : activeDaily
+                        ? 'daily'
+                        : 'home';
 
   return (
+    <PocketBaseAuthGate>
     <PersistGate loading={null} persistor={persistor}>
       <div className="App app-container animation-optimized">
         {/* Custom Title Bar Region - Only in Electron */}
@@ -304,6 +312,8 @@ export default function App() {
                   <CustomPrint />
                 ) : screen === 'cafe_costs' ? (
                   <CafeCosts />
+                ) : screen === 'delivery_tracking' ? (
+                  <DeliveryTracking />
                 ) : screen === 'config' ? (
                   <Config />
                 ) : screen === 'daily' ? (
@@ -327,5 +337,6 @@ export default function App() {
         </div>
       </div>
     </PersistGate>
+    </PocketBaseAuthGate>
   );
 }

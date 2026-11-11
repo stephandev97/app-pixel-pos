@@ -130,6 +130,7 @@
     "framer-motion": "^12.23.12",
     "jimp": "^1.6.0",
     "lucide-react": "^0.544.0",
+    "maplibre-gl": "^4.7.1",
     "pocketbase": "^0.26.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

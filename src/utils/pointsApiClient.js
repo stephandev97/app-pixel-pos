@@ -1,17 +1,18 @@
-// Cliente para conectar al PB de la app de puntos desde el POS
+// Cliente para conectar al PB de la app de monedas desde el POS
 import PocketBase from 'pocketbase';
 
-// URL de la app de puntos (mismo PB que el POS)
+// La app de puntos, rewards y clientes vive en el PB público activo. Se puede
+// reemplazar por entorno si alguna instalación usa una instancia separada.
 const POINTS_PB_URL =
-  import.meta.env.VITE_POINTS_PB_URL || 'https://railway-production-857d.up.railway.app';
+  import.meta.env.VITE_POINTS_PB_URL || 'https://pb.pixelhelados.com';
 
-// URL del PB de rewards (app de puntos)
+// URL del PB de rewards (app de monedas)
 const REWARDS_PB_URL =
-  import.meta.env.VITE_REWARDS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+  import.meta.env.VITE_REWARDS_PB_URL || 'https://pb.pixelhelados.com';
 
 // URL del PB de clientes (pixel-pwa-backend - para buscar QR de clientes)
 const CLIENTS_PB_URL =
-  import.meta.env.VITE_CLIENTS_PB_URL || 'https://pixel-pwa-backend-production.up.railway.app';
+  import.meta.env.VITE_CLIENTS_PB_URL || 'https://pb.pixelhelados.com';
 
 // Credenciales del usuario POS (mismo que en pb-config.js)
 const POS_CREDENTIALS = {
@@ -19,7 +20,7 @@ const POS_CREDENTIALS = {
   password: import.meta.env.VITE_POS_PASSWORD || '12345678',
 };
 
-// Factor de puntos configurable (ARS por punto) - $100 = 1 punto
+// Factor de monedas configurable (ARS por punto) - $100 = 1 punto
 export const POINTS_RATE = Number(import.meta.env.VITE_POINTS_RATE || 100) || 100;
 
 export class PointsApiClient {
@@ -38,7 +39,7 @@ export class PointsApiClient {
   // Autenticar como usuario POS
   async authenticate() {
     try {
-      console.log('🔐 Autenticando usuario POS en app de puntos...');
+      console.log('🔐 Autenticando usuario POS en app de monedas...');
       await this.pb
         .collection('users')
         .authWithPassword(POS_CREDENTIALS.email, POS_CREDENTIALS.password);
@@ -110,10 +111,10 @@ export class PointsApiClient {
     return { success: true, message: 'Ya autenticado en rewards' };
   }
 
-  // Buscar QR en la app de puntos
+  // Buscar QR en la app de monedas
   async findQRCode(qrData) {
     try {
-      console.log('🔍 POS: Buscando QR en app de puntos:', qrData);
+      console.log('🔍 POS: Buscando QR en app de monedas:', qrData);
 
       // Asegurar autenticación
       const authResult = await this.ensureAuthenticated();
@@ -185,7 +186,7 @@ export class PointsApiClient {
           found: true,
           type: 'claim',
           data: claim,
-          message: '🎫 Cupón encontrado en sistema de puntos',
+          message: '🎫 Cupón encontrado en sistema de monedas',
           rewardTitle: claim.expand?.reward?.title || 'Premio',
           clientName: clientName,
           clientDni: clientDni, // Nuevo campo DNI
@@ -216,7 +217,7 @@ export class PointsApiClient {
           found: true,
           type: 'reward',
           data: reward,
-          message: '🎁 Premio directo encontrado en sistema de puntos',
+          message: '🎁 Premio directo encontrado en sistema de monedas',
           pointsCost: reward.pointsCost,
           title: reward.title,
           rewardId: reward.id,
@@ -279,7 +280,7 @@ export class PointsApiClient {
           found: true,
           type: 'client',
           data: client,
-          message: '👤 Cliente encontrado en sistema de puntos',
+          message: '👤 Cliente encontrado en sistema de monedas',
           pointsBalance: client.pointsBalance || 0,
           name: client.name || client.email,
           level: client.level || 'basic',
@@ -292,11 +293,11 @@ export class PointsApiClient {
         found: false,
         type: 'not_found',
         data: null,
-        message: '❌ QR no encontrado en sistema de puntos',
+        message: '❌ QR no encontrado en sistema de monedas',
         searchedCode: qrData,
       };
     } catch (error) {
-      console.error('❌ Error general buscando QR en app de puntos:', error);
+      console.error('❌ Error general buscando QR en app de monedas:', error);
       return {
         found: false,
         type: 'error',
@@ -307,7 +308,7 @@ export class PointsApiClient {
     }
   }
 
-  // Obtener info detallada del cliente desde app de puntos
+  // Obtener info detallada del cliente desde app de monedas
   async getClientInfo(clientId) {
     try {
       await this.ensureAuthenticated();
@@ -373,9 +374,9 @@ export class PointsApiClient {
       let clientPoints = null;
       let rewardTitle = null;
 
-      // Si hay un reward asociado, descontar puntos del cliente
+      // Si hay un reward asociado, descontar monedas del cliente
       if (claim.reward && claim.client) {
-        console.log('💰 Procesando transacción de puntos para cliente:', claim.client);
+        console.log('💰 Procesando transacción de monedas para cliente:', claim.client);
 
         try {
           await this.authenticateClients();
@@ -385,7 +386,7 @@ export class PointsApiClient {
           if (client.pointsBalance < reward.pointsCost) {
             return {
               success: false,
-              message: `⚠️ Puntos insuficientes. Tiene ${client.pointsBalance}, necesita ${reward.pointsCost}`,
+              message: `⚠️ Monedas insuficientes. Tiene ${client.pointsBalance}, necesita ${reward.pointsCost}`,
             };
           }
 
@@ -435,7 +436,7 @@ export class PointsApiClient {
         claim: updatedClaim,
         message: rewardTitle
           ? `✅ Cupón "${rewardTitle}" canjeado exitosamente`
-          : `✅ Cupón canjeado exitosamente (sin descuento de puntos)`,
+          : `✅ Cupón canjeado exitosamente (sin descuento de monedas)`,
         newBalance: clientPoints,
         rewardTitle: rewardTitle,
       };
@@ -450,39 +451,132 @@ export class PointsApiClient {
     }
   }
 
-  // Agregar puntos desde POS (al PB de clientes - pixel-pwa-backend)
-  async addPointsFromPos(clientId, pointsToAdd, reason, _posOperator) {
+  // Agregar monedas desde POS (al PB de clientes - pixel-pwa-backend)
+  async notifyPointsCredit(transactionId) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        await this.pbClients.send('/api/pixel/points-notifications/enqueue', {
+          method: 'POST', body: { transactionId }, requestKey: null,
+        });
+        return true;
+      } catch (error) {
+        if (attempt === 2) {
+          console.warn('Monedas acreditados, pero no se pudo guardar el aviso:', error);
+          return false;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+    return false;
+  }
+
+  async addPointsFromPos(clientId, pointsToAdd, reason, _posOperator, orderId) {
     try {
+      if (!orderId) {
+        return {
+          success: false,
+          message: 'No se puede acreditar monedas sin asociarlas a un pedido.',
+        };
+      }
+
       await this.ensureAuthenticated();
       await this.authenticateClients();
-      
+
+      const order = await this.pb.collection('orders').getOne(orderId);
+      if (String(order.source || '').trim().toLowerCase() !== 'app') {
+        return {
+          success: false,
+          message: 'Solo se acreditan monedas de pedidos originados en la app.',
+        };
+      }
+      const orderProgress = String(order.progress || '').trim().toLowerCase();
+      if (
+        !['delivered', 'pickedup', 'entregado', 'retirado', 'completed', 'completado', 'finalizado'].includes(
+          orderProgress
+        )
+      ) {
+        return {
+          success: false,
+          message: 'Las monedas solo se acreditan cuando el pedido figura como entregado o retirado.',
+        };
+      }
+      if (order.pointsClaimed) {
+        return {
+          success: false,
+          alreadyClaimed: true,
+          message: 'Las monedas de este pedido ya fueron acreditadas.',
+        };
+      }
+      if (String(order.client || '') !== String(clientId)) {
+        return {
+          success: false,
+          message: 'El cliente no coincide con el cliente vinculado al pedido.',
+        };
+      }
+
+      const orderPoints = Math.floor(Number(order.points) || 0);
+      if (orderPoints <= 0 || orderPoints !== Math.floor(Number(pointsToAdd) || 0)) {
+        return {
+          success: false,
+          message: 'La cantidad de monedas no coincide con las monedas pendientes del pedido.',
+        };
+      }
+
+      const description = `${reason || 'Compra en POS'} [pedido ${orderId}]`;
+      const escapedDescription = description.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      const escapedClientId = String(clientId).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+      let existingTransaction = null;
+      try {
+        existingTransaction = await this.pbClients
+          .collection('points_transactions')
+          .getFirstListItem(
+            `client = "${escapedClientId}" && description = "${escapedDescription}"`
+          );
+      } catch (lookupError) {
+        if (lookupError?.status !== 404) throw lookupError;
+      }
+
+      if (existingTransaction) {
+        await this.pb.collection('orders').update(orderId, { pointsClaimed: true });
+        return {
+          success: true,
+          alreadyClaimed: true,
+          transaction: existingTransaction,
+          message: 'Las monedas de este pedido ya estaban acreditadas.',
+        };
+      }
+
       const client = await this.pbClients.collection('clients').getOne(clientId);
 
-      // Crear transacción de puntos en PB de clientes
+      // Crear transacción de monedas en PB de clientes
       const transaction = await this.pbClients.collection('points_transactions').create({
         client: clientId,
-        points: pointsToAdd,
+        points: orderPoints,
         type: 'earn',
-        description: reason || 'Compra en POS',
+        description,
       });
 
       // Actualizar balance del cliente en PB de clientes
       const updatedClient = await this.pbClients.collection('clients').update(clientId, {
-        pointsBalance: client.pointsBalance + pointsToAdd,
+        pointsBalance: (Number(client.pointsBalance) || 0) + orderPoints,
       });
+
+      // El aviso no debe demorar ni invalidar una acreditación ya completada.
+      void this.notifyPointsCredit(transaction.id);
+      await this.pb.collection('orders').update(orderId, { pointsClaimed: true });
 
       return {
         success: true,
         transaction: transaction,
         updatedClient: updatedClient,
-        message: `✅ ${pointsToAdd} puntos agregados exitosamente`,
+        message: `✅ ${orderPoints} monedas agregadas exitosamente`,
         newBalance: updatedClient.pointsBalance,
       };
     } catch (error) {
-      console.error('Error agregando puntos desde POS:', error);
+      console.error('Error agregando monedas desde POS:', error);
       return {
         success: false,
-        message: `❌ Error al agregar puntos: ${error.message}`,
+        message: `❌ Error al agregar monedas: ${error.message}`,
       };
     }
   }
@@ -507,7 +601,7 @@ export class PointsApiClient {
     }
   }
 
-  // Calcular puntos desde precio del producto
+  // Calcular monedas desde precio del producto
   calculatePointsFromPrice(price) {
     return Math.floor(Number(price || 0) / POINTS_RATE);
   }
@@ -543,7 +637,7 @@ export class PointsApiClient {
           productPrice = productResult.price;
           dynamicPointsCost = this.calculatePointsFromPrice(productPrice);
           console.log(`📦 Reward "${rewardTitle}" vinculada a producto: ${productResult.name} - $${productPrice}`);
-          console.log(`💰 Puntos dinámicos calculados: ${dynamicPointsCost} (rate: ${POINTS_RATE})`);
+          console.log(`💰 Monedas dinámicos calculados: ${dynamicPointsCost} (rate: ${POINTS_RATE})`);
         } else {
           console.warn('⚠️ No se pudo obtener precio del producto, usando pointsCost fijo');
           dynamicPointsCost = reward.pointsCost;
@@ -554,7 +648,7 @@ export class PointsApiClient {
 
       let clientPoints = null;
 
-      // Descontar puntos del cliente si aplica
+      // Descontar monedas del cliente si aplica
       if (claim.client && dynamicPointsCost > 0) {
         await this.authenticateClients();
         const client = await this.pbClients.collection('clients').getOne(claim.client);
@@ -562,7 +656,7 @@ export class PointsApiClient {
         if (client.pointsBalance < dynamicPointsCost) {
           return {
             success: false,
-            message: `⚠️ Puntos insuficientes. Tiene ${client.pointsBalance}, necesita ${dynamicPointsCost}`,
+            message: `⚠️ Monedas insuficientes. Tiene ${client.pointsBalance}, necesita ${dynamicPointsCost}`,
           };
         }
 
@@ -585,7 +679,7 @@ export class PointsApiClient {
         clientPoints = client.pointsBalance - dynamicPointsCost;
       }
 
-      // Actualizar claim con los puntos reales usados y marcar como canjeado
+      // Actualizar claim con las monedas reales usados y marcar como canjeado
       const updatedClaim = await this.pbRewards.collection('reward_claims').update(claimId, {
         status: 'redeemed',
         claimed_from: 'pos',
@@ -600,8 +694,8 @@ export class PointsApiClient {
         success: true,
         claim: updatedClaim,
         message: productPrice 
-          ? `✅ Cupón "${rewardTitle}" canjeado ($${productPrice} → ${dynamicPointsCost} puntos)`
-          : `✅ Cupón "${rewardTitle}" canjeado por ${dynamicPointsCost} puntos`,
+          ? `✅ Cupón "${rewardTitle}" canjeado ($${productPrice} → ${dynamicPointsCost} monedas)`
+          : `✅ Cupón "${rewardTitle}" canjeado por ${dynamicPointsCost} monedas`,
         newBalance: clientPoints,
         rewardTitle: rewardTitle,
         dynamicPoints: dynamicPointsCost,
@@ -616,7 +710,7 @@ export class PointsApiClient {
     }
   }
 
-  // Verificar conexión con la app de puntos y rewards
+  // Verificar conexión con la app de monedas y rewards
   async testConnection() {
     try {
       // Autenticar en PB principal

@@ -83,15 +83,23 @@ const pbToOrder = (rec) => ({
   paidAmount: rec.paidAmount ?? null,
   revenueAmount: rec.revenueAmount ?? null,
   businessDate: rec.businessDate ?? rec.day ?? null,
+  scheduledStart: rec.scheduledStart || '',
+  scheduledEnd: rec.scheduledEnd || '',
+  prepareAt: rec.prepareAt || '',
   mode: rec.mode ?? null,
   address: rec.address ?? null,
   phone: rec.phone ?? null,
   name: rec.name ?? null,
-  // cliente y puntos
+  // cliente y monedas
   client: rec.client ?? rec.clientId ?? null,
   points: Number(rec.points ?? 0),
   pointsClaimed: !!rec.pointsClaimed,
+  enviado: rec.enviado ?? null,
+  entregado: rec.entregado ?? null,
   baristaDone: !!rec.baristaDone,
+  source: rec.source ?? null,
+  deliveryId: rec.deliveryId ?? null,
+  progress: rec.progress ?? (String(rec.source || '').trim().toLowerCase() === 'app' ? 'pending' : null),
 });
 
 export const hydrateOrdersFromPocket = createAsyncThunk(

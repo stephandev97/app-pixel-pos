@@ -20,6 +20,7 @@ const INITIAL_STATE = {
   pago: 0,
   toggleDailyStats: false,
   toggleCafeCosts: false,
+  toggleDeliveryTracking: false,
   showLoginModal: false,
   isAdmin: false,
   showDevQr: typeof window !== 'undefined' ? localStorage.getItem('show_dev_qr') === 'true' : false,
@@ -152,6 +153,9 @@ const actionsSlice = createSlice({
     },
     toggleCafeCosts: (state, action) => {
       state.toggleCafeCosts = action.payload;
+    },
+    toggleDeliveryTracking: (state, action) => {
+      state.toggleDeliveryTracking = action.payload;
     },
     setShowLoginModal: (state, action) => {
       state.showLoginModal = action.payload;
@@ -333,6 +337,7 @@ export const {
   setLoginIntent,
   toggleDailyStats,
   toggleCafeCosts,
+  toggleDeliveryTracking,
   toggleOrders,
   toggleTestOrders,
   toggleRewards,

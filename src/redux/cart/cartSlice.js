@@ -5,6 +5,7 @@ import { addItemToCart, AddNewProduct, removeItemFromCart } from './cart-utils';
 const DEFAULT_DELIVERY_INFO = {
   isRetiro: true,
   deliveryType: 'retiro',
+  deliveryEntryMode: 'automatic',
   direccion: 'Retiro',
   envioTarifa: 0,
   envioOpcion: null,

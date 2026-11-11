@@ -1129,7 +1129,16 @@ export function getFormattedDrinkName(item) {
   // Detección y formateo de Cookies:
   // "que no diga por ejemplo cookie rellena y especifique sabor debajo.
   //  sino que diga cookie pistacho por ejemplo. cookie nutella y etc"
-  if (norm.includes('cookie') || norm.includes('galletita') || cat.includes('cookie')) {
+  // Importante: excluir Pote Gio, Paletas, Helados o Tortas cuyo sabor contenga "cookies" (ej. "Pote Gio - Cookies & Cream")
+  const isCookieProduct =
+    !norm.includes('pote gio') &&
+    !norm.includes('gio') &&
+    !norm.includes('paleta') &&
+    !norm.includes('torta') &&
+    !norm.includes('helado') &&
+    (/^cookies?\b/i.test(norm) || /^galletitas?\b/i.test(norm) || cat.includes('cookie'));
+
+  if (isCookieProduct) {
     const ckFlavor = typeof item === 'object' ? getCookieFlavor(item) : '';
     if (ckFlavor) {
       const cleanFlavor = ckFlavor.charAt(0).toUpperCase() + ckFlavor.slice(1);

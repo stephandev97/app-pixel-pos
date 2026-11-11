@@ -17,17 +17,6 @@ const PB_URL =
     process.env.VITE_POCKETBASE_URL ||
     process.env.REACT_APP_PB_URL ||
     'https://railway-production-857d.up.railway.app/';
-const PB_EMAIL =
-    process.env.PB_EMAIL ||
-    process.env.VITE_POS_EMAIL ||
-    process.env.REACT_APP_PB_SERVICE_EMAIL ||
-    'pos@pixelhelados.com';
-const PB_PASSWORD =
-    process.env.PB_PASSWORD ||
-    process.env.VITE_POS_PASSWORD ||
-    process.env.REACT_APP_PB_SERVICE_PASS ||
-    '3UyKkcDwXaSt-RhdLV6X-2OlC9fUei7O';
-
 const BUILD_DIR = path.resolve(__dirname, '../android/app/build/outputs/apk/debug');
 const APK_NAME = 'app-debug.apk';
 const APK_PATH = path.join(BUILD_DIR, APK_NAME);

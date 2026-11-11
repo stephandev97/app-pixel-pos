@@ -94,7 +94,7 @@ export default function RewardsList() {
           <div>
             <div style={{ fontSize: '1.4rem', fontWeight: 800 }}>Canjes completados</div>
             <div style={{ fontSize: '1rem', color: '#666', marginTop: '8px' }}>
-              POS + App de Puntos
+              POS + App de Monedas
             </div>
           </div>
           <div
@@ -232,7 +232,7 @@ export default function RewardsList() {
                   <strong>{c.expand?.client?.name || c.expand?.client?.email || '-'}</strong>
                 </div>
                 <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>
-                  Puntos: <strong>{c.pointsCost ?? '-'}</strong>
+                  Monedas: <strong>{c.pointsCost ?? '-'}</strong>
                 </div>
                 {c.productPrice != null && (
                   <div style={{ fontSize: '0.95rem', color: '#1f2937', zIndex: 1 }}>

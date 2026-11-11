@@ -100,8 +100,7 @@ function getDecodedAudioBuffer(ctx) {
 }
 
 /**
- * Reproduce el audio MP3 decodificado con Amplificador de Ganancia (Loudness Booster 3.0x / +9.5 dB)
- * y Compresor Dinámico de Estudio para máxima presencia sin distorsión.
+ * Reproduce el audio MP3 con compresión y ganancia final para mejorar su volumen percibido en móviles.
  */
 async function playBoostedAudioBuffer() {
   const ctx = getAudioContext();
@@ -131,9 +130,13 @@ async function playBoostedAudioBuffer() {
     compressor.attack.setValueAtTime(0.002, ctx.currentTime);
     compressor.release.setValueAtTime(0.2, ctx.currentTime);
 
+    const outputGain = ctx.createGain();
+    outputGain.gain.setValueAtTime(2, ctx.currentTime);
+
     source.connect(gainNode);
     gainNode.connect(compressor);
-    compressor.connect(ctx.destination);
+    compressor.connect(outputGain);
+    outputGain.connect(ctx.destination);
 
     source.start(0);
     return true;
@@ -164,7 +167,10 @@ export function playSynthesizedChime() {
     compressor.ratio.setValueAtTime(10, now);
     compressor.attack.setValueAtTime(0.002, now);
     compressor.release.setValueAtTime(0.25, now);
-    compressor.connect(ctx.destination);
+    const outputGain = ctx.createGain();
+    outputGain.gain.setValueAtTime(2, now);
+    compressor.connect(outputGain);
+    outputGain.connect(ctx.destination);
 
     const playTone = (freq, start, duration, gainVal = 0.9, type = 'sine') => {
       const osc = ctx.createOscillator();
@@ -273,7 +279,7 @@ export function isBaristaScreenActive() {
 }
 
 /**
- * Reproduce el sonido de notificación barista con amplificación de volumen (Loudness Booster)
+ * Reproduce el sonido de notificación barista con amplificación de volumen
  * @param {string} [orderId] - ID del pedido para evitar repeticiones múltiples
  * @param {boolean} [force=false] - Forzar reproducción sin chequear pantalla (ej: botón de prueba)
  */

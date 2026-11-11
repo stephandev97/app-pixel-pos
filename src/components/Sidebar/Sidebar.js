@@ -1,4 +1,4 @@
-import { BookOpen, Calculator, Coffee, FlaskConical, Heart, QrCode, ShoppingBasket, Timer, Tv } from 'lucide-react'; // ✅ nuevo
+import { Bike, BookOpen, Calculator, Coffee, FlaskConical, Heart, QrCode, ShoppingBasket, Timer, Tv } from 'lucide-react'; // ✅ nuevo
 import { useState } from 'react';
 import { HiClipboardList, HiOutlineClipboardList } from 'react-icons/hi';
 import {
@@ -16,6 +16,7 @@ import {
   toggleCafeCosts,
   toggleConfig,
   toggleCustomPrint,
+  toggleDeliveryTracking,
   toggleEditor,
   toggleHome,
   toggleOrders,
@@ -40,6 +41,7 @@ export default function Sidebar() {
   const activeBaristaRecipes = useSelector((s) => s.actions.toggleBaristaRecipes);
   const activeCustomPrint = useSelector((s) => s.actions.toggleCustomPrint);
   const activeCafeCosts = useSelector((s) => s.actions.toggleCafeCosts);
+  const activeDeliveryTracking = useSelector((s) => s.actions.toggleDeliveryTracking);
   const showDevQr = useSelector((s) => s.actions?.showDevQr);
   const showSectionProducts = useSelector((s) => s.actions?.showSectionProducts ?? true);
   const showSectionOrders = useSelector((s) => s.actions?.showSectionOrders ?? true);
@@ -70,6 +72,13 @@ export default function Sidebar() {
     dispatch(toggleBaristaRecipes(false));
     dispatch(toggleCustomPrint(false));
     dispatch(toggleCafeCosts(false));
+    dispatch(toggleDeliveryTracking(false));
+  };
+
+  const goDeliveryTracking = () => {
+    resetViews();
+    dispatch(toggleDeliveryTracking(true));
+    dispatch(toggleEditor(true));
   };
 
   const goCafeCosts = () => {
@@ -152,6 +161,17 @@ export default function Sidebar() {
         {showSectionOrders && (
           <Item aria-label="Pedidos" data-active={activeOrders} onClick={goOrders}>
             {activeOrders ? <HiClipboardList size={22} /> : <HiOutlineClipboardList size={22} />}
+          </Item>
+        )}
+
+        {showSectionOrders && (
+          <Item
+            aria-label="Repartidores"
+            data-active={activeDeliveryTracking}
+            onClick={goDeliveryTracking}
+            title="Repartidores"
+          >
+            <Bike size={22} />
           </Item>
         )}
 

@@ -209,11 +209,14 @@ export function isBaristaItem(it) {
     .replace(/[\u0300-\u036f]/g, '')
     .trim();
 
-  // Las mini tortas y tortas NO son de cafetería/barista (se despachan por mostrador/heladería)
+  // Las mini tortas, tortas, potes gio y paletas NO son de cafetería/barista (se despachan por mostrador/heladería)
   if (
     nameNorm.includes('mini torta') ||
     nameNorm.includes('minitorta') ||
-    nameNorm.includes('torta')
+    nameNorm.includes('torta') ||
+    nameNorm.includes('pote gio') ||
+    nameNorm.includes('paleta') ||
+    nameNorm.includes('alfajor helado')
   ) {
     return false;
   }
